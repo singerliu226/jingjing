@@ -1,0 +1,354 @@
+const assert = require("node:assert/strict");
+const Core = require("./core.js");
+
+const fixedNow = new Date("2026-06-12T09:00:00+08:00");
+
+function freshState() {
+  return Core.createSeedState(fixedNow);
+}
+
+{
+  const state = freshState();
+  const analysis = Core.analyzeInput("主管说海报颜色太暗，要更年轻一点，明天下午前改。", state, fixedNow);
+  assert.equal(analysis.feedback.conflict, false);
+  assert.equal(analysis.from, "主管");
+  assert.equal(analysis.dueDate, "2026-06-13");
+  assert.equal(analysis.behavior, "record_feedback");
+  assert.ok(analysis.feedback.action.includes("提高整体明度"));
+}
+
+{
+  const state = freshState();
+  const before = state.projects.length;
+  Core.applyInput(state, "新项目「秋季新品」客户要公众号头图、朋友圈海报和小红书封面，明天交。", fixedNow);
+  assert.equal(state.projects.length, before + 1);
+  assert.equal(state.projects[0].name, "秋季新品");
+  assert.ok(state.projects[0].deliverables.includes("公众号头图"));
+  assert.ok(state.checklist.some((item) => item.projectId === state.projects[0].id));
+  assert.equal(state.messages.at(-2).projectId, state.projects[0].id);
+}
+
+{
+  const state = freshState();
+  Core.applyInput(state, "老板希望画面更高级也更活泼，今天下班前改。", fixedNow);
+  const active = Core.getProject(state, state.activeProjectId);
+  assert.ok(active.risks.includes("反馈调性可能冲突，需要确认优先级"));
+  assert.ok(state.feedback.at(-1).conflict);
+}
+
+{
+  const state = freshState();
+  Core.applyInput(state, "主管说海报颜色太暗，要更年轻一点，明天下午前改。", fixedNow);
+  const active = Core.getProject(state, state.activeProjectId);
+  assert.ok(!active.risks.includes("缺少交付物清单"));
+  assert.ok(!active.risks.includes("缺少截止时间"));
+  assert.equal(state.tasks.find((task) => task.id === "t-first").status, "done");
+  assert.ok(Core.getDashboard(state, fixedNow).today.some((task) => task.title.startsWith("处理反馈")));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.dueDate = "2026-06-14";
+  project.goal = "让用户一眼知道活动优惠和报名入口。";
+  project.deliverables = ["朋友圈海报"];
+  project.risks = [];
+  Core.applyInput(state, "反馈：画面太普通，希望更高级一点。", fixedNow);
+  assert.ok(!project.risks.includes("缺少截止时间"));
+  assert.equal(state.tasks.at(-1).dueDate, "2026-06-14");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "春季活动海报";
+  project.type = "海报";
+  project.dueDate = "2026-06-14";
+  project.goal = "让用户一眼知道活动优惠和报名入口。";
+  project.deliverables = ["朋友圈海报", "公众号头图"];
+  project.risks = [];
+  const workflow = Core.generateProjectWorkflow(project, fixedNow);
+  assert.equal(workflow.ready, true);
+  assert.ok(workflow.summary.includes("春季活动海报"));
+  assert.ok(workflow.tasks.some((task) => task.key === "draft" && task.title.includes("朋友圈海报")));
+  assert.ok(workflow.tasks.every((task) => task.dueDate === "2026-06-14"));
+}
+
+{
+  const state = freshState();
+  Core.applyInput(state, "我已经完成最终交付。", fixedNow);
+  assert.equal(Core.getProject(state, state.activeProjectId).status, "done");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  Core.applyInput(state, "这个项目目标是让用户知道优惠，受众是年轻女性，投放在小红书和朋友圈。", fixedNow);
+  assert.equal(project.goal, "用户知道优惠");
+  assert.equal(project.audience, "年轻女性");
+  assert.equal(project.scene, "小红书和朋友圈");
+  assert.ok(!project.risks.includes("缺少设计目标"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.goal = "让用户一眼看懂活动优惠。";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "画面太乱信息太多，我不知道怎么改。", fixedNow);
+  assert.equal(result.analysis.behavior, "solve_design_issue");
+  assert.ok(result.reply.includes("设计卡点"));
+  assert.ok(result.reply.includes("主标题"));
+  assert.ok(result.reply.includes("下一步"));
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(project.portfolio.process.includes("设计卡点"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "颜色有点乱，也不够年轻，怎么优化？", fixedNow);
+  assert.equal(result.analysis.behavior, "solve_design_issue");
+  assert.ok(result.reply.includes("主色"));
+  assert.ok(result.reply.includes("明度"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "活动海报";
+  project.status = "designing";
+  state.tasks.push({
+    id: "t-draft",
+    projectId: project.id,
+    title: "完成首版设计：一张海报",
+    priority: "high",
+    dueDate: "2026-06-13",
+    status: "todo",
+    nextAction: "先搭主视觉和信息层级",
+    feedbackIds: [],
+  });
+  Core.applyInput(state, "我完成了首版设计，准备发给老板看。", fixedNow);
+  assert.equal(state.tasks.find((task) => task.id === "t-draft").status, "done");
+  assert.equal(project.status, "designing");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  Core.applyInput(state, "已经发给老板看了，等反馈。", fixedNow);
+  assert.equal(project.status, "waiting");
+  assert.ok(state.tasks.some((task) => task.projectId === project.id && task.status === "waiting"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const analysis = Core.analyzeInput("截止时间改到2026/06/19。", state, fixedNow);
+  assert.equal(analysis.dueDate, "2026-06-19");
+  assert.equal(analysis.behavior, "update_deadline");
+  Core.applyInput(state, "截止时间改到2026/06/19。", fixedNow);
+  assert.equal(project.dueDate, "2026-06-19");
+}
+
+{
+  const state = freshState();
+  const summary = Core.generateDailySummary(state, fixedNow);
+  assert.ok(summary.includes("今日工作总结"));
+  assert.ok(summary.includes("等待确认"));
+  const plan = Core.generateDailyPlan(state, fixedNow);
+  assert.ok(plan.includes("今日安排"));
+  assert.ok(plan.includes("先做"));
+}
+
+{
+  const state = freshState();
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "今天先做什么？", fixedNow);
+  assert.equal(result.analysis.behavior, "ask_plan");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("今日安排"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  state.tasks.push({
+    id: "t-cancel",
+    projectId: project.id,
+    title: "确认尺寸、参考和交付格式",
+    priority: "high",
+    dueDate: "2026-06-13",
+    status: "todo",
+    nextAction: "确认尺寸",
+    feedbackIds: [],
+  });
+  const result = Core.applyInput(state, "确认尺寸这个任务先不用做了。", fixedNow);
+  assert.equal(result.analysis.behavior, "cancel_task");
+  assert.equal(state.tasks.find((task) => task.id === "t-cancel").status, "done");
+  assert.ok(!Core.getDashboard(state, fixedNow).today.some((task) => task.id === "t-cancel"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const result = Core.applyInput(state, "交付检查都完成了。", fixedNow);
+  assert.equal(result.analysis.behavior, "complete_checklist");
+  assert.ok(state.checklist.filter((item) => item.projectId === project.id).every((item) => item.done));
+  assert.ok(result.reply.includes("已完成交付检查"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const result = Core.applyInput(state, "V2 改了标题层级和按钮颜色，老板确认了。", fixedNow);
+  assert.equal(result.analysis.behavior, "record_version");
+  assert.equal(project.versions.at(-1).name, "V2");
+  assert.ok(project.portfolio.process.includes("版本记录"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  state.tasks.push({
+    id: "t-date",
+    projectId: project.id,
+    title: "完成首版设计",
+    priority: "high",
+    dueDate: "2026-06-13",
+    status: "todo",
+    nextAction: "做首版",
+    feedbackIds: [],
+  });
+  Core.applyInput(state, "截止时间改到2026/06/19。", fixedNow);
+  assert.equal(state.tasks.find((task) => task.id === "t-date").dueDate, "2026-06-19");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.risks = ["缺少尺寸 / 平台规格", "缺少交付格式"];
+  const result = Core.applyInput(state, "尺寸是1080x1920px，导出 png 和源文件。", fixedNow);
+  assert.equal(result.analysis.behavior, "update_project_specs");
+  assert.ok(project.specs.includes("1080x1920px"));
+  assert.ok(project.formats.includes("png"));
+  assert.ok(project.formats.includes("源文件"));
+  assert.ok(!project.risks.some((risk) => /尺寸|规格|交付格式/.test(risk)));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const result = Core.applyInput(state, "项目名改成「六一活动海报」。", fixedNow);
+  assert.equal(result.analysis.behavior, "update_project_name");
+  assert.equal(project.name, "六一活动海报");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const beforeChecklist = state.checklist.length;
+  const result = Core.applyInput(state, "项目类型改成包装。", fixedNow);
+  assert.equal(result.analysis.behavior, "update_project_type");
+  assert.equal(project.type, "包装");
+  assert.ok(state.checklist.length > beforeChecklist);
+  assert.ok(state.checklist.some((item) => item.projectId === project.id && item.label.includes("CMYK")));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.status = "waiting";
+  project.risks.push("等待老板确认方向");
+  state.tasks.push({
+    id: "t-confirm",
+    projectId: project.id,
+    title: "等待老板确认方向",
+    priority: "high",
+    dueDate: "2026-06-13",
+    status: "waiting",
+    nextAction: "等老板回复",
+    feedbackIds: [],
+  });
+  const result = Core.applyInput(state, "老板确认了方向，通过了。", fixedNow);
+  assert.equal(result.analysis.behavior, "clear_waiting");
+  assert.equal(project.status, "designing");
+  assert.equal(state.tasks.find((task) => task.id === "t-confirm").status, "done");
+  assert.ok(!project.risks.some((risk) => /等待|确认/.test(risk)));
+}
+
+{
+  const state = freshState();
+  Core.applyInput(state, "主管说画面太暗，明天改。", fixedNow);
+  const project = Core.getProject(state, state.activeProjectId);
+  const feedbackTask = state.tasks.find((task) => task.projectId === project.id && /反馈|处理/.test(task.title));
+  const result = Core.applyInput(state, "反馈改完了。", fixedNow);
+  assert.equal(result.analysis.behavior, "mark_feedback_handled");
+  assert.ok(state.feedback.filter((item) => item.projectId === project.id).every((item) => item.handled));
+  assert.equal(feedbackTask.status, "done");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  state.tasks.push({
+    id: "t-snooze",
+    projectId: project.id,
+    title: "完成首版设计",
+    priority: "high",
+    dueDate: "2026-06-12",
+    status: "todo",
+    nextAction: "做首版",
+    feedbackIds: [],
+  });
+  const result = Core.applyInput(state, "完成首版这个任务延后到明天。", fixedNow);
+  assert.equal(result.analysis.behavior, "snooze_task");
+  assert.equal(state.tasks.find((task) => task.id === "t-snooze").dueDate, "2026-06-13");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const portfolio = Core.generatePortfolioCase(project, state.feedback.filter((item) => item.projectId === project.id));
+  assert.ok(portfolio.includes("项目归档草稿"));
+  assert.ok(portfolio.includes("设计策略"));
+  assert.ok(portfolio.includes("面试表达"));
+}
+
+{
+  const state = freshState();
+  const insights = Core.getProjectInsights(state, state.activeProjectId, fixedNow);
+  assert.ok(insights.briefScore < 50);
+  assert.ok(insights.nextStep.length > 0);
+  assert.equal(insights.deadline, "今天截止");
+  assert.ok(insights.missing.includes("设计目标"));
+}
+
+{
+  const state = freshState();
+  state.tasks.push({
+    id: "t-note",
+    projectId: state.activeProjectId,
+    title: "补齐项目小纸条",
+    priority: "high",
+    dueDate: "",
+    status: "todo",
+    nextAction: "先补齐目标、截止时间和交付物",
+    feedbackIds: [],
+  });
+  state.tasks.push({
+    id: "t-wait",
+    projectId: state.activeProjectId,
+    title: "等待老板确认方向",
+    priority: "high",
+    dueDate: "",
+    status: "waiting",
+    nextAction: "等待确认",
+    feedbackIds: [],
+  });
+  const dashboard = Core.getDashboard(state, fixedNow);
+  assert.ok(dashboard.today.some((task) => task.id === "t-note"));
+  assert.ok(!dashboard.today.some((task) => task.id === "t-wait"));
+  assert.ok(dashboard.waiting.some((task) => task.id === "t-wait"));
+}
+
+console.log("All Design Desk Agent tests passed.");

@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>菁菁小画桌</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="项目与视图">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M8 5.5h8l2.5 2.7v8.3l-2.5 2.7H8l-2.5-2.7V8.2L8 5.5Z"/><path d="M9 11.2h.1M15 11.2h.1M9.5 15c1.4 1 3.6 1 5 0"/></svg>
+          </div>
+          <div>
+            <h1>菁菁小画桌</h1>
+            <p>菁菁的设计工作小助理</p>
+          </div>
+        </div>
+
+        <button class="primary-action" id="new-project-btn" type="button">
+          <span aria-hidden="true">+</span>
+          新建项目
+        </button>
+
+        <section class="sidebar-section">
+          <div class="section-title">
+            <h2>项目</h2>
+            <button class="icon-button" id="sort-projects-btn" title="按风险和截止时间排序" type="button">
+              <svg viewBox="0 0 24 24"><path d="M7 6h10M10 12h7M13 18h4M5 6h.01M5 12h.01M5 18h.01"/></svg>
+            </button>
+          </div>
+          <div class="filter-tabs" role="tablist" aria-label="项目筛选">
+            <button class="filter-tab is-active" data-filter="all" type="button">全部</button>
+            <button class="filter-tab" data-filter="active" type="button">进行中</button>
+            <button class="filter-tab" data-filter="waiting" type="button">待确认</button>
+            <button class="filter-tab" data-filter="done" type="button">已完成</button>
+          </div>
+          <div class="project-list" id="project-list"></div>
+        </section>
+
+        <section class="sidebar-section sidebar-bottom">
+          <div class="section-title">
+            <h2>更多</h2>
+          </div>
+          <button class="view-link is-active" data-panel="workbench" type="button">
+            <svg viewBox="0 0 24 24"><path d="M4 5h16v6H4zM4 15h7v4H4zM15 15h5v4h-5z"/></svg>
+            工作台
+          </button>
+          <button class="view-link" data-panel="portfolio" type="button">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V5h8v2"/></svg>
+            项目归档
+          </button>
+          <button class="view-link" data-panel="library" type="button">
+            <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM16 4v4h4M8 12h8M8 16h6"/></svg>
+            设计词典
+          </button>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <section class="project-header">
+          <div>
+            <div class="project-kicker" id="active-project-type">视觉设计 · 进行中</div>
+            <h2 id="active-project-name">品牌升级 · 青禾咖啡</h2>
+          </div>
+        </section>
+
+        <div class="content-grid app-view is-active" id="workbench-view">
+          <section class="chat-panel conversation-panel" aria-label="和小画桌对话">
+            <div class="conversation-head">
+              <div>
+                <h3>和小画桌说</h3>
+                <p>需求、反馈、进度、截止时间都可以直接丢进来。</p>
+              </div>
+              <div class="activity-tools" aria-label="常用整理">
+                <button class="mini-action" id="daily-summary-btn" type="button">日报</button>
+                <button class="mini-action" id="review-btn" type="button">自检</button>
+                <button class="mini-action" id="checklist-btn" type="button">交付</button>
+                <button class="mini-action" id="risk-audit-btn" type="button">风险</button>
+                <button class="mini-action" id="portfolio-btn" type="button">归档</button>
+              </div>
+            </div>
+
+            <div class="chat-stream compact-stream" id="chat-stream" aria-live="polite"></div>
+
+            <div class="quick-actions" aria-label="快速记录">
+              <button class="quick-action" data-template="主管反馈：" type="button">记录反馈</button>
+              <button class="quick-action" data-template="新需求：" type="button">新需求</button>
+              <button class="quick-action" data-template="我完成了：" type="button">完成进度</button>
+              <button class="quick-action" data-template="等待确认：" type="button">等待确认</button>
+            </div>
+
+            <form class="composer" id="composer">
+              <textarea id="message-input" rows="2" placeholder="输入你的问题，或记录需求 / 反馈 / 截止时间。例如：主管说海报颜色太暗，要更年轻一点，明天下午前改。"></textarea>
+              <button class="send-button" type="submit" title="发送">
+                <svg viewBox="0 0 24 24"><path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/></svg>
+              </button>
+            </form>
+          </section>
+
+          <aside class="work-rail" aria-label="今日安排和项目小纸条">
+            <section class="rail-card task-card" aria-label="今日工作安排">
+              <div class="rail-card-head">
+                <div>
+                  <h3>今天要做 <span id="today-count">0</span></h3>
+                  <p id="daily-guidance">小画桌把最该推进的事放在这里。</p>
+                </div>
+                <button class="secondary-button compact-button" id="plan-day-btn" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>
+                  整理
+                </button>
+              </div>
+              <div class="plan-list" id="today-list"></div>
+              <span class="hidden-flow" id="waiting-count">0</span>
+              <div class="hidden-flow" id="waiting-list"></div>
+              <div class="hidden-flow" id="next-list"></div>
+            </section>
+
+            <aside class="inspector assistant-panel rail-card note-card" aria-label="项目小纸条">
+              <section class="inspector-section focus-section">
+                <div class="panel-heading">
+                  <h3>项目小纸条</h3>
+                  <button class="text-button" id="save-project-btn" type="button">已自动保存</button>
+                </div>
+                <form class="project-form" id="project-form">
+                  <label>这是什么项目<input id="project-name-input" type="text" /></label>
+                  <label>大概是哪类设计<input id="project-type-input" type="text" placeholder="海报 / 品牌 / 社媒图" /></label>
+                  <label>什么时候交<input id="project-due-input" type="date" /></label>
+                  <label>这次要解决什么<textarea id="project-goal-input" rows="2"></textarea></label>
+                  <label>主要给谁看<textarea id="project-audience-input" rows="2"></textarea></label>
+                  <label>会出现在哪里<textarea id="project-scene-input" rows="2"></textarea></label>
+                  <label>最后要交哪些图<input id="project-deliverables-input" type="text" placeholder="例如：海报、公众号头图、小红书封面" /></label>
+                </form>
+              </section>
+
+              <section class="inspector-section">
+                <div class="panel-heading">
+                  <h3>为什么先做它</h3>
+                  <button class="text-button" id="show-all-tasks" type="button">任务清单</button>
+                </div>
+                <p class="assistant-copy" id="assistant-advice">先处理最临近截止的任务，完成后我会帮菁菁更新进度。</p>
+                <p class="advice-source" id="assistant-source">来源：项目缺失信息、任务截止时间和等待确认事项。</p>
+              </section>
+
+              <section class="inspector-section">
+                <div class="panel-heading">
+                  <h3>需要确认</h3>
+                  <button class="text-button" id="mark-waiting" type="button">整理话术</button>
+                </div>
+                <div class="risk-list" id="risk-list"></div>
+              </section>
+            </aside>
+          </aside>
+        </div>
+
+        <section class="app-view portfolio-view" id="portfolio-view" aria-label="项目归档">
+          <div class="view-panel">
+            <div class="view-head">
+              <div>
+                <h3>项目归档</h3>
+                <p>把做过的项目整理成能讲清楚过程、策略和成长的记录。</p>
+              </div>
+              <button class="secondary-button compact-button" id="portfolio-generate-all" type="button">整理这个项目</button>
+            </div>
+            <div class="portfolio-grid" id="portfolio-page-list"></div>
+          </div>
+        </section>
+
+        <section class="app-view library-view" id="library-view" aria-label="设计词典">
+          <div class="view-panel">
+            <div class="view-head">
+              <div>
+                <h3>设计词典</h3>
+                <p>把常见反馈翻译成菁菁能直接执行的设计动作。</p>
+              </div>
+              <button class="secondary-button compact-button" id="library-insert-tip" type="button">拿一句试试</button>
+            </div>
+            <div class="library-grid" id="library-page-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="message-template">
+      <article class="message">
+        <div class="avatar"></div>
+        <div class="message-body">
+          <div class="message-meta"></div>
+          <div class="bubble"></div>
+        </div>
+      </article>
+    </template>
+
+    <script src="core.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
