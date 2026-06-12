@@ -115,6 +115,30 @@ function freshState() {
 {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
+  project.type = "社媒图";
+  project.deliverables = ["小红书封面"];
+  project.dueDate = "2026-06-13";
+  const result = Core.applyInput(state, "小红书封面字太多，看不清，怎么改？", fixedNow);
+  assert.equal(result.analysis.behavior, "solve_design_issue");
+  assert.ok(result.reply.includes("手机预览"));
+  assert.ok(result.reply.includes("少字"));
+  assert.ok(result.reply.includes("时间很近"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.type = "包装";
+  project.deliverables = ["包装"];
+  const result = Core.applyInput(state, "包装画面有点乱，信息太多。", fixedNow);
+  assert.equal(result.analysis.behavior, "solve_design_issue");
+  assert.ok(result.reply.includes("出血"));
+  assert.ok(result.reply.includes("CMYK"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
   project.name = "活动海报";
   project.status = "designing";
   state.tasks.push({

@@ -639,6 +639,11 @@
     issue.actions.forEach((action, index) => {
       lines.push(`${index + 1}. ${action}`);
     });
+    const contextual = buildContextualDesignAdvice(project, issue, analysis);
+    if (contextual.length) {
+      lines.push("结合这个项目，额外注意：");
+      contextual.forEach((item) => lines.push(`- ${item}`));
+    }
     lines.push(`下一步：${issue.nextStep}`);
     if (project.goal && !/待补充/.test(project.goal)) {
       lines.push(`判断标准：每一步都回到项目目标「${project.goal}」，不要只凭“好不好看”改。`);
@@ -647,6 +652,30 @@
     }
     project.portfolio.process = appendSentence(project.portfolio.process, `设计卡点：${analysis.text}`);
     return lines.join("\n");
+  }
+
+  function buildContextualDesignAdvice(project, issue, analysis) {
+    const text = `${project.type} ${(project.deliverables || []).join("、")} ${analysis.text}`;
+    const advice = [];
+    if (/小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(text)) {
+      advice.push("先用手机预览尺寸看一眼，主标题和关键利益点要在小屏上仍然清楚。");
+    }
+    if (/印刷|包装|画册|折页/.test(text)) {
+      advice.push("如果要印刷，先确认出血、CMYK、图片精度和文字是否需要转曲，别等导出前才补。");
+    }
+    if (/品牌|logo|VI|视觉识别/i.test(text)) {
+      advice.push("先回到品牌规范：色值、字体、图形语言要统一，别为了解决单张图破坏识别感。");
+    }
+    if (project.dueDate && daysUntil(project.dueDate) <= 1) {
+      advice.push("时间很近，先修影响交付判断的 20%：主信息、可读性、尺寸格式，装饰细节后置。");
+    }
+    if (issue.keys.includes("layout_hierarchy") && project.goal && !/待补充/.test(project.goal)) {
+      advice.push(`所有层级调整都服务于目标：${project.goal}`);
+    }
+    if (issue.keys.includes("typography") && /小红书|朋友圈|公众号|社媒|封面|头图/i.test(text)) {
+      advice.push("封面类物料宁可少字，也不要把说明文字塞满；详情可以放正文或二级画面。");
+    }
+    return Array.from(new Set(advice)).slice(0, 4);
   }
 
   function generateChecklistText(state, project) {
