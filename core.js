@@ -482,6 +482,12 @@
       return "recommend_layout_structure";
     }
     if (
+      /字体搭配|字体怎么搭|字体怎么选|用什么字体|标题字体|正文字体|字号层级|字号怎么|字重|字距|行距|文字间距|字体太挤|字太挤/.test(text) &&
+      !/品牌字体|品牌规范|VI|vi|文案|标题文案|主标题文案|怎么写|精简/.test(text)
+    ) {
+      return "recommend_typography_system";
+    }
+    if (
       analysisBits.designIssue &&
       !analysisBits.feedback &&
       !/文案|标题|主标题|副标题|slogan|口号|标语|卖点|利益点|CTA|按钮文案|文字太多|精简|怎么写/.test(text) &&
@@ -793,6 +799,7 @@
       "check_brand_consistency",
       "guide_visual_effect",
       "recommend_layout_structure",
+      "recommend_typography_system",
       "solve_design_issue",
       "cancel_task",
       "complete_checklist",
@@ -831,6 +838,7 @@
     if (analysis.behavior === "check_brand_consistency") return checkBrandConsistency(project, analysis);
     if (analysis.behavior === "guide_visual_effect") return guideVisualEffect(project, analysis);
     if (analysis.behavior === "recommend_layout_structure") return recommendLayoutStructure(project, analysis);
+    if (analysis.behavior === "recommend_typography_system") return recommendTypographySystem(project, analysis);
     if (analysis.behavior === "ask_checklist") return generateChecklistText(state, project);
     if (analysis.behavior === "update_project_name" || analysis.behavior === "update_project_type" || analysis.behavior === "update_project_specs") {
       applyProjectMeta(state, project, analysis.meta);
@@ -1421,6 +1429,126 @@
     return Array.from(new Set(context)).slice(0, 4);
   }
 
+  function recommendTypographySystem(project, analysis) {
+    const systems = buildTypographySystems(project, analysis.text);
+    const lines = [`字体系统建议：${project.name}`];
+    lines.push("先别同时试很多字体。第一版只搭一套字体系统：标题、正文、数字/标签各自有角色。");
+    systems.forEach((item, index) => {
+      lines.push(`方案 ${index + 1}｜${item.name}`);
+      lines.push(`- 标题：${item.title}`);
+      lines.push(`- 正文：${item.body}`);
+      lines.push(`- 数字/标签：${item.accent}`);
+      lines.push(`- 适合：${item.bestFor}`);
+      lines.push(`- 风险：${item.risk}`);
+    });
+    lines.push("字号层级：");
+    buildTypeScale(project, analysis.text).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("字距/行距检查：");
+    buildSpacingChecks(analysis.text).forEach((item) => lines.push(`- ${item}`));
+    const context = buildTypographyContext(project, analysis.text);
+    if (context.length) {
+      lines.push("结合当前项目：");
+      context.forEach((item) => lines.push(`- ${item}`));
+    }
+    lines.push("下一步：先复制当前稿做一版“字体收敛稿”，只保留 1 个字体家族、2 种字重、3 档字号。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `字体系统整理：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildTypographySystems(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${text}`;
+    const wantsPremium = /高级|质感|克制|品牌|正式/.test(combined);
+    const wantsYoung = /年轻|活泼|可爱|小红书|社媒|封面|促销/.test(combined);
+    const wantsPrint = /印刷|包装|画册|折页/.test(combined);
+    const systems = [
+      {
+        name: wantsPremium ? "克制高级" : "清晰稳妥",
+        title: wantsPremium ? "用偏几何、笔画稳定的黑体或宋黑结合，字重 700/800。" : "用清楚的黑体，字重 700/800，先保证第一眼读到。",
+        body: "正文用同家族常规字重 400/500，不换风格字体。",
+        accent: "数字、价格、日期可用同字体加粗，或用窄一点的数字风格增强秩序。",
+        bestFor: wantsPremium ? "品牌感、会员活动、需要显得可靠和精致的画面。" : "首版、日报、活动海报、时间紧的社媒图。",
+        risk: "可能不够有记忆点，需要靠版式、留白或一个视觉锚点补强。",
+      },
+      {
+        name: wantsYoung ? "年轻传播" : "标题强化",
+        title: "标题可以选更有性格的粗黑、圆体或手写感字体，但只用于主标题。",
+        body: "正文仍然回到清楚字体，避免整张图都变成装饰字。",
+        accent: "标签/角标用高对比字重或小色块承接，不要再加第三种字体。",
+        bestFor: "小红书封面、节日活动、促销图、需要抢第一眼的传播物料。",
+        risk: "标题字体太花会降低可信度；正文不要跟着一起花。",
+      },
+      {
+        name: wantsPrint ? "印刷阅读" : "信息密集",
+        title: "标题用稳定粗字重，避免太细的装饰字体。",
+        body: "正文用可读性好的黑体/宋体，控制行长和行距。",
+        accent: "说明、注释、规格用小一级字号，不靠颜色堆层级。",
+        bestFor: wantsPrint ? "画册、折页、包装说明、线下物料。" : "规则说明多、活动信息多、需要兼顾可读性的画面。",
+        risk: "信息密度高时容易闷，要用分组、间距和小标题切开。",
+      },
+    ];
+    return systems.slice(0, 3);
+  }
+
+  function buildTypeScale(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    if (/小红书|朋友圈|社媒|封面|头图|Banner/i.test(combined)) {
+      return [
+        "主标题最大，至少比副标题大 1.6 倍；手机缩略图里主标题要先被读到。",
+        "副标题/利益点用中等字号，负责解释价值，不要和主标题抢。",
+        "时间、地点、规则、二维码说明降一级，能读清即可。",
+        "同一张图控制 3 档字号：大标题、中信息、小说明。",
+      ];
+    }
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      return [
+        "主标题负责翻页时被看到，正文负责近距离阅读，不要用同一套比例。",
+        "正文行长别太长；行距通常比字号大 30%-60% 更舒服。",
+        "注释和规格可以小，但必须留足对比和边距，避免印刷后糊成一团。",
+        "印刷前放到真实尺寸检查字号，不只看电脑缩放视图。",
+      ];
+    }
+    return [
+      "主标题、副标题、说明文字至少拉开 3 档层级。",
+      "标题用字重和字号建立层级，正文用间距和分组建立秩序。",
+      "不要用颜色替代层级；黑白稿能看懂，彩色稿才稳。",
+      "如果信息很多，先删重复内容，再调字号。",
+    ];
+  }
+
+  function buildSpacingChecks(text) {
+    const checks = [
+      "中文标题字距通常不要拉太开，除非是高级/品牌氛围；拉开后要检查识别速度。",
+      "标题太挤时，先加行距或拆成两行，不要一味缩小字号。",
+      "正文行距要比标题更松一点，让阅读不费力。",
+      "同组信息间距小，不同组信息间距大；用间距表达关系。",
+    ];
+    if (/字距|文字间距/.test(text)) {
+      checks.unshift("调字距前先判断是“字太挤”还是“行太长”；很多时候该换行，不是拉字距。");
+    }
+    if (/行距/.test(text)) {
+      checks.unshift("行距先服务阅读：多行标题可以紧一点，正文和说明要松一点。");
+    }
+    return Array.from(new Set(checks)).slice(0, 5);
+  }
+
+  function buildTypographyContext(project, text) {
+    const context = [];
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    if (/品牌|VI|Logo|logo/.test(combined)) {
+      context.push("如果这是品牌项目，先确认品牌字体和授权；没有规范时再选气质接近的替代字体。");
+    }
+    if (/小红书|朋友圈|社媒|封面/.test(combined)) {
+      context.push("社媒封面宁可少字大字，也不要把所有说明都塞进画面。");
+    }
+    if (project.goal && !/待补充/.test(project.goal)) {
+      context.push(`当前目标是「${project.goal}」，字体性格要服务这个目标。`);
+    }
+    if (project.dueDate && daysUntil(project.dueDate) <= 1) {
+      context.push("时间紧时不要大换字体系统，先收敛字重、字号和间距。");
+    }
+    return Array.from(new Set(context)).slice(0, 4);
+  }
+
   function adaptMultiFormat(project, analysis) {
     const targets = detectAdaptTargets(project, analysis.text);
     const lines = [`多尺寸适配方案：${project.name}`];
@@ -1721,6 +1849,7 @@
         "check_brand_consistency",
         "guide_visual_effect",
         "recommend_layout_structure",
+        "recommend_typography_system",
         "solve_design_issue",
         "cancel_task",
         "complete_checklist",
@@ -2505,6 +2634,7 @@
     checkBrandConsistency,
     guideVisualEffect,
     recommendLayoutStructure,
+    recommendTypographySystem,
     generateDesignDirections,
     compareDesignOptions,
     generateReview,

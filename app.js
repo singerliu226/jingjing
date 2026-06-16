@@ -349,6 +349,7 @@
       "check_brand_consistency",
       "guide_visual_effect",
       "recommend_layout_structure",
+      "recommend_typography_system",
       "solve_design_issue",
       "cancel_task",
       "complete_checklist",

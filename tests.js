@@ -440,10 +440,13 @@ function freshState() {
 
 {
   const state = freshState();
+  const beforeTasks = state.tasks.length;
   const result = Core.applyInput(state, "标题字体怎么配比较好？", fixedNow);
-  assert.equal(result.analysis.behavior, "answer_design_question");
-  assert.ok(result.reply.includes("字体选择"));
-  assert.ok(result.reply.includes("1-2 个字体家族"));
+  assert.equal(result.analysis.behavior, "recommend_typography_system");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("字体系统建议"));
+  assert.ok(result.reply.includes("标题"));
+  assert.ok(result.reply.includes("字号层级"));
   assert.ok(result.reply.includes("下一步"));
 }
 
@@ -893,6 +896,44 @@ function freshState() {
   const result = Core.applyInput(state, "画面太乱了，怎么排版优化？", fixedNow);
   assert.equal(result.analysis.behavior, "solve_design_issue");
   assert.ok(result.reply.includes("设计卡点"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员活动海报";
+  project.type = "社媒图";
+  project.goal = "让用户快速看到报名入口";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "标题字体和正文字体怎么搭配？字号层级怎么做？", fixedNow);
+  assert.equal(result.analysis.behavior, "recommend_typography_system");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("字体系统建议"));
+  assert.ok(result.reply.includes("字号层级"));
+  assert.ok(result.reply.includes("字距/行距检查"));
+  assert.ok(result.reply.includes("1 个字体家族、2 种字重、3 档字号"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "字体太挤了，字距和行距怎么调？", fixedNow);
+  assert.equal(result.analysis.behavior, "recommend_typography_system");
+  assert.ok(result.reply.includes("调字距前"));
+  assert.ok(result.reply.includes("行距先服务阅读"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "品牌字体和 Logo 使用要注意什么？", fixedNow);
+  assert.equal(result.analysis.behavior, "check_brand_consistency");
+  assert.ok(result.reply.includes("品牌一致性检查"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "标题文案怎么写得更年轻？", fixedNow);
+  assert.equal(result.analysis.behavior, "refine_copywriting");
+  assert.ok(result.reply.includes("文案整理"));
 }
 
 console.log("All Design Desk Agent tests passed.");
