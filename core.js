@@ -462,6 +462,12 @@
     if (/品牌规范|视觉规范|VI|vi|品牌色|品牌字体|logo.*使用|Logo.*使用|不符合品牌|不像品牌|品牌一致|调性统一|品牌调性/.test(text)) {
       return "check_brand_consistency";
     }
+    if (
+      /高级质感|质感|阴影|投影|光影|毛玻璃|玻璃拟态|金属|渐变|颗粒|噪点|发光|霓虹|立体字|材质|氛围光/.test(text) &&
+      /怎么|如何|想做|做出|调|加|处理|效果|教程|方法|不影响|可读性/.test(text)
+    ) {
+      return "guide_visual_effect";
+    }
     if (analysisBits.designerQuestion) return "answer_design_question";
     if (/文案|标题|主标题|副标题|slogan|口号|标语|卖点|利益点|CTA|按钮文案|文字太多|精简.*文字|怎么写/.test(text)) {
       return "refine_copywriting";
@@ -763,6 +769,7 @@
       "organize_delivery_files",
       "adapt_multi_format",
       "check_brand_consistency",
+      "guide_visual_effect",
       "solve_design_issue",
       "cancel_task",
       "complete_checklist",
@@ -798,6 +805,7 @@
     if (analysis.behavior === "organize_delivery_files") return organizeDeliveryFiles(project, analysis);
     if (analysis.behavior === "adapt_multi_format") return adaptMultiFormat(project, analysis);
     if (analysis.behavior === "check_brand_consistency") return checkBrandConsistency(project, analysis);
+    if (analysis.behavior === "guide_visual_effect") return guideVisualEffect(project, analysis);
     if (analysis.behavior === "ask_checklist") return generateChecklistText(state, project);
     if (analysis.behavior === "update_project_name" || analysis.behavior === "update_project_type" || analysis.behavior === "update_project_specs") {
       applyProjectMeta(state, project, analysis.meta);
@@ -1204,6 +1212,152 @@
     return Array.from(new Set(checks)).slice(0, 7);
   }
 
+  function guideVisualEffect(project, analysis) {
+    const recipe = pickVisualEffectRecipe(analysis.text);
+    const lines = [`视觉效果做法：${project.name}`];
+    lines.push(`先判断：${recipe.judge}`);
+    lines.push("具体步骤：");
+    recipe.steps.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    const context = buildVisualEffectContext(project, analysis.text, recipe);
+    if (context.length) {
+      lines.push("结合当前项目：");
+      context.forEach((item) => lines.push(`- ${item}`));
+    }
+    lines.push("避坑：");
+    recipe.pitfalls.forEach((item) => lines.push(`- ${item}`));
+    lines.push(`下一步：${recipe.nextStep}`);
+    lines.push("判断标准：效果是为了强化主信息，不是为了证明技法很复杂。缩小预览后，标题和核心信息仍然清楚才算成功。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `视觉效果尝试：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function pickVisualEffectRecipe(text) {
+    const recipes = [
+      {
+        key: "glass",
+        match: /毛玻璃|玻璃拟态/,
+        judge: "毛玻璃适合放在有层次的背景上，用来承载文字或标签；如果背景本身很花，先降噪再做。",
+        steps: [
+          "先选一个有明暗变化的背景，不要用纯平底色硬做毛玻璃。",
+          "给信息区加半透明浅色或深色填充，透明度先从 65%-85% 试起。",
+          "对底层背景做模糊，玻璃层本身保持边缘清楚。",
+          "加 1px 细边框或内高光，让玻璃边缘和背景分开。",
+          "文字使用高对比色，必要时加一层很轻的暗色遮罩保证可读性。",
+        ],
+        pitfalls: [
+          "不要把正文直接放在花背景上，漂亮但读不清会被打回。",
+          "模糊、透明、阴影不要同时拉满，否则会显脏。",
+        ],
+        nextStep: "先做一个只含标题和核心信息的毛玻璃信息块，缩到手机尺寸看可读性。",
+      },
+      {
+        key: "metal",
+        match: /金属/,
+        judge: "金属感靠明暗带和反光关系，不是简单套银灰渐变。",
+        steps: [
+          "先确定光源方向，所有高光和暗部都按同一个方向走。",
+          "用 3-5 个明暗色阶做线性或径向渐变，形成亮面、过渡和暗面。",
+          "在边缘加细高光，在背光侧加窄暗边，让形体立起来。",
+          "背景保持克制，避免和金属高光抢第一视觉。",
+          "如果是标题字，字距略收紧，笔画细节不要被高光吃掉。",
+        ],
+        pitfalls: [
+          "不要只用灰色，金属通常需要冷暖反光，否则会像脏灰。",
+          "高光太多会廉价，留一到两个最亮点就够。",
+        ],
+        nextStep: "先用黑白灰做出金属明暗，再加少量冷暖色反光。",
+      },
+      {
+        key: "glow",
+        match: /发光|霓虹|氛围光/,
+        judge: "发光效果适合暗背景或强氛围画面，用来强调焦点；亮底上硬加发光通常会脏。",
+        steps: [
+          "先压暗背景，让发光元素有对比空间。",
+          "保留一个清楚的发光核心，核心要比外扩光更亮更实。",
+          "外发光分两层：小半径高亮、大半径低透明度氛围光。",
+          "发光颜色不要超过 1-2 个主色，避免像杂乱彩灯。",
+          "文字旁边留出呼吸空间，不要让光晕盖住笔画。",
+        ],
+        pitfalls: [
+          "不要把所有元素都发光，焦点会消失。",
+          "光晕压住文字时，先降透明度或加暗底，不要继续加粗文字硬顶。",
+        ],
+        nextStep: "先只让主标题或主视觉发光，其他元素保持安静。",
+      },
+      {
+        key: "grain",
+        match: /颗粒|噪点/,
+        judge: "颗粒适合增加质感和统一素材，不适合弥补层级混乱。",
+        steps: [
+          "先把版式、颜色和主信息整理清楚，再加颗粒。",
+          "颗粒层放在最上方或素材组内，透明度从 5%-12% 试起。",
+          "大面积背景用细颗粒，主体局部可以稍强，但不要盖住文字。",
+          "如果多张素材风格不统一，可以用同一层颗粒和色罩收住它们。",
+          "导出前检查压缩后颗粒是否变脏或产生摩尔纹。",
+        ],
+        pitfalls: [
+          "颗粒不是越多越高级，过量会显旧、显脏、影响阅读。",
+          "印刷物要先确认打样，细噪点可能印出来和屏幕不一样。",
+        ],
+        nextStep: "先复制一版，加 8% 左右细颗粒，对比文字可读性和整体统一感。",
+      },
+      {
+        key: "shadow",
+        match: /阴影|投影|光影/,
+        judge: "阴影的作用是说明层级和空间，不是给每个元素都加装饰。",
+        steps: [
+          "先确定一个光源方向，比如左上来光，所有阴影都朝同一侧。",
+          "主物体用一层接触阴影贴住地面或卡片，透明度低一点。",
+          "悬浮元素再加一层更大、更软、更淡的投影，表现距离。",
+          "阴影颜色不要纯黑，取背景或主色的深色版会更自然。",
+          "最后关掉阴影看一眼，信息层级仍成立，再打开微调强度。",
+        ],
+        pitfalls: [
+          "不要多个方向乱投影，会显得廉价且不真实。",
+          "阴影过黑会让画面脏；高级感通常来自轻、软、克制。",
+        ],
+        nextStep: "先只给主视觉和最重要的信息卡加阴影，其他元素保持平面。",
+      },
+    ];
+    return recipes.find((item) => item.match.test(text)) || {
+      key: "premium",
+      judge: "高级质感先来自秩序、素材质量和克制的细节，再考虑技法。",
+      steps: [
+        "先减少颜色：主色、辅助色、强调色控制在 3 类以内。",
+        "统一光源和材质：阴影、渐变、颗粒都按同一套方向和强度处理。",
+        "拉开层级：主标题最大最清楚，装饰和辅助信息不要抢焦点。",
+        "增加一个低调细节：轻阴影、细颗粒、局部高光或材质纹理，选一个就够。",
+        "用真实预览尺寸检查：小屏或远看时，信息是否仍然一眼清楚。",
+      ],
+      pitfalls: [
+        "不要把高级感理解成变暗、变灰、加很多阴影。",
+        "不要同时叠毛玻璃、发光、颗粒、渐变，初稿容易失控。",
+      ],
+      nextStep: "先做一版“减法质感稿”：少色、强层级、轻阴影，再决定是否加材质细节。",
+    };
+  }
+
+  function buildVisualEffectContext(project, text, recipe) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    const context = [];
+    if (/小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(combined)) {
+      context.push("线上/社媒图先保证小屏可读，效果不能盖住标题、利益点和 CTA。");
+    }
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      context.push("印刷物要注意颜色模式、图片精度和打样，发光、颗粒、细阴影印出来可能会变弱或变脏。");
+    }
+    if (/品牌|VI|logo|Logo/.test(combined)) {
+      context.push("品牌项目要先遵守品牌色、字体和 Logo 规则，效果只做辅助，不要破坏识别感。");
+    }
+    if (project.dueDate && daysUntil(project.dueDate) <= 1) {
+      context.push("时间很紧，优先用最稳的轻量效果，不要临交付前大面积改材质。");
+    }
+    if (recipe.key === "glass" || /可读性|读不清/.test(text)) {
+      context.push("所有承载文字的效果层，都要先过可读性检查：缩小后仍能一眼读到主信息。");
+    }
+    return Array.from(new Set(context)).slice(0, 4);
+  }
+
   function cancelTaskFromText(state, project, text) {
     const openTasks = state.tasks.filter((task) => task.projectId === project.id && task.status !== "done");
     if (!openTasks.length) return "当前项目没有可取消的待办。";
@@ -1280,6 +1434,7 @@
         "organize_delivery_files",
         "adapt_multi_format",
         "check_brand_consistency",
+        "guide_visual_effect",
         "solve_design_issue",
         "cancel_task",
         "complete_checklist",
@@ -2061,6 +2216,7 @@
     organizeDeliveryFiles,
     adaptMultiFormat,
     checkBrandConsistency,
+    guideVisualEffect,
     generateDesignDirections,
     compareDesignOptions,
     generateReview,

@@ -346,6 +346,7 @@
       "organize_delivery_files",
       "adapt_multi_format",
       "check_brand_consistency",
+      "guide_visual_effect",
       "solve_design_issue",
       "cancel_task",
       "complete_checklist",

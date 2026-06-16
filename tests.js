@@ -794,4 +794,40 @@ function freshState() {
   assert.ok(state.checklist.length > beforeChecklist);
 }
 
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员活动海报";
+  project.type = "社媒图";
+  project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "想做高级一点的质感和阴影怎么做？", fixedNow);
+  assert.equal(result.analysis.behavior, "guide_visual_effect");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("视觉效果做法"));
+  assert.ok(result.reply.includes("光源"));
+  assert.ok(result.reply.includes("阴影"));
+  assert.ok(result.reply.includes("下一步"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品封面";
+  project.type = "社媒图";
+  const result = Core.applyInput(state, "毛玻璃效果怎么做才不影响文字可读性？", fixedNow);
+  assert.equal(result.analysis.behavior, "guide_visual_effect");
+  assert.ok(result.reply.includes("半透明"));
+  assert.ok(result.reply.includes("模糊"));
+  assert.ok(result.reply.includes("可读性"));
+  assert.ok(result.reply.includes("小屏"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "品牌质感不统一，怎么检查品牌规范？", fixedNow);
+  assert.equal(result.analysis.behavior, "check_brand_consistency");
+  assert.ok(result.reply.includes("品牌一致性检查"));
+}
+
 console.log("All Design Desk Agent tests passed.");
