@@ -488,6 +488,14 @@
       return "recommend_typography_system";
     }
     if (
+      /配色怎么|颜色怎么|色彩怎么|颜色搭|配色搭|主色|辅助色|强调色|颜色太暗|颜色太灰|颜色太脏|画面太暗|画面太灰|画面太脏|不够亮|不够年轻|色值怎么|怎么调色|如何调色/.test(text) &&
+      /怎么|如何|搭|配|调|建议|处理|改善|优化|不够|太暗|太灰|太脏/.test(text) &&
+      !(analysisBits.feedback && /反馈|说|觉得|希望|要求|建议|客户|主管|老板|运营|产品|甲方/.test(text)) &&
+      !/品牌色|品牌规范|VI|vi/.test(text)
+    ) {
+      return "recommend_color_system";
+    }
+    if (
       analysisBits.designIssue &&
       !analysisBits.feedback &&
       !/文案|标题|主标题|副标题|slogan|口号|标语|卖点|利益点|CTA|按钮文案|文字太多|精简|怎么写/.test(text) &&
@@ -800,6 +808,7 @@
       "guide_visual_effect",
       "recommend_layout_structure",
       "recommend_typography_system",
+      "recommend_color_system",
       "solve_design_issue",
       "cancel_task",
       "complete_checklist",
@@ -839,6 +848,7 @@
     if (analysis.behavior === "guide_visual_effect") return guideVisualEffect(project, analysis);
     if (analysis.behavior === "recommend_layout_structure") return recommendLayoutStructure(project, analysis);
     if (analysis.behavior === "recommend_typography_system") return recommendTypographySystem(project, analysis);
+    if (analysis.behavior === "recommend_color_system") return recommendColorSystem(project, analysis);
     if (analysis.behavior === "ask_checklist") return generateChecklistText(state, project);
     if (analysis.behavior === "update_project_name" || analysis.behavior === "update_project_type" || analysis.behavior === "update_project_specs") {
       applyProjectMeta(state, project, analysis.meta);
@@ -1549,6 +1559,128 @@
     return Array.from(new Set(context)).slice(0, 4);
   }
 
+  function recommendColorSystem(project, analysis) {
+    const systems = buildColorSystems(project, analysis.text);
+    const lines = [`配色系统建议：${project.name}`];
+    lines.push("先别一边看感觉一边乱调。第一版先定主色、辅助色、强调色，再检查文字和背景对比。");
+    systems.forEach((item, index) => {
+      lines.push(`方案 ${index + 1}｜${item.name}`);
+      lines.push(`- 主色：${item.primary}`);
+      lines.push(`- 辅助色：${item.secondary}`);
+      lines.push(`- 强调色：${item.accent}`);
+      lines.push(`- 适合：${item.bestFor}`);
+      lines.push(`- 风险：${item.risk}`);
+    });
+    lines.push("颜色比例：");
+    lines.push("1. 主色 60%：背景、大面积色块或主视觉氛围。");
+    lines.push("2. 辅助色 30%：承接信息区、分组、次级模块。");
+    lines.push("3. 强调色 10%：按钮、价格、关键词、必须被看到的行动点。");
+    const repairSteps = buildColorRepairSteps(analysis.text);
+    if (repairSteps.length) {
+      lines.push("修色顺序：");
+      repairSteps.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    }
+    lines.push("可读性检查：");
+    buildColorReadabilityChecks(project, analysis.text).forEach((item) => lines.push(`- ${item}`));
+    const context = buildColorContext(project, analysis.text);
+    if (context.length) {
+      lines.push("结合当前项目：");
+      context.forEach((item) => lines.push(`- ${item}`));
+    }
+    lines.push("下一步：先复制当前稿做一版“减色稿”，只保留 1 个主色、1 个辅助色、1 个强调色，再看画面是否清楚。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `配色系统整理：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildColorSystems(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${text}`;
+    const wantsYoung = /年轻|活泼|可爱|小红书|社媒|促销|不够年轻|不够亮/.test(combined);
+    const wantsPremium = /高级|质感|克制|品牌|正式/.test(combined);
+    const wantsWarm = /咖啡|食品|亲子|温暖|节日|生活/.test(combined);
+    return [
+      {
+        name: wantsPremium ? "克制高级" : "清晰稳妥",
+        primary: wantsPremium ? "低饱和深色或中性色，控制大面积背景。" : "从品牌色或项目主题色里选一个最稳定的颜色。",
+        secondary: wantsPremium ? "同色系浅灰/米白/低饱和辅助色，用来做信息承托。" : "主色的浅色版或邻近色，用来分组和承接画面。",
+        accent: wantsPremium ? "少量金色、亮白或高明度小面积点缀。" : "只选一个高对比强调色，用在按钮、价格或核心利益点。",
+        bestFor: wantsPremium ? "会员、品牌、质感活动、需要稳重可信的画面。" : "首版、日常活动、时间紧的设计任务。",
+        risk: "可能不够抢眼，需要靠标题大小、版式和一个强调点补第一眼。",
+      },
+      {
+        name: wantsYoung ? "年轻明亮" : "传播吸引",
+        primary: "高明度主色或更干净的暖/冷色，不要一开始就用很深的底。",
+        secondary: "用白色、浅色或同色系浅色拉开呼吸感。",
+        accent: "选一个跳色放在关键词、价格、CTA 上，面积要小。",
+        bestFor: "小红书封面、朋友圈海报、促销活动、需要更轻快的传播图。",
+        risk: "跳色过多会显廉价；最多一个强调色，别把所有元素都做亮。",
+      },
+      {
+        name: wantsWarm ? "温暖亲和" : "同色系秩序",
+        primary: wantsWarm ? "暖棕、橙、米色或柔和红色，营造亲和和食欲感。" : "选一个主色后，只在同色相里调整明度和饱和度。",
+        secondary: wantsWarm ? "米白、浅黄、浅棕承接背景和信息区。" : "用浅色/深色同色阶建立模块，不新增复杂色相。",
+        accent: wantsWarm ? "少量深棕、红橙或亮黄强调价格/行动。" : "同色系里最高对比的一档，用来强调行动点。",
+        bestFor: wantsWarm ? "咖啡、餐饮、亲子、节日和生活方式项目。" : "画面已经乱、需要快速统一气质的稿。",
+        risk: "同色系容易平，要用明度对比和字体层级补强重点。",
+      },
+    ];
+  }
+
+  function buildColorRepairSteps(text) {
+    const steps = [];
+    if (/太暗|不够亮|太灰|太脏/.test(text)) {
+      steps.push("先提高背景或主信息区的明度，不要先加更多颜色。");
+      steps.push("降低脏灰色的饱和度差异：保留一个主色，其他灰色改成同色系浅/深阶。");
+      steps.push("把最重要的标题或 CTA 放到高对比色块上，别让文字直接压在复杂背景里。");
+    }
+    if (/不够年轻|不年轻/.test(text)) {
+      steps.push("年轻感优先从更高明度、更清楚的留白和更轻快的强调色来，不是把颜色堆满。");
+      steps.push("保留一个跳色给核心信息，其他颜色收干净。");
+    }
+    if (/颜色乱|配色乱|颜色有点乱/.test(text)) {
+      steps.push("先删颜色：只留主色、辅助色、强调色，装饰色全部暂停。");
+      steps.push("把同类信息统一成同一种颜色，不同组再用间距区分。");
+    }
+    if (!steps.length) {
+      steps.push("先做 3 个小色板：稳妥版、年轻版、克制版，每版只用 3 个颜色。");
+      steps.push("把当前稿缩小看一眼，第一眼看不到的信息先提高明度对比。");
+    }
+    return Array.from(new Set(steps)).slice(0, 5);
+  }
+
+  function buildColorReadabilityChecks(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    const checks = [
+      "关掉饱和度看黑白稿：主标题和背景的明度差是否足够。",
+      "强调色只用于最重要的 1-2 个信息点，不要平均撒在装饰上。",
+      "同一组信息用同一套颜色逻辑，避免每行字都不同色。",
+    ];
+    if (/小红书|朋友圈|社媒|封面|头图|Banner/i.test(combined)) {
+      checks.unshift("缩到手机预览尺寸，3 秒内主标题和行动点必须读得清。");
+    }
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      checks.unshift("印刷物要确认 CMYK 转换和打样，屏幕上的亮色印出来可能变暗。");
+    }
+    return checks.slice(0, 5);
+  }
+
+  function buildColorContext(project, text) {
+    const context = [];
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    if (/品牌|VI|Logo|logo/.test(combined)) {
+      context.push("如果有品牌规范，先用品牌标准色；辅助色和强调色不能抢走品牌识别。");
+    }
+    if (/小红书|朋友圈|社媒|封面/.test(combined)) {
+      context.push("社媒图要先保证缩略图里标题清楚，颜色好看但读不清就要降级。");
+    }
+    if (project.goal && !/待补充/.test(project.goal)) {
+      context.push(`当前目标是「${project.goal}」，颜色要帮助用户更快完成这个判断。`);
+    }
+    if (project.dueDate && daysUntil(project.dueDate) <= 1) {
+      context.push("时间紧时先做减色和对比修正，不要临时换一整套视觉风格。");
+    }
+    return Array.from(new Set(context)).slice(0, 4);
+  }
+
   function adaptMultiFormat(project, analysis) {
     const targets = detectAdaptTargets(project, analysis.text);
     const lines = [`多尺寸适配方案：${project.name}`];
@@ -1850,6 +1982,7 @@
         "guide_visual_effect",
         "recommend_layout_structure",
         "recommend_typography_system",
+        "recommend_color_system",
         "solve_design_issue",
         "cancel_task",
         "complete_checklist",
@@ -2635,6 +2768,7 @@
     guideVisualEffect,
     recommendLayoutStructure,
     recommendTypographySystem,
+    recommendColorSystem,
     generateDesignDirections,
     compareDesignOptions,
     generateReview,

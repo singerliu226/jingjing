@@ -107,7 +107,8 @@ function freshState() {
 {
   const state = freshState();
   const result = Core.applyInput(state, "颜色有点乱，也不够年轻，怎么优化？", fixedNow);
-  assert.equal(result.analysis.behavior, "solve_design_issue");
+  assert.equal(result.analysis.behavior, "recommend_color_system");
+  assert.ok(result.reply.includes("配色系统建议"));
   assert.ok(result.reply.includes("主色"));
   assert.ok(result.reply.includes("明度"));
 }
@@ -934,6 +935,46 @@ function freshState() {
   const result = Core.applyInput(state, "标题文案怎么写得更年轻？", fixedNow);
   assert.equal(result.analysis.behavior, "refine_copywriting");
   assert.ok(result.reply.includes("文案整理"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品封面";
+  project.type = "社媒图";
+  project.goal = "让用户一眼知道新品上市";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "配色怎么搭？主色辅助色和强调色怎么分？", fixedNow);
+  assert.equal(result.analysis.behavior, "recommend_color_system");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("配色系统建议"));
+  assert.ok(result.reply.includes("主色 60%"));
+  assert.ok(result.reply.includes("辅助色 30%"));
+  assert.ok(result.reply.includes("强调色 10%"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "画面颜色太暗太灰，怎么调色更年轻？", fixedNow);
+  assert.equal(result.analysis.behavior, "recommend_color_system");
+  assert.ok(result.reply.includes("修色顺序"));
+  assert.ok(result.reply.includes("明度"));
+  assert.ok(result.reply.includes("跳色"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "主管说海报颜色太暗，要更年轻一点，明天改。", fixedNow);
+  assert.equal(result.analysis.behavior, "record_feedback");
+  assert.ok(result.reply.includes("已记录到"));
+  assert.ok(result.reply.includes("反馈已翻译为"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "品牌色怎么用才符合规范？", fixedNow);
+  assert.equal(result.analysis.behavior, "check_brand_consistency");
+  assert.ok(result.reply.includes("品牌一致性检查"));
 }
 
 console.log("All Design Desk Agent tests passed.");
