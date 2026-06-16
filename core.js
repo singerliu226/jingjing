@@ -20,6 +20,26 @@
 
   const fuzzyFeedback = [
     {
+      word: "不行",
+      action: "先不要整体推翻，确认具体不行的是目标、层级、风格还是交付限制，再按优先级补救。",
+      reason: "否定型反馈通常缺少可执行信息，需要先定位问题范围。",
+    },
+    {
+      word: "重做",
+      action: "把重做拆成保留项和推翻项：先确认哪些信息必须保留，再重建方向。",
+      reason: "重做并不等于全部删除，先确认可复用内容能减少返工。",
+    },
+    {
+      word: "很怪",
+      action: "检查画面违和点：风格是否不统一、比例是否失衡、颜色和字体是否互相打架。",
+      reason: "“怪”通常指一致性或比例问题，不一定是创意完全失败。",
+    },
+    {
+      word: "丑",
+      action: "把情绪化反馈转成设计检查：层级、对齐、间距、字体、颜色和素材质量逐项排查。",
+      reason: "直接评价审美时，需要转成可修改的基础设计项。",
+    },
+    {
       word: "太普通",
       action: "增强视觉记忆点：提高主标题对比，加入更明确的视觉锚点或风格化图形。",
       reason: "反馈指向差异化不足，需要让画面被快速记住。",
@@ -107,6 +127,105 @@
         "高级感优先来自秩序和克制：减少颜色、统一间距、提高素材质量。",
       ],
       nextStep: "先做 2 个方向小稿：一个更克制，一个更有视觉记忆点，再对比哪个更贴 brief。",
+    },
+  ];
+
+  const designerQuestionRules = [
+    {
+      key: "brief_start",
+      label: "需求拆解",
+      words: ["不知道从哪开始", "从哪开始", "怎么开始", "怎么拆", "拆brief", "拆 brief", "需求不清", "先做什么"],
+      judge: "先判断这张图要解决的唯一核心问题：让谁在什么场景下看懂什么。",
+      steps: [
+        "把需求写成一句话：给谁看、在哪里看、希望对方做什么。",
+        "只保留 3 类必填信息：目标、受众、交付物；尺寸和截止时间单独确认。",
+        "先做信息层级草稿，不急着找风格；层级错了，后面都会返工。",
+      ],
+      nextStep: "在项目小纸条补齐目标、受众、场景、交付物和截止时间，再让小画桌排工作流。",
+    },
+    {
+      key: "reference",
+      label: "参考与灵感",
+      words: ["参考", "灵感", "找图", "找案例", "竞品", "情绪板", "moodboard"],
+      judge: "先别只找“好看的图”，要按目标、受众、场景去找能解决同类问题的参考。",
+      steps: [
+        "分三组找参考：信息层级参考、视觉风格参考、同平台尺寸参考。",
+        "每张参考只写一句为什么可用，例如“标题够醒目”或“色彩更年轻”。",
+        "不要照搬整张图，只借一个方法：构图、字体比例、配色关系或图形语言。",
+      ],
+      nextStep: "先收 6 张参考：2 张层级、2 张风格、2 张平台尺寸，并删掉说不出理由的图。",
+    },
+    {
+      key: "typography_choice",
+      label: "字体选择",
+      words: ["字体怎么", "字体选", "字体搭", "字重", "字体配", "用什么字体", "标题字体"],
+      judge: "字体先服务信息性格：是清楚、正式、年轻、可爱，还是高级。",
+      steps: [
+        "先选标题字体，再选正文；正文优先清楚，不要抢标题。",
+        "同一张图控制在 1-2 个字体家族，变化靠字号、字重和间距完成。",
+        "标题要有主次：主标题最大，利益点次之，说明信息再降一级。",
+      ],
+      nextStep: "复制当前稿做一版字体收敛版：只保留 2 种字重和 3 档字号。",
+    },
+    {
+      key: "color_choice",
+      label: "配色判断",
+      words: ["配色", "颜色怎么", "色彩怎么", "主色", "辅助色", "颜色搭", "色值"],
+      judge: "配色先判断情绪和识别：品牌色能不能用，目标情绪是年轻、温暖、高级还是促销。",
+      steps: [
+        "先定主色，再定辅助色，最后只留一个强调色。",
+        "检查主标题和背景的明度对比，别让颜色好看但文字读不清。",
+        "如果画面已经乱，先减少颜色数量，再调饱和度和明度。",
+      ],
+      nextStep: "做 3 个小色板：品牌稳妥版、年轻明亮版、克制高级版，再选最贴目标的一版。",
+    },
+    {
+      key: "layout_method",
+      label: "版式方法",
+      words: ["版式", "构图", "排版", "留白", "层级", "信息层级", "视觉中心"],
+      judge: "版式先解决第一眼顺序：用户先看哪里，再看哪里，最后记住什么。",
+      steps: [
+        "把所有信息按重要性排队：必须看到、可以看到、可弱化。",
+        "主视觉或主标题只选一个当第一视觉，不要两个都抢。",
+        "用对齐、间距和分组建立秩序；装饰只服务视觉动线。",
+      ],
+      nextStep: "先做黑白线框稿，确认信息顺序成立后，再加颜色、图片和装饰。",
+    },
+    {
+      key: "delivery_specs",
+      label: "交付规格",
+      words: ["尺寸", "规格", "导出", "格式", "源文件", "出血", "印刷", "转曲", "分辨率", "安全区"],
+      judge: "交付问题先确认使用场景：线上看、印刷、广告位、还是多平台复用。",
+      steps: [
+        "线上图先确认平台尺寸、安全区、移动端可读性和导出格式。",
+        "印刷物先确认出血、CMYK、图片精度、文字转曲和文件打包。",
+        "交付前统一命名，源文件、导出图、字体/图片授权分开放好。",
+      ],
+      nextStep: "打开交付检查清单，先补尺寸和格式，再做导出。",
+    },
+    {
+      key: "feedback_handling",
+      label: "反馈处理",
+      words: ["改来改去", "反馈很多", "意见很多", "客户一直改", "老板一直改", "怎么沟通", "怎么确认"],
+      judge: "反馈多时不要马上全改，先把反馈分成目标问题、审美偏好、交付限制三类。",
+      steps: [
+        "先找冲突反馈，例如“高级”和“活泼”同时出现，要确认优先级。",
+        "每轮只确认 1-2 个核心方向，避免把所有意见平均塞进画面。",
+        "回复时用方案语言：我会保留什么、调整什么、为什么这样更贴目标。",
+      ],
+      nextStep: "把反馈原话发给小画桌，它会翻译成修改点，并生成确认话术。",
+    },
+    {
+      key: "copyright_assets",
+      label: "素材与授权",
+      words: ["版权", "授权", "字体授权", "图片版权", "商用", "素材能不能用", "侵权"],
+      judge: "素材先判断是否商用、是否对外发布、是否需要源文件交付。",
+      steps: [
+        "商用项目优先用公司素材库、可商用图库或客户提供素材。",
+        "字体要确认授权范围；不确定时换成公司已授权字体或免费商用字体。",
+        "交付时记录素材来源，避免后续被问到时说不清。",
+      ],
+      nextStep: "把不确定的字体和图片列出来，先向负责人确认能否商用。",
     },
   ];
 
@@ -265,6 +384,17 @@
     };
   }
 
+  function detectDesignerQuestion(text) {
+    const matched = designerQuestionRules.filter((rule) => rule.words.some((word) => text.includes(word)));
+    const looksLikeQuestion = /怎么|如何|怎么办|能不能|要不要|先做|从哪|为什么|\?$|？$/.test(text);
+    if (!matched.length || !looksLikeQuestion) return null;
+    return {
+      keys: matched.map((rule) => rule.key),
+      labels: matched.map((rule) => rule.label),
+      rules: matched,
+    };
+  }
+
   function extractDeliverables(text) {
     const deliverables = [];
     const patterns = [
@@ -300,17 +430,56 @@
     if (!text) return "empty";
     if (/今天.*(做什么|安排)|今日.*安排|先做什么|排一下|计划一下/.test(text)) return "ask_plan";
     if (/日报|今天总结|工作总结|周报/.test(text)) return "ask_summary";
+    if (/汇报|提案|讲方案|讲这个方案|方案.*怎么讲|设计说明|解释.*(设计|方案)|说服|怎么跟.*讲|给老板看.*说|发给老板.*说/.test(text)) {
+      return "prepare_design_presentation";
+    }
     if (/自检|帮我看看|提交前|会被问|检查一下|哪里有问题/.test(text)) return "ask_review";
+    if (/话术|怎么问|怎么说|帮我问|帮我整理.*确认|催一下|催.*(反馈|确认|回复)|没回.*怎么|没回复.*怎么/.test(text)) {
+      return "ask_confirmation_message";
+    }
+    if (/来不及|赶不完|太多了|任务太多|很乱|乱成|焦虑|崩溃|不知道先做哪个|老板.*催|客户.*催|马上要|今天.*交.*还没/.test(text)) {
+      return "triage_overload";
+    }
     if (/任务.*(延后|延期|推迟|改到)|延后到|延期到|推迟到/.test(text) && analysisBits.dueDate) return "snooze_task";
     if (/取消|删除|不用做|不用了|先不做|撤掉/.test(text)) return "cancel_task";
     if (/交付检查.*(完成|勾完|都好了)|检查项.*(完成|勾完|都好了)/.test(text)) return "complete_checklist";
+    if (/源文件.*(整理|打包|命名)|文件.*(整理|命名|打包|太乱)|怎么.*(命名|打包|整理).*文件|交付包|命名规范|文件夹/.test(text)) {
+      return "organize_delivery_files";
+    }
     if (/交付检查|导出检查|检查.*(出血|转曲|源文件|打包)|清单/.test(text)) return "ask_checklist";
     if (/作品集|归档|面试|复盘|案例/.test(text)) return "ask_portfolio";
     if (/(v|V)\s*\d+|第[一二三四五六七八九十\d]+版|版本/.test(text)) return "record_version";
+    if (/素材|图片|照片|图太糊|太糊|清晰度|分辨率|抠图|扣图|边缘|锯齿|水印|找不到图|没有合适的图|素材不统一|图片风格不统一/.test(text)) {
+      return "fix_asset_quality";
+    }
+    if (
+      /适配|改尺寸|多尺寸|多平台|一稿多|横版.*竖版|竖版.*横版|安全区|裁切|公众号头图|朋友圈海报|小红书封面|banner.*尺寸|Banner.*尺寸/.test(text) &&
+      /怎么|如何|改|适配|生成|做|处理/.test(text) &&
+      !/新项目|创建项目|客户要|最后要交|需要.*(海报|头图|封面|包装|banner|PPT)|字太多|看不清|画面乱|太乱|层级|颜色|字体/.test(text)
+    ) {
+      return "adapt_multi_format";
+    }
+    if (/品牌规范|视觉规范|VI|vi|品牌色|品牌字体|logo.*使用|Logo.*使用|不符合品牌|不像品牌|品牌一致|调性统一|品牌调性/.test(text)) {
+      return "check_brand_consistency";
+    }
+    if (analysisBits.designerQuestion) return "answer_design_question";
+    if (/文案|标题|主标题|副标题|slogan|口号|标语|卖点|利益点|CTA|按钮文案|文字太多|精简.*文字|怎么写/.test(text)) {
+      return "refine_copywriting";
+    }
+    if (/给.*(方向|方案|关键词)|出.*(方向|方案)|想.*(方向|方案)|视觉关键词|设计方向|风格方向|创意方向|几个方向|几个方案/.test(text)) {
+      return "ask_design_directions";
+    }
+    if (/选哪个|哪个更好|哪个方案|方案[AB]|A.*B|两个方案|要不要|该不该/.test(text)) return "compare_design_options";
     if (/项目名|项目名称|名字.*(改成|改为|叫)|名称.*(改成|改为)/.test(text)) return "update_project_name";
     if (/项目类型|设计类型|类型.*(改成|改为|是)|类别.*(改成|改为|是)/.test(text)) return "update_project_type";
     if (/客户|老板|主管|甲方|运营|产品/.test(text) && /确认了|通过了|回复了|同意了|ok了|OK了/.test(text)) return "clear_waiting";
     if (/反馈.*(处理好了|改完了|已处理|完成)|修改.*(完成|改完)/.test(text)) return "mark_feedback_handled";
+    if (/不行|重做|推翻|被否|否了|毙了|很怪|丑|不好看|完全不对|方向不对/.test(text) && /老板|客户|主管|甲方|说|反馈|觉得/.test(text)) {
+      return "handle_negative_feedback";
+    }
+    if (/不对劲|有点怪|怪怪的|不舒服|不协调|不太对|说不上来|不知道哪里|看着不行|感觉不对/.test(text)) {
+      return "diagnose_ambiguous_issue";
+    }
     if (analysisBits.meta && (analysisBits.meta.name || analysisBits.meta.type)) return analysisBits.meta.name ? "update_project_name" : "update_project_type";
     if (analysisBits.meta && (analysisBits.meta.specs || analysisBits.meta.formats)) return "update_project_specs";
     if (analysisBits.createsProject) return "create_project";
@@ -409,11 +578,12 @@
     const from = detectPeople(clean);
     const feedback = detectFeedback(clean);
     const designIssue = detectDesignIssue(clean);
+    const designerQuestion = detectDesignerQuestion(clean);
     const deliverables = extractDeliverables(clean);
     const createsProject = /新项目|创建项目|项目|客户要|需要.*(海报|头图|封面|包装|banner|PPT)/i.test(clean) && deliverables.length > 1;
     const brief = extractBriefFields(clean);
     const meta = extractProjectMeta(clean);
-    const behavior = detectBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue });
+    const behavior = detectBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion });
     const projectName = createsProject ? guessProjectName(clean, activeProject) : activeProject.name;
     const missing = [];
     if ((createsProject || type.deliverables.length) && !/尺寸|规格|px|mm|cm|出血/.test(clean)) missing.push("尺寸 / 平台规格");
@@ -433,6 +603,7 @@
       from,
       feedback,
       designIssue,
+      designerQuestion,
       brief,
       meta,
       missing,
@@ -579,6 +750,19 @@
       "ask_review",
       "ask_checklist",
       "ask_portfolio",
+      "ask_confirmation_message",
+      "answer_design_question",
+      "ask_design_directions",
+      "compare_design_options",
+      "triage_overload",
+      "refine_copywriting",
+      "prepare_design_presentation",
+      "handle_negative_feedback",
+      "diagnose_ambiguous_issue",
+      "fix_asset_quality",
+      "organize_delivery_files",
+      "adapt_multi_format",
+      "check_brand_consistency",
       "solve_design_issue",
       "cancel_task",
       "complete_checklist",
@@ -601,6 +785,19 @@
     if (analysis.behavior === "ask_portfolio") {
       return generatePortfolioCase(project, state.feedback.filter((item) => item.projectId === project.id));
     }
+    if (analysis.behavior === "ask_confirmation_message") return generateConfirmationMessage(state, project, analysis.text);
+    if (analysis.behavior === "answer_design_question") return answerDesignQuestion(project, analysis);
+    if (analysis.behavior === "ask_design_directions") return generateDesignDirections(project, analysis);
+    if (analysis.behavior === "compare_design_options") return compareDesignOptions(project, analysis);
+    if (analysis.behavior === "triage_overload") return generateTriagePlan(state, project, analysis, now);
+    if (analysis.behavior === "refine_copywriting") return refineCopywriting(project, analysis);
+    if (analysis.behavior === "prepare_design_presentation") return generatePresentationScript(state, project, analysis);
+    if (analysis.behavior === "handle_negative_feedback") return handleNegativeFeedback(state, project, analysis, now);
+    if (analysis.behavior === "diagnose_ambiguous_issue") return diagnoseAmbiguousIssue(project, analysis);
+    if (analysis.behavior === "fix_asset_quality") return fixAssetQuality(project, analysis);
+    if (analysis.behavior === "organize_delivery_files") return organizeDeliveryFiles(project, analysis);
+    if (analysis.behavior === "adapt_multi_format") return adaptMultiFormat(project, analysis);
+    if (analysis.behavior === "check_brand_consistency") return checkBrandConsistency(project, analysis);
     if (analysis.behavior === "ask_checklist") return generateChecklistText(state, project);
     if (analysis.behavior === "update_project_name" || analysis.behavior === "update_project_type" || analysis.behavior === "update_project_specs") {
       applyProjectMeta(state, project, analysis.meta);
@@ -747,6 +944,266 @@
       : "已记录反馈处理完成。当前没有未处理的反馈条目。";
   }
 
+  function handleNegativeFeedback(state, project, analysis, now) {
+    const feedback = analysis.feedback || detectFeedback(analysis.text);
+    const item = {
+      id: uid("f"),
+      projectId: project.id,
+      from: analysis.from || "待补充",
+      raw: analysis.text,
+      action: feedback ? feedback.action : "把否定型反馈拆成可执行问题：目标、层级、风格、交付限制分别确认。",
+      reason: feedback ? feedback.reason : "否定型反馈需要先定位问题范围，避免盲目重做。",
+      conflict: Boolean(feedback && feedback.conflict),
+      handled: false,
+      version: project.versions && project.versions.length ? project.versions[project.versions.length - 1].name : "",
+    };
+    state.feedback.push(item);
+    project.status = "designing";
+    project.risks = Array.from(new Set((project.risks || []).concat(["否定型反馈，需要先确认重做范围"])));
+    state.tasks.push({
+      id: uid("t"),
+      projectId: project.id,
+      title: "拆解否定型反馈并补救方案",
+      priority: "high",
+      dueDate: analysis.dueDate || project.dueDate || formatDate(now),
+      status: "todo",
+      nextAction: "先确认不满意的是目标、层级、风格还是细节，再做一版补救小稿",
+      feedbackIds: [item.id],
+    });
+    project.portfolio.process = appendSentence(project.portfolio.process, `否定型反馈：${analysis.text}`);
+    return buildNegativeFeedbackPlan(project, item, analysis);
+  }
+
+  function buildNegativeFeedbackPlan(project, feedback, analysis) {
+    const lines = [`补救方案：${project.name}`];
+    lines.push("先别急着全部推翻。否定型反馈要先拆成“哪里不对”，否则会越改越乱。");
+    lines.push(`已记录原话：${feedback.raw}`);
+    lines.push("先问清 3 件事：");
+    lines.push("1. 是目标方向不对，还是画面执行不够好？");
+    lines.push("2. 哪些部分必须保留：文案、主视觉、品牌色、尺寸、活动信息？");
+    lines.push("3. 希望下一版更接近哪个方向：更高级、更年轻、更清楚，还是更有记忆点？");
+    lines.push("马上补救：");
+    lines.push("- 先做一版黑白信息层级稿，证明主信息顺序是清楚的。");
+    lines.push("- 再做 1 个风格小稿，不要同时试太多装饰。");
+    lines.push("- 把修改前后放一起，方便老板/客户说清楚哪版更接近。");
+    lines.push("可以这样回复：我先确认一下，这版主要是不符合方向，还是画面层级/风格细节不够？我会先保留必要信息，快速调整一版更接近目标的方向给你看。");
+    if (analysis.dueDate || project.dueDate) {
+      lines.push(`时间提醒：当前截止是 ${analysis.dueDate || project.dueDate}，建议先确认重做范围，再投入精修。`);
+    }
+    return lines.join("\n");
+  }
+
+  function diagnoseAmbiguousIssue(project, analysis) {
+    const lines = [`模糊问题诊断：${project.name}`];
+    lines.push("先不急着猜原因。遇到“怪怪的 / 不对劲 / 说不上来”，按这个顺序排查：");
+    buildAmbiguousChecks(project, analysis.text).forEach((item, index) => {
+      lines.push(`${index + 1}. ${item}`);
+    });
+    lines.push("关键追问：");
+    lines.push("- 第一眼应该看到什么？现在第一眼实际看到了什么？");
+    lines.push("- 不舒服主要来自颜色、字体、比例、素材，还是信息太多？");
+    lines.push("- 这张图是要更清楚、更高级、更年轻，还是更有促销感？");
+    lines.push("下一步：先复制一版，只改一个变量。先改层级或对齐，不要同时改颜色、字体和素材。");
+    const risks = currentProjectRisks(project);
+    if (risks.length) lines.push(`别忘了先确认：${risks.slice(0, 2).join("、")}。`);
+    project.portfolio.process = appendSentence(project.portfolio.process, `模糊问题诊断：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildAmbiguousChecks(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    const checks = [
+      "关掉颜色看黑白稿：主标题、主图、辅助信息的顺序是否清楚。",
+      "检查对齐和间距：有没有某些元素像是“飘着”或贴得太近。",
+      "检查字体数量和字重：是否用了太多风格，导致语气不统一。",
+      "检查颜色关系：主色、辅助色、强调色是否超过 3 类。",
+      "检查素材质量和比例：主体图是否被拉伸、裁切或和风格不一致。",
+    ];
+    if (/小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(combined)) {
+      checks.splice(1, 0, "缩到手机预览大小：3 秒内能否看清主标题和核心利益点。");
+    }
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      checks.splice(1, 0, "放到真实尺寸看：出血、边距、字号和图片精度是否靠谱。");
+    }
+    return checks.slice(0, 6);
+  }
+
+  function fixAssetQuality(project, analysis) {
+    const text = analysis.text;
+    const lines = [`素材补救方案：${project.name}`];
+    lines.push("先判断素材是不是“能救”，不要一上来就滤镜硬修。按这个顺序处理：");
+    buildAssetQualitySteps(project, text).forEach((item, index) => {
+      lines.push(`${index + 1}. ${item}`);
+    });
+    lines.push("替代方案：");
+    buildAssetAlternatives(project, text).forEach((item) => lines.push(`- ${item}`));
+    lines.push("交付提醒：如果是商业发布，素材来源、字体和图片授权要留记录；不确定授权时先换可商用素材。");
+    lines.push("下一步：先做一版“换素材/裁切/降级为图形化”的对比小稿，选最稳的一版继续精修。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `素材问题处理：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildAssetQualitySteps(project, text) {
+    const steps = [];
+    if (/糊|清晰度|分辨率|锯齿/.test(text)) {
+      steps.push("先看真实使用尺寸：如果放大后仍糊，优先换更高清源图，不要硬锐化。");
+      steps.push("如果必须用这张图，缩小使用、加遮罩或作为背景氛围，不要当主视觉大图。");
+    }
+    if (/抠图|扣图|边缘|锯齿/.test(text)) {
+      steps.push("先处理边缘：羽化 0.5-1px、清理杂边，再检查阴影是否贴合背景光源。");
+      steps.push("抠图脏时不要加复杂背景，先用干净底色或局部色块承接主体。");
+    }
+    if (/不统一|风格/.test(text)) {
+      steps.push("把素材统一到同一种处理方式：同色调、同颗粒感、同光源方向，别让每张图像来自不同世界。");
+    }
+    if (/水印|找不到|没有合适/.test(text)) {
+      steps.push("不要直接用带水印素材；先找可商用替代图，或改成图标/色块/文字信息主导。");
+    }
+    if (!steps.length) {
+      steps.push("先判断素材承担什么角色：主视觉、背景氛围、说明图标，角色不同处理方式不同。");
+      steps.push("主视觉素材必须清楚、风格统一；背景素材可以弱化、裁切或加色罩。");
+    }
+    steps.push("最后回到画面：素材处理完后，主标题和核心信息不能被素材抢走。");
+    return steps.slice(0, 6);
+  }
+
+  function buildAssetAlternatives(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    const alternatives = [];
+    if (/小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(combined)) {
+      alternatives.push("社媒封面可以用大标题 + 简单图形/色块替代复杂素材，先保证小屏识别。");
+    }
+    if (/包装|画册|折页|印刷/.test(combined)) {
+      alternatives.push("印刷物宁可用高质量局部裁切，也不要铺满低清图片。");
+    }
+    alternatives.push("如果素材质量都不够，改用图形化表达：关键词、线条、色块、图标和材质纹理。");
+    alternatives.push("如果客户必须用原图，把原图作为小尺寸信息图，主视觉交给标题和版式。");
+    return alternatives.slice(0, 4);
+  }
+
+  function organizeDeliveryFiles(project, analysis) {
+    const date = (project.dueDate || formatDate(new Date())).replace(/-/g, "");
+    const safeName = sanitizeFileName(project.name);
+    const deliverables = (project.deliverables || []).length ? project.deliverables : ["交付图"];
+    const lines = [`交付文件整理：${project.name}`];
+    lines.push("建议用这个交付包结构，别人打开也能马上看懂：");
+    lines.push(`${date}_${safeName}_交付包/`);
+    lines.push("- 01_导出图/");
+    lines.push("- 02_源文件/");
+    lines.push("- 03_参考与素材/");
+    lines.push("- 04_字体与授权说明/");
+    lines.push("- README_交付说明.txt");
+    lines.push("命名规范：");
+    deliverables.slice(0, 4).forEach((item, index) => {
+      lines.push(`- ${date}_${safeName}_${String(index + 1).padStart(2, "0")}_${sanitizeFileName(item)}_v01`);
+    });
+    lines.push("导出前检查：");
+    buildDeliveryFileChecks(project, analysis.text).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("README 里写清楚：项目名、交付日期、包含文件、尺寸规格、导出格式、是否含源文件、字体/图片授权情况。");
+    lines.push("交付话术：我已经把导出图、源文件、参考素材和授权说明分开放好，文件名按日期/项目/物料/版本命名，方便后续查找和修改。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `交付文件整理：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function sanitizeFileName(value) {
+    return String(value || "未命名")
+      .replace(/[\\/:*?"<>|]/g, "")
+      .replace(/\s+/g, "")
+      .slice(0, 24);
+  }
+
+  function buildDeliveryFileChecks(project, text) {
+    const checks = [
+      "导出图和源文件分开放，避免客户误开编辑文件。",
+      "版本号只递增，不用“最终版/最终最终版”。",
+      "删除临时图层、隐藏废稿、无用素材和空白画板。",
+      "确认文件能在另一台电脑打开，图片链接和字体没有丢失。",
+    ];
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      checks.push("印刷文件另存一份转曲/嵌图版本，并标清是否含出血。");
+    }
+    if (/小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(combined)) {
+      checks.push("线上图按平台分别导出，不同尺寸不要混在同一个文件名里。");
+    }
+    return checks.slice(0, 6);
+  }
+
+  function adaptMultiFormat(project, analysis) {
+    const targets = detectAdaptTargets(project, analysis.text);
+    const lines = [`多尺寸适配方案：${project.name}`];
+    lines.push("不要直接拉伸原稿。先做一张母版，再按平台重排信息层级。");
+    lines.push("适配顺序：");
+    lines.push("1. 锁定母版：主标题、主视觉、核心卖点和 CTA 先确定。");
+    lines.push("2. 拆安全区：每个尺寸先画出不可裁切区域，再放主信息。");
+    lines.push("3. 重排而不是缩放：横版改竖版时，主视觉和标题位置要重新建立第一眼顺序。");
+    lines.push("4. 少字优先：小尺寸只保留主标题、一个利益点和一个行动点。");
+    lines.push("平台处理：");
+    targets.forEach((target) => lines.push(`- ${target.name}：${target.note}`));
+    lines.push("检查标准：缩到手机预览或真实投放尺寸，3 秒内能否看清主标题和核心利益点。");
+    lines.push("下一步：先导出低清预览给自己看裁切，再统一导出正式图，避免最后才发现关键信息被裁掉。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `多尺寸适配：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function detectAdaptTargets(project, text) {
+    const combined = `${(project.deliverables || []).join("、")} ${text}`;
+    const targets = [];
+    if (/小红书|封面/.test(combined)) {
+      targets.push({ name: "小红书封面", note: "标题要大，人物/产品不要贴边，顶部和底部留出裁切余量。" });
+    }
+    if (/朋友圈|海报/.test(combined)) {
+      targets.push({ name: "朋友圈海报", note: "主标题和活动利益点放在上半区，长说明放弱，不要让二维码抢第一眼。" });
+    }
+    if (/公众号|头图/.test(combined)) {
+      targets.push({ name: "公众号头图", note: "横向空间更宽，主标题和主体图左右分布，避免把字压得太小。" });
+    }
+    if (/Banner|banner|横幅/.test(combined)) {
+      targets.push({ name: "Banner", note: "横版只保留一个主视觉和一句核心文案，按钮或利益点要靠近视觉中心。" });
+    }
+    if (!targets.length) {
+      targets.push({ name: "当前尺寸", note: "先确认真实投放尺寸和安全区，再决定是重排、裁切还是删减信息。" });
+    }
+    return targets.slice(0, 5);
+  }
+
+  function checkBrandConsistency(project, analysis) {
+    const text = analysis.text;
+    const lines = [`品牌一致性检查：${project.name}`];
+    lines.push("先别只看单张图好不好看，先看它有没有像同一个品牌。按这个顺序检查：");
+    buildBrandChecks(project, text).forEach((item, index) => {
+      lines.push(`${index + 1}. ${item}`);
+    });
+    lines.push("修正顺序：");
+    lines.push("- 先固定 Logo 使用方式和安全距离，再调版式。");
+    lines.push("- 再收敛品牌色和辅助色，不要随手加新颜色。");
+    lines.push("- 最后统一字体、图标、线条、插画或素材处理方式。");
+    lines.push("需要确认：是否有品牌手册、标准色值、指定字体、Logo 禁用规则和历史模板。");
+    lines.push("判断标准：遮住 Logo 后，用户仍然能从色彩、字体、图形语言感到这是同一个品牌。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `品牌一致性检查：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildBrandChecks(project, text) {
+    const checks = [
+      "Logo：比例、留白、安全距离和背景对比是否符合规范。",
+      "色彩：主品牌色是否正确，辅助色有没有抢走品牌色。",
+      "字体：标题和正文是否沿用品牌字体或同气质替代字体。",
+      "图形语言：图标、线条、插画、照片调性是否像同一套系统。",
+      "版式气质：间距、圆角、按钮、标签是否和历史物料一致。",
+    ];
+    if (/品牌色|颜色|色值/.test(text)) {
+      checks.unshift("色值：先确认品牌标准色的 RGB/CMYK/HEX，不要用肉眼吸近似色。");
+    }
+    if (/logo|Logo/.test(text)) {
+      checks.unshift("Logo 使用：不要拉伸、加描边、随意换色或压在复杂背景上。");
+    }
+    if (/字体/.test(text)) {
+      checks.unshift("品牌字体：如果没有授权字体，先找气质接近且可商用的替代字体，并记录原因。");
+    }
+    return Array.from(new Set(checks)).slice(0, 7);
+  }
+
   function cancelTaskFromText(state, project, text) {
     const openTasks = state.tasks.filter((task) => task.projectId === project.id && task.status !== "done");
     if (!openTasks.length) return "当前项目没有可取消的待办。";
@@ -810,6 +1267,19 @@
         "ask_review",
         "ask_checklist",
         "ask_portfolio",
+        "ask_confirmation_message",
+        "answer_design_question",
+        "ask_design_directions",
+        "compare_design_options",
+        "triage_overload",
+        "refine_copywriting",
+        "prepare_design_presentation",
+        "handle_negative_feedback",
+        "diagnose_ambiguous_issue",
+        "fix_asset_quality",
+        "organize_delivery_files",
+        "adapt_multi_format",
+        "check_brand_consistency",
         "solve_design_issue",
         "cancel_task",
         "complete_checklist",
@@ -1135,6 +1605,410 @@
     return lines.join("\n");
   }
 
+  function generateTriagePlan(state, project, analysis, now = new Date()) {
+    const dashboard = getDashboard(state, now);
+    const projectTasks = state.tasks
+      .filter((task) => task.projectId === project.id && task.status !== "done")
+      .sort((a, b) => {
+        const pa = a.status === "waiting" ? 2 : a.priority === "high" ? 0 : 1;
+        const pb = b.status === "waiting" ? 2 : b.priority === "high" ? 0 : 1;
+        return pa - pb || String(a.dueDate || "9999").localeCompare(String(b.dueDate || "9999"));
+      });
+    const actionableTasks = projectTasks.filter((task) => !/先写下这个项目要做什么/.test(task.title));
+    const taskPool = actionableTasks.length ? actionableTasks : projectTasks;
+    const firstTask = taskPool.find((task) => task.status !== "waiting") || dashboard.today[0];
+    const waiting = projectTasks.find((task) => task.status === "waiting") || dashboard.waiting[0];
+    const risks = currentProjectRisks(project);
+    const due = project.dueDate || (firstTask && firstTask.dueDate) || "";
+    const urgent = /来不及|赶不完|马上|今天|下班前|催/.test(analysis.text) || (due && daysUntil(due, now) <= 1);
+    const lines = [`紧急推进方案：${project.name}`];
+    lines.push("先稳住，我们不把所有事同时做。现在只切成 4 块：保交付、保可读、保确认、砍细节。");
+    lines.push(firstTask ? `1. 先做这一件：${firstTask.title}。动作：${firstTask.nextAction}` : "1. 先做这一件：补齐项目小纸条里的目标、截止时间和交付物。");
+    lines.push(`2. 交付底线：${buildDeliveryBottomLine(project, urgent)}`);
+    lines.push(waiting ? `3. 立刻确认：${waiting.title}。如果 30 分钟内没回复，先按最稳方案推进，并留下确认记录。` : "3. 需要确认：如果尺寸、格式、目标不清，先发一条确认话术，不要边猜边精修。");
+    lines.push(risks.length ? `4. 暂时别碰：会放大返工的部分，尤其是 ${risks.slice(0, 2).join("、")}。` : "4. 暂时别碰：复杂装饰、第二套风格、非必要动效和过细文案。");
+    lines.push("时间盒：先用 25 分钟完成可读版，再用 25 分钟补视觉重点，最后 10 分钟检查尺寸、命名和导出。");
+    if (urgent) lines.push("今天的标准不是做到完美，而是先交一版清楚、可解释、能继续反馈的稿。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `紧急推进：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildDeliveryBottomLine(project, urgent) {
+    const social = /小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(`${project.type} ${(project.deliverables || []).join("、")}`);
+    const print = /印刷|包装|画册|折页/.test(`${project.type} ${(project.deliverables || []).join("、")}`);
+    if (print) return "尺寸、出血、CMYK、图片精度和文字转曲不能漏；视觉细节可以后补。";
+    if (social) return "手机预览里主标题、利益点、主体图必须清楚，细碎说明先删或弱化。";
+    if (urgent) return "主信息清楚、尺寸正确、可导出，比多做一个风格更重要。";
+    return "先保证目标、主信息、尺寸和格式正确，再优化风格细节。";
+  }
+
+  function refineCopywriting(project, analysis) {
+    const goal = project.goal && !/待补充/.test(project.goal) ? project.goal : inferCopyGoal(analysis.text);
+    const audience = project.audience && !/待补充/.test(project.audience) ? project.audience : "目标用户";
+    const scene = project.scene && !/待补充/.test(project.scene) ? project.scene : inferCopyScene(project, analysis.text);
+    const theme = inferCopyTheme(project, analysis.text);
+    const tone = inferCopyTone(analysis.text);
+    const headlines = buildHeadlineOptions(theme, tone, goal);
+    const lines = [`文案整理：${project.name}`];
+    lines.push(`先定信息层级：主标题说「${theme}」，副标题解释价值，按钮/角标只放行动。`);
+    lines.push(`受众/场景：${audience} / ${scene}。文案要先服务读懂，再服务好听。`);
+    lines.push("主标题候选：");
+    headlines.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("副标题写法：");
+    lines.push(`- 直接版：${theme}，把重点信息一眼说清楚。`);
+    lines.push(`- 情绪版：给${audience}一个更容易被记住的理由。`);
+    lines.push("CTA / 小标签：");
+    buildCtaOptions(analysis.text, goal).forEach((item) => lines.push(`- ${item}`));
+    lines.push("需要从画面里拿掉或弱化：长解释、重复卖点、内部视角的话、无法立刻行动的信息。");
+    lines.push("下一步：先只上主标题 + 1 句副标题 + 1 个行动点，剩下信息放正文、备注或二级画面。");
+    if (/文字太多|太多字|精简|太长/.test(analysis.text)) {
+      lines.push("精简标准：每删一句都问，它会不会影响用户理解核心利益；不会，就先删。");
+    }
+    project.portfolio.process = appendSentence(project.portfolio.process, `文案整理：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function inferCopyTheme(project, text) {
+    const quoted = text.match(/[「《“"]([^」》”"]{2,30})[」》”"]/);
+    if (quoted) return quoted[1];
+    const deliverable = (project.deliverables || [])[0] || project.name;
+    if (/新品|上新/.test(`${text} ${project.name}`)) return "新品上市";
+    if (/活动|报名|优惠|促销/.test(`${text} ${project.goal || ""}`)) return "活动利益点";
+    if (/节日|春节|中秋|圣诞|万圣/.test(`${text} ${project.name}`)) return "节日主题";
+    return deliverable && !/未命名|第一个/.test(deliverable) ? deliverable : "核心卖点";
+  }
+
+  function inferCopyGoal(text) {
+    if (/报名|预约|领取|购买|下单/.test(text)) return "让用户立刻知道下一步行动";
+    if (/新品|上新/.test(text)) return "让用户一眼知道新品和亮点";
+    if (/优惠|折扣|促销/.test(text)) return "让用户快速看到优惠利益";
+    return "让用户快速看懂核心信息";
+  }
+
+  function inferCopyScene(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    if (/小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(combined)) return "手机端快速浏览";
+    if (/印刷|包装|画册|折页/.test(combined)) return "线下阅读或实物接触";
+    return "当前使用场景";
+  }
+
+  function inferCopyTone(text) {
+    if (/年轻|活泼|可爱|轻松/.test(text)) return "young";
+    if (/高级|质感|克制|品牌/.test(text)) return "premium";
+    if (/促销|优惠|抢|限时/.test(text)) return "promo";
+    return "clear";
+  }
+
+  function buildHeadlineOptions(theme, tone, goal) {
+    if (tone === "premium") {
+      return [`${theme}，刚刚好`, `把${theme}留给重要时刻`, `${theme}的精致选择`];
+    }
+    if (tone === "young") {
+      return [`${theme}，今天就要新鲜一点`, `把${theme}装进好心情`, `${theme}来啦，先看到先心动`];
+    }
+    if (tone === "promo") {
+      return [`${theme}，现在正划算`, `限时开启，别错过${theme}`, `${theme}福利，一眼看懂`];
+    }
+    if (/行动|报名|领取|购买/.test(goal)) {
+      return [`${theme}，现在开始`, `别错过${theme}`, `${theme}，一步到位`];
+    }
+    return [`${theme}，一眼看懂`, `这次重点是${theme}`, `${theme}，先看这里`];
+  }
+
+  function buildCtaOptions(text, goal) {
+    if (/报名|预约/.test(`${text} ${goal}`)) return ["立即报名", "预约参与", "查看活动详情"];
+    if (/购买|下单|新品|上新/.test(`${text} ${goal}`)) return ["立即了解", "查看新品", "现在入手"];
+    if (/领取|优惠|折扣|促销/.test(`${text} ${goal}`)) return ["领取优惠", "查看福利", "限时参与"];
+    return ["了解详情", "查看规则", "马上参与"];
+  }
+
+  function generatePresentationScript(state, project, analysis) {
+    const feedbackItems = state.feedback.filter((item) => item.projectId === project.id);
+    const latestFeedback = feedbackItems.slice().reverse()[0];
+    const latestVersion = (project.versions || []).slice().reverse()[0];
+    const goal = project.goal && !/待补充/.test(project.goal) ? project.goal : "让用户更快看懂核心信息";
+    const audience = project.audience && !/待补充/.test(project.audience) ? project.audience : "目标用户";
+    const scene = project.scene && !/待补充/.test(project.scene) ? project.scene : inferCopyScene(project, analysis.text);
+    const lines = [`方案汇报稿：${project.name}`];
+    lines.push("可以按这个顺序讲，别先说“我觉得好看”，先说设计判断：");
+    lines.push(`1. 背景目标：这版主要是为了「${goal}」，面向「${audience}」，使用场景是「${scene}」。`);
+    lines.push(`2. 设计策略：我先保证主信息能被第一眼读到，再用${presentationStyleFocus(project)}强化视觉记忆点。`);
+    lines.push(`3. 画面处理：主标题/主体图作为第一视觉，次要信息降级，避免用户第一眼不知道看哪里。`);
+    if (latestFeedback) {
+      lines.push(`4. 对反馈的回应：上一轮反馈是「${latestFeedback.raw}」，这版对应调整为：${latestFeedback.action}`);
+    } else {
+      lines.push("4. 风险控制：这版先控制字体、颜色和信息层级，避免在首版里同时追太多风格。");
+    }
+    if (latestVersion) {
+      lines.push(`5. 版本变化：${latestVersion.name} 主要调整了 ${latestVersion.changes}。`);
+    }
+    lines.push("结尾可以这样说：这版我建议先确认信息层级和整体调性，如果方向没问题，我再继续精修细节和适配交付尺寸。");
+    lines.push("可能被问到：");
+    buildPresentationQuestions(project, latestFeedback).forEach((item) => lines.push(`- ${item}`));
+    project.portfolio.process = appendSentence(project.portfolio.process, `方案表达准备：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function presentationStyleFocus(project) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""}`;
+    if (/小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(combined)) return "更强的标题对比和移动端可读性";
+    if (/印刷|包装|画册|折页/.test(combined)) return "更稳定的版面秩序和交付规范";
+    if (/品牌|logo|VI|视觉识别/i.test(combined)) return "统一的品牌色、字体和图形语言";
+    return "清楚的层级、克制的配色和明确的视觉中心";
+  }
+
+  function buildPresentationQuestions(project, latestFeedback) {
+    const questions = [
+      "为什么这样排版？答：为了让用户先看到主信息，再读辅助说明。",
+      "为什么不用更多装饰？答：先保证可读性和交付稳定，装饰只服务视觉中心。",
+    ];
+    if (!project.goal || /待补充/.test(project.goal)) {
+      questions.push("如果被问目标是什么，要先反问确认：这张图最重要是点击、通知、促销，还是品牌形象？");
+    }
+    if (latestFeedback && latestFeedback.conflict) {
+      questions.push("如果被问高级和活泼能否兼顾，要先确认优先级，再决定配色和装饰力度。");
+    }
+    if ((project.risks || []).some((risk) => /尺寸|规格|交付格式/.test(risk))) {
+      questions.push("如果被问能否直接交付，要说明尺寸/格式还需确认，避免导出返工。");
+    }
+    return questions;
+  }
+
+  function answerDesignQuestion(project, analysis) {
+    const question = analysis.designerQuestion || detectDesignerQuestion(analysis.text);
+    const rules = question && question.rules && question.rules.length ? question.rules : [designerQuestionRules[0]];
+    const lines = [`设计问题：${rules.map((rule) => rule.label).join("、")}`];
+    lines.push(`针对「${project.name}」，先这样判断：`);
+    rules.forEach((rule) => {
+      lines.push(`- ${rule.judge}`);
+    });
+    lines.push("具体做法：");
+    const steps = Array.from(new Set(rules.flatMap((rule) => rule.steps))).slice(0, 6);
+    steps.forEach((step, index) => {
+      lines.push(`${index + 1}. ${step}`);
+    });
+    const contextual = buildQuestionContext(project, rules, analysis.text);
+    if (contextual.length) {
+      lines.push("结合当前项目：");
+      contextual.forEach((item) => lines.push(`- ${item}`));
+    }
+    lines.push(`下一步：${rules[0].nextStep}`);
+    lines.push("判断标准：能不能让目标用户更快看懂，而不是只问自己好不好看。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `设计问题答疑：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildQuestionContext(project, rules, text) {
+    const context = [];
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    const keys = rules.map((rule) => rule.key);
+    if ((!project.goal || /待补充/.test(project.goal)) && (keys.includes("brief_start") || keys.includes("layout_method"))) {
+      context.push("项目目标还不清楚，先别急着做风格，先补一句“这张图要让谁做什么”。");
+    } else if (project.goal && !/待补充/.test(project.goal)) {
+      context.push(`当前目标是「${project.goal}」，所有选择都要能解释它。`);
+    }
+    if (/小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(combined)) {
+      context.push("这是偏线上/社媒场景，先保证手机预览时标题、利益点和主体不被裁切。");
+    }
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      context.push("这是偏印刷/实体场景，设计前就要确认出血、CMYK、图片精度和文字转曲要求。");
+    }
+    if (project.dueDate && daysUntil(project.dueDate) <= 1) {
+      context.push("时间很紧，先做能影响交付判断的部分：目标、尺寸、主信息、可读性。");
+    }
+    const risks = currentProjectRisks(project);
+    if (risks.length) {
+      context.push(`当前最容易返工的是：${risks.slice(0, 2).join("、")}。`);
+    }
+    return Array.from(new Set(context)).slice(0, 4);
+  }
+
+  function generateDesignDirections(project, analysis) {
+    const text = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${analysis.text}`;
+    const goal = project.goal && !/待补充/.test(project.goal) ? project.goal : "先让用户快速看懂主信息";
+    const audience = project.audience && !/待补充/.test(project.audience) ? project.audience : "当前目标用户";
+    const scene = project.scene && !/待补充/.test(project.scene) ? project.scene : "实际投放场景";
+    const directions = buildDirectionOptions(text);
+    const lines = [`设计方向草案：${project.name}`];
+    lines.push(`先按这个判断：目标是「${goal}」，受众是「${audience}」，场景是「${scene}」。`);
+    directions.forEach((direction, index) => {
+      lines.push(`方向 ${index + 1}｜${direction.name}`);
+      lines.push(`- 视觉关键词：${direction.keywords.join("、")}`);
+      lines.push(`- 版式动作：${direction.layout}`);
+      lines.push(`- 色彩/字体：${direction.style}`);
+      lines.push(`- 适合：${direction.bestFor}`);
+      lines.push(`- 风险：${direction.risk}`);
+    });
+    lines.push("推荐做法：先做 2 张小稿，不要一开始精修；用主信息是否更快被看懂来选方向。");
+    const risks = currentProjectRisks(project);
+    if (risks.length) {
+      lines.push(`动手前先确认：${risks.slice(0, 3).join("、")}。`);
+    }
+    project.portfolio.process = appendSentence(project.portfolio.process, `方向探索：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildDirectionOptions(text) {
+    const isSocial = /小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(text);
+    const isPrint = /印刷|包装|画册|折页/.test(text);
+    const wantsPremium = /高级|质感|克制|品牌/.test(text);
+    const wantsYoung = /年轻|活泼|可爱|童趣|节日|促销/.test(text);
+    const base = [
+      {
+        name: wantsPremium ? "克制质感方向" : "清晰稳妥方向",
+        keywords: wantsPremium ? ["克制", "秩序", "质感"] : ["清楚", "直接", "稳妥"],
+        layout: "主标题和主体图形占据第一视觉，次要信息成组放在下方或侧边。",
+        style: wantsPremium ? "低饱和主色，少装饰，标题字重稳定。" : "品牌色或安全主色，标题对比明确，正文保持易读。",
+        bestFor: "需要降低返工风险、让老板或客户快速理解的首版。",
+        risk: "可能不够有记忆点，需要一个小的视觉锚点补强。",
+      },
+      {
+        name: wantsYoung ? "年轻传播方向" : "记忆点方向",
+        keywords: wantsYoung ? ["年轻", "轻快", "有节奏"] : ["差异化", "视觉锚点", "传播感"],
+        layout: "用更大的标题节奏或局部放大元素制造视觉中心。",
+        style: wantsYoung ? "明度更高的主色，搭配一个跳色强调重点。" : "控制色彩数量，把特殊图形或标题处理作为记忆点。",
+        bestFor: isSocial ? "社媒封面、活动海报、需要抢第一眼的图。" : "希望方案看起来不普通、需要提案比较的图。",
+        risk: "如果装饰太多，容易牺牲可读性。",
+      },
+      {
+        name: isPrint ? "交付安全方向" : "平台适配方向",
+        keywords: isPrint ? ["规范", "可靠", "可印刷"] : ["适配", "可读", "高效率"],
+        layout: isPrint ? "先按真实尺寸和出血排版，重要内容远离裁切边。" : "按平台安全区放主信息，移动端预览时标题仍要清楚。",
+        style: isPrint ? "提前按 CMYK 和图片精度控制素材，避免后期大改。" : "减少细碎文字，保留高对比标题和清楚按钮/利益点。",
+        bestFor: isPrint ? "包装、画册、折页等需要稳定交付的物料。" : "多平台复用、时间紧、需要快速交付的项目。",
+        risk: "视觉惊喜较少，但能保证交付不出错。",
+      },
+    ];
+    return base;
+  }
+
+  function compareDesignOptions(project, analysis) {
+    const text = analysis.text;
+    const lines = [`方案选择建议：${project.name}`];
+    lines.push("先不要用“哪个更好看”判断，按这 4 个标准选：");
+    const criteria = [
+      project.goal && !/待补充/.test(project.goal)
+        ? `是否更直接服务目标「${project.goal}」`
+        : "是否更快说清楚这张图要解决的问题",
+      "第一眼是否能读到主标题或核心利益点",
+      "是否更符合投放场景和尺寸限制",
+      "是否更容易在截止时间前稳定交付",
+    ];
+    criteria.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push(`我的倾向：${buildOptionRecommendation(project, text)}`);
+    lines.push("下一步：把两个方案各缩到手机预览大小或真实使用尺寸，只看 3 秒，哪个先被读懂就优先推进哪个。");
+    if (!project.goal || /待补充/.test(project.goal)) {
+      lines.push("还缺一个关键判断：项目目标没写清楚。目标不清时，方案选择很容易变成纯审美争论。");
+    }
+    return lines.join("\n");
+  }
+
+  function buildOptionRecommendation(project, text) {
+    if (/时间|赶|今天|明天|马上|来不及/.test(text) || (project.dueDate && daysUntil(project.dueDate) <= 1)) {
+      return "选更稳、更容易交付的方案；先保证信息清楚和格式正确，再补视觉细节。";
+    }
+    if (/高级|品牌|质感/.test(text)) return "选更克制、有秩序、颜色和字体更少的方案。";
+    if (/年轻|活泼|传播|小红书|封面/.test(`${text} ${project.type} ${(project.deliverables || []).join("、")}`)) {
+      return "选第一眼更强、标题更清楚、适合小屏传播的方案。";
+    }
+    const risks = currentProjectRisks(project);
+    if (risks.length) return `先选能避开当前风险的方案，尤其是：${risks[0]}。`;
+    return "先选信息层级更清楚的方案；如果层级差不多，再比较风格记忆点。";
+  }
+
+  function currentProjectRisks(project) {
+    return (project.risks || []).filter((risk) => {
+      if (/设计目标/.test(risk) && project.goal && !/待补充|待从/.test(project.goal)) return false;
+      if (/交付物/.test(risk) && (project.deliverables || []).length) return false;
+      if (/截止时间/.test(risk) && project.dueDate) return false;
+      if (/尺寸|规格/.test(risk) && (project.specs || []).length) return false;
+      if (/交付格式/.test(risk) && (project.formats || []).length) return false;
+      return true;
+    });
+  }
+
+  function generateConfirmationMessage(state, project, promptText = "") {
+    const waitingTasks = state.tasks.filter((task) => task.projectId === project.id && task.status === "waiting");
+    const projectFeedback = state.feedback.filter((item) => item.projectId === project.id);
+    const conflictFeedback = projectFeedback.filter((item) => item.conflict && !item.handled);
+    const missingQuestions = buildMissingConfirmationQuestions(project);
+    const waitingQuestions = waitingTasks.map((task) => task.nextAction || task.title).filter(Boolean);
+    const conflictQuestions = buildConflictConfirmationQuestions(project, conflictFeedback);
+    const promptQuestions = buildPromptConfirmationQuestions(promptText);
+    const questions = Array.from(new Set(promptQuestions.concat(waitingQuestions, conflictQuestions, missingQuestions))).slice(0, 5);
+    const recipient = guessConfirmationRecipient(promptText, projectFeedback);
+    const greeting = recipient === "你好" ? "你好" : `${recipient}好`;
+    const opener = waitingTasks.length || /催/.test(promptText)
+      ? `${greeting}，我这边想轻轻跟进一下「${project.name}」的确认信息，避免影响后面的设计和交付。`
+      : `${greeting}，我这边想先确认一下「${project.name}」的几个信息，避免后面返工。`;
+    const fallback = "这次最优先解决的问题是什么：拉新、促销、品牌形象，还是通知信息？";
+    const lines = [`确认话术：${project.name}`, opener];
+    (questions.length ? questions : [fallback]).forEach((question, index) => {
+      lines.push(`${index + 1}. ${question}`);
+    });
+    lines.push("确认后我会先按这个方向推进首版，有不确定的地方会再同步给你。");
+    if (conflictFeedback.length) {
+      lines.push("我建议先确认调性优先级，再开始大改，这样更省时间。");
+    }
+    return lines.join("\n");
+  }
+
+  function buildMissingConfirmationQuestions(project) {
+    const questions = [];
+    const risks = project.risks.join("、");
+    if (!project.goal || /待补充|待从/.test(project.goal) || /设计目标/.test(risks)) {
+      questions.push("这次设计最重要的目标是什么？是提升点击、传达活动信息、还是强化品牌感？");
+    }
+    if (!project.audience || /待补充/.test(project.audience)) {
+      questions.push("主要给谁看？比如新客、老客、年轻用户、儿童家庭，还是内部同事？");
+    }
+    if (!project.scene || /待补充/.test(project.scene)) {
+      questions.push("主要投放在哪里？不同平台会影响尺寸、安全区和文字大小。");
+    }
+    if (!(project.deliverables || []).length || /交付物/.test(risks)) {
+      questions.push("最后需要交哪些图？例如海报、公众号头图、小红书封面、朋友圈图或源文件。");
+    }
+    if (!project.dueDate || /截止时间/.test(risks)) {
+      questions.push("最晚什么时候需要确认或交付？如果有内部审核时间，也请一起告诉我。");
+    }
+    if (!(project.specs || []).length || /尺寸|规格/.test(risks)) {
+      questions.push("每个交付物的尺寸、平台规格和安全区是否有固定要求？");
+    }
+    if (!(project.formats || []).length || /交付格式/.test(risks)) {
+      questions.push("导出格式需要哪些？例如 jpg、png、pdf、ai/psd 源文件。");
+    }
+    return questions;
+  }
+
+  function buildConflictConfirmationQuestions(project, conflictFeedback) {
+    const questions = [];
+    const hasConflictRisk = project.risks.some((risk) => /冲突|优先级/.test(risk));
+    if (hasConflictRisk || conflictFeedback.length) {
+      questions.push("目前反馈里有不同调性方向，我想确认优先级：更重视高级质感，还是更重视年轻活泼和传播感？");
+    }
+    return questions;
+  }
+
+  function buildPromptConfirmationQuestions(text) {
+    const questions = [];
+    if (/尺寸|规格/.test(text)) questions.push("尺寸和平台规格能否发我一下？我会按对应安全区来做，避免裁切。");
+    if (/格式|源文件|导出/.test(text)) questions.push("交付格式需要哪些？只要图片，还是也需要源文件一起打包？");
+    if (/反馈|意见/.test(text)) questions.push("方便的话能否给我一个明确反馈方向：哪里需要保留，哪里需要调整？");
+    if (/优先级|冲突|高级|活泼/.test(text)) questions.push("如果两个方向不能同时兼顾，这一版更优先哪一个：品牌质感，还是活泼传播？");
+    if (/催|没回|没回复/.test(text)) questions.push("这边需要继续推进下一步，想确认是否按当前方向先做首版？");
+    return questions;
+  }
+
+  function guessConfirmationRecipient(text, feedbackItems) {
+    if (/客户|甲方/.test(text)) return "客户";
+    if (/老板/.test(text)) return "老板";
+    if (/主管/.test(text)) return "主管";
+    if (/运营/.test(text)) return "运营同事";
+    if (/产品/.test(text)) return "产品同事";
+    const latestFeedbackPerson = feedbackItems.slice().reverse().find((item) => item.from && !/待补充/.test(item.from));
+    return latestFeedbackPerson ? latestFeedbackPerson.from : "你好";
+  }
+
   function generateReview(project, feedbackItems) {
     const feedbackText = feedbackItems.length
       ? feedbackItems.map((item) => `- ${item.action}`).join("\n")
@@ -1176,6 +2050,19 @@
     generateDailySummary,
     generateDailyPlan,
     generateProjectWorkflow,
+    generateConfirmationMessage,
+    answerDesignQuestion,
+    generateTriagePlan,
+    refineCopywriting,
+    generatePresentationScript,
+    handleNegativeFeedback,
+    diagnoseAmbiguousIssue,
+    fixAssetQuality,
+    organizeDeliveryFiles,
+    adaptMultiFormat,
+    checkBrandConsistency,
+    generateDesignDirections,
+    compareDesignOptions,
     generateReview,
     generatePortfolioCase,
     daysUntil,

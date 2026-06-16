@@ -375,4 +375,423 @@ function freshState() {
   assert.ok(dashboard.waiting.some((task) => task.id === "t-wait"));
 }
 
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "万圣节海报";
+  project.risks = ["缺少尺寸 / 平台规格", "缺少交付格式"];
+  project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "帮我整理问客户确认尺寸和格式的话术。", fixedNow);
+  assert.equal(result.analysis.behavior, "ask_confirmation_message");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("确认话术"));
+  assert.ok(result.reply.includes("尺寸"));
+  assert.ok(result.reply.includes("交付格式"));
+  assert.ok(result.reply.includes("避免后面返工"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "活动主视觉";
+  state.tasks.push({
+    id: "t-wait-message",
+    projectId: project.id,
+    title: "等待老板确认方向",
+    priority: "high",
+    dueDate: "2026-06-13",
+    status: "waiting",
+    nextAction: "确认是走高级质感还是年轻活泼",
+    feedbackIds: [],
+  });
+  const result = Core.applyInput(state, "老板还没回，帮我催一下。", fixedNow);
+  assert.equal(result.analysis.behavior, "ask_confirmation_message");
+  assert.ok(result.reply.includes("轻轻跟进"));
+  assert.ok(result.reply.includes("高级质感"));
+  assert.ok(result.reply.includes("避免影响"));
+}
+
+{
+  const state = freshState();
+  Core.applyInput(state, "老板希望画面更高级也更活泼，今天下班前改。", fixedNow);
+  const result = Core.applyInput(state, "帮我整理确认优先级的话术。", fixedNow);
+  assert.equal(result.analysis.behavior, "ask_confirmation_message");
+  assert.ok(result.reply.includes("高级"));
+  assert.ok(result.reply.includes("活泼"));
+  assert.ok(result.reply.includes("优先级"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "新品小红书封面";
+  project.type = "社媒图";
+  project.deliverables = ["小红书封面"];
+  project.goal = "让用户一眼知道新品上市";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "参考图应该怎么找？", fixedNow);
+  assert.equal(result.analysis.behavior, "answer_design_question");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("设计问题：参考与灵感"));
+  assert.ok(result.reply.includes("信息层级参考"));
+  assert.ok(result.reply.includes("手机预览"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "标题字体怎么配比较好？", fixedNow);
+  assert.equal(result.analysis.behavior, "answer_design_question");
+  assert.ok(result.reply.includes("字体选择"));
+  assert.ok(result.reply.includes("1-2 个字体家族"));
+  assert.ok(result.reply.includes("下一步"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.type = "包装";
+  project.deliverables = ["包装"];
+  const result = Core.applyInput(state, "印刷尺寸和导出格式要注意什么？", fixedNow);
+  assert.equal(result.analysis.behavior, "answer_design_question");
+  assert.ok(result.reply.includes("交付规格"));
+  assert.ok(result.reply.includes("出血"));
+  assert.ok(result.reply.includes("CMYK"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "客户一直改来改去怎么办？", fixedNow);
+  assert.equal(result.analysis.behavior, "answer_design_question");
+  assert.ok(result.reply.includes("反馈处理"));
+  assert.ok(result.reply.includes("冲突反馈"));
+  assert.ok(result.reply.includes("确认话术"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品海报";
+  project.type = "社媒图";
+  project.goal = "让用户一眼知道新品上市";
+  project.audience = "年轻上班族";
+  project.scene = "小红书封面";
+  project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "帮我出三个年轻一点的设计方向。", fixedNow);
+  assert.equal(result.analysis.behavior, "ask_design_directions");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("设计方向草案"));
+  assert.ok(result.reply.includes("方向 1"));
+  assert.ok(result.reply.includes("视觉关键词"));
+  assert.ok(result.reply.includes("移动端预览"));
+  assert.ok(!result.reply.includes("缺少设计目标"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "活动海报";
+  project.goal = "让用户快速看到报名入口";
+  project.dueDate = "2026-06-13";
+  const result = Core.applyInput(state, "方案A更高级，方案B更活泼，选哪个？明天要交。", fixedNow);
+  assert.equal(result.analysis.behavior, "compare_design_options");
+  assert.ok(result.reply.includes("方案选择建议"));
+  assert.ok(result.reply.includes("4 个标准"));
+  assert.ok(result.reply.includes("更容易交付"));
+  assert.ok(result.reply.includes("3 秒"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "小红书新品封面";
+  project.type = "社媒图";
+  project.deliverables = ["小红书封面"];
+  project.dueDate = "2026-06-12";
+  state.tasks.push({
+    id: "t-urgent",
+    projectId: project.id,
+    title: "完成首版设计：小红书封面",
+    priority: "high",
+    dueDate: "2026-06-12",
+    status: "todo",
+    nextAction: "先搭主标题和主体图",
+    feedbackIds: [],
+  });
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "今天要交但我来不及了，怎么办？", fixedNow);
+  assert.equal(result.analysis.behavior, "triage_overload");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("紧急推进方案"));
+  assert.ok(result.reply.includes("先做这一件"));
+  assert.ok(result.reply.includes("手机预览"));
+  assert.ok(result.reply.includes("25 分钟"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "品牌活动物料";
+  state.tasks.push({
+    id: "t-many-1",
+    projectId: project.id,
+    title: "确认尺寸、参考和交付格式",
+    priority: "high",
+    dueDate: "2026-06-12",
+    status: "todo",
+    nextAction: "先确认尺寸和交付格式",
+    feedbackIds: [],
+  });
+  state.tasks.push({
+    id: "t-many-2",
+    projectId: project.id,
+    title: "等待老板确认方向",
+    priority: "high",
+    dueDate: "2026-06-12",
+    status: "waiting",
+    nextAction: "确认高级还是活泼",
+    feedbackIds: [],
+  });
+  const result = Core.applyInput(state, "任务太多了，我很乱，不知道先做哪个。", fixedNow);
+  assert.equal(result.analysis.behavior, "triage_overload");
+  assert.ok(result.reply.includes("确认尺寸、参考和交付格式"));
+  assert.ok(result.reply.includes("立刻确认"));
+  assert.ok(result.reply.includes("砍细节"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品海报";
+  project.goal = "让用户一眼知道新品上市";
+  project.audience = "年轻上班族";
+  project.scene = "小红书封面";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "帮我想几个年轻一点的主标题文案。", fixedNow);
+  assert.equal(result.analysis.behavior, "refine_copywriting");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("文案整理"));
+  assert.ok(result.reply.includes("主标题候选"));
+  assert.ok(result.reply.includes("CTA"));
+  assert.ok(result.reply.includes("年轻上班族"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "促销海报";
+  project.goal = "让用户快速看到优惠利益";
+  const result = Core.applyInput(state, "画面文字太多，文案怎么精简？", fixedNow);
+  assert.equal(result.analysis.behavior, "refine_copywriting");
+  assert.ok(result.reply.includes("需要从画面里拿掉或弱化"));
+  assert.ok(result.reply.includes("主标题 + 1 句副标题 + 1 个行动点"));
+  assert.ok(result.reply.includes("精简标准"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员活动海报";
+  project.type = "社媒图";
+  project.goal = "让用户快速看到报名入口";
+  project.audience = "会员用户";
+  project.scene = "朋友圈";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "明天给老板看，我该怎么讲这个方案？", fixedNow);
+  assert.equal(result.analysis.behavior, "prepare_design_presentation");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("方案汇报稿"));
+  assert.ok(result.reply.includes("背景目标"));
+  assert.ok(result.reply.includes("设计策略"));
+  assert.ok(result.reply.includes("可能被问到"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "新品主视觉";
+  Core.applyInput(state, "老板说画面太普通，希望更高级一点，明天改。", fixedNow);
+  Core.applyInput(state, "V2 改了标题层级和按钮颜色，老板确认了。", fixedNow);
+  const result = Core.applyInput(state, "帮我写一段设计说明，用来解释这版为什么这样做。", fixedNow);
+  assert.equal(result.analysis.behavior, "prepare_design_presentation");
+  assert.ok(result.reply.includes("对反馈的回应"));
+  assert.ok(result.reply.includes("增强视觉记忆点"));
+  assert.ok(result.reply.includes("版本变化"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "开业海报";
+  project.dueDate = "2026-06-13";
+  const beforeFeedback = state.feedback.length;
+  const result = Core.applyInput(state, "老板说这版不行，要重做。", fixedNow);
+  assert.equal(result.analysis.behavior, "handle_negative_feedback");
+  assert.equal(state.feedback.length, beforeFeedback + 1);
+  assert.ok(state.tasks.some((task) => task.projectId === project.id && task.title.includes("否定型反馈")));
+  assert.ok(result.reply.includes("补救方案"));
+  assert.ok(result.reply.includes("先问清 3 件事"));
+  assert.ok(result.reply.includes("可以这样回复"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员主视觉";
+  const result = Core.applyInput(state, "客户觉得画面很怪，但没说哪里怪。", fixedNow);
+  assert.equal(result.analysis.behavior, "handle_negative_feedback");
+  assert.ok(project.risks.includes("否定型反馈，需要先确认重做范围"));
+  assert.ok(result.reply.includes("风格细节"));
+  assert.ok(result.reply.includes("黑白信息层级稿"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "活动海报";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "这个画面有点不对劲，但我说不上来。", fixedNow);
+  assert.equal(result.analysis.behavior, "diagnose_ambiguous_issue");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("模糊问题诊断"));
+  assert.ok(result.reply.includes("按这个顺序排查"));
+  assert.ok(result.reply.includes("关键追问"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "小红书封面";
+  project.type = "社媒图";
+  project.deliverables = ["小红书封面"];
+  const result = Core.applyInput(state, "封面看着不协调，不知道哪里怪。", fixedNow);
+  assert.equal(result.analysis.behavior, "diagnose_ambiguous_issue");
+  assert.ok(result.reply.includes("手机预览"));
+  assert.ok(result.reply.includes("3 秒"));
+  assert.ok(result.reply.includes("只改一个变量"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "新品海报";
+  project.type = "社媒图";
+  project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "主图太糊了，分辨率不够怎么办？", fixedNow);
+  assert.equal(result.analysis.behavior, "fix_asset_quality");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("素材补救方案"));
+  assert.ok(result.reply.includes("高清源图"));
+  assert.ok(result.reply.includes("小屏识别"));
+  assert.ok(result.reply.includes("商业发布"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "活动长图";
+  const result = Core.applyInput(state, "素材风格不统一，也找不到合适的图。", fixedNow);
+  assert.equal(result.analysis.behavior, "fix_asset_quality");
+  assert.ok(result.reply.includes("同色调"));
+  assert.ok(result.reply.includes("图形化表达"));
+  assert.ok(result.reply.includes("可商用"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品海报";
+  project.dueDate = "2026-06-20";
+  project.deliverables = ["小红书封面", "朋友圈海报"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "源文件怎么整理打包给老板？", fixedNow);
+  assert.equal(result.analysis.behavior, "organize_delivery_files");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("交付文件整理"));
+  assert.ok(result.reply.includes("01_导出图"));
+  assert.ok(result.reply.includes("02_源文件"));
+  assert.ok(result.reply.includes("README"));
+  assert.ok(result.reply.includes("命名规范"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "文件命名规范怎么写？不要最终最终版那种。", fixedNow);
+  assert.equal(result.analysis.behavior, "organize_delivery_files");
+  assert.ok(result.reply.includes("版本号只递增"));
+  assert.ok(result.reply.includes("交付话术"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "交付检查清单给我看一下。", fixedNow);
+  assert.equal(result.analysis.behavior, "ask_checklist");
+  assert.ok(result.reply.includes("交付检查"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "新品活动海报";
+  project.deliverables = ["小红书封面", "朋友圈海报", "公众号头图"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "这张海报要适配小红书封面、朋友圈海报和公众号头图，怎么做？", fixedNow);
+  assert.equal(result.analysis.behavior, "adapt_multi_format");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("多尺寸适配方案"));
+  assert.ok(result.reply.includes("不要直接拉伸"));
+  assert.ok(result.reply.includes("小红书封面"));
+  assert.ok(result.reply.includes("公众号头图"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "横版 Banner 要改成竖版，安全区怎么处理？", fixedNow);
+  assert.equal(result.analysis.behavior, "adapt_multi_format");
+  assert.ok(result.reply.includes("重排而不是缩放"));
+  assert.ok(result.reply.includes("安全区"));
+  assert.ok(result.reply.includes("3 秒"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "最后要交小红书封面和朋友圈海报。", fixedNow);
+  assert.equal(result.analysis.behavior, "update_deliverables");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "品牌活动海报";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "老板说这版不像品牌，怎么检查品牌规范？", fixedNow);
+  assert.equal(result.analysis.behavior, "check_brand_consistency");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("品牌一致性检查"));
+  assert.ok(result.reply.includes("Logo"));
+  assert.ok(result.reply.includes("品牌色"));
+  assert.ok(result.reply.includes("判断标准"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "品牌色和 Logo 使用要注意什么？", fixedNow);
+  assert.equal(result.analysis.behavior, "check_brand_consistency");
+  assert.ok(result.reply.includes("色值"));
+  assert.ok(result.reply.includes("不要拉伸"));
+  assert.ok(result.reply.includes("品牌手册"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const beforeChecklist = state.checklist.length;
+  const result = Core.applyInput(state, "项目类型改成品牌。", fixedNow);
+  assert.equal(result.analysis.behavior, "update_project_type");
+  assert.equal(project.type, "品牌");
+  assert.ok(state.checklist.length > beforeChecklist);
+}
+
 console.log("All Design Desk Agent tests passed.");

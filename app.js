@@ -333,6 +333,19 @@
       "ask_summary",
       "ask_checklist",
       "ask_portfolio",
+      "ask_confirmation_message",
+      "answer_design_question",
+      "ask_design_directions",
+      "compare_design_options",
+      "triage_overload",
+      "refine_copywriting",
+      "prepare_design_presentation",
+      "handle_negative_feedback",
+      "diagnose_ambiguous_issue",
+      "fix_asset_quality",
+      "organize_delivery_files",
+      "adapt_multi_format",
+      "check_brand_consistency",
       "solve_design_issue",
       "cancel_task",
       "complete_checklist",
@@ -483,12 +496,13 @@
   }
 
   function markWaitingSummary() {
+    const project = Core.getProject(state, state.activeProjectId);
     const dashboard = Core.getDashboard(state);
-    if (!dashboard.waiting.length) {
-      addAgentMessage("现在没有等待确认事项。");
+    if (!dashboard.waiting.length && !project.risks.length) {
+      addAgentMessage("现在没有明显等待确认事项。");
       return;
     }
-    addAgentMessage(`等待确认事项\n${dashboard.waiting.map((task) => `- ${task.title}：${task.nextAction}`).join("\n")}`);
+    addAgentMessage(Core.generateConfirmationMessage(state, project, "帮我整理等待确认的话术"));
   }
 
   function showAllTasks() {
