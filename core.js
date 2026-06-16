@@ -496,6 +496,14 @@
       return "recommend_color_system";
     }
     if (
+      /高级感|高级一点|年轻感|年轻一点|科技感|未来感|国潮|国风|中国风|可爱|童趣|活泼|极简|大气|轻奢|复古|ins风|赛博|潮酷|清新|温暖|专业感/.test(text) &&
+      /怎么|如何|做出|做成|表现|落地|视觉语言|调性|风格|想做|想要|要做|设计/.test(text) &&
+      !(analysisBits.feedback && /反馈|说|觉得|希望|要求|建议|客户|主管|老板|运营|产品|甲方/.test(text)) &&
+      !/方向|方案|关键词|配色|颜色|字体|字号|字距|行距/.test(text)
+    ) {
+      return "translate_style_keyword";
+    }
+    if (
       analysisBits.designIssue &&
       !analysisBits.feedback &&
       !/文案|标题|主标题|副标题|slogan|口号|标语|卖点|利益点|CTA|按钮文案|文字太多|精简|怎么写/.test(text) &&
@@ -809,6 +817,7 @@
       "recommend_layout_structure",
       "recommend_typography_system",
       "recommend_color_system",
+      "translate_style_keyword",
       "solve_design_issue",
       "cancel_task",
       "complete_checklist",
@@ -849,6 +858,7 @@
     if (analysis.behavior === "recommend_layout_structure") return recommendLayoutStructure(project, analysis);
     if (analysis.behavior === "recommend_typography_system") return recommendTypographySystem(project, analysis);
     if (analysis.behavior === "recommend_color_system") return recommendColorSystem(project, analysis);
+    if (analysis.behavior === "translate_style_keyword") return translateStyleKeyword(project, analysis);
     if (analysis.behavior === "ask_checklist") return generateChecklistText(state, project);
     if (analysis.behavior === "update_project_name" || analysis.behavior === "update_project_type" || analysis.behavior === "update_project_specs") {
       applyProjectMeta(state, project, analysis.meta);
@@ -1681,6 +1691,125 @@
     return Array.from(new Set(context)).slice(0, 4);
   }
 
+  function translateStyleKeyword(project, analysis) {
+    const style = pickStyleRecipe(analysis.text);
+    const lines = [`风格关键词翻译：${style.name}`];
+    lines.push(`先判断：${style.judge}`);
+    lines.push("落地动作：");
+    lines.push(`- 构图：${style.layout}`);
+    lines.push(`- 字体：${style.type}`);
+    lines.push(`- 色彩：${style.color}`);
+    lines.push(`- 图形/材质：${style.graphic}`);
+    lines.push("不要这样做：");
+    style.pitfalls.forEach((item) => lines.push(`- ${item}`));
+    const context = buildStyleContext(project, analysis.text, style);
+    if (context.length) {
+      lines.push("结合当前项目：");
+      context.forEach((item) => lines.push(`- ${item}`));
+    }
+    lines.push(`下一步：${style.nextStep}`);
+    lines.push("判断标准：别人不用听你解释，也能从画面秩序、字体性格、色彩和图形语言里感到这个调性。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `风格关键词翻译：${style.name} - ${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function pickStyleRecipe(text) {
+    const recipes = [
+      {
+        key: "premium",
+        match: /高级感|高级一点|大气|轻奢|专业感/,
+        name: "高级 / 大气 / 专业",
+        judge: "高级感不是变黑变灰，而是秩序、留白、素材质量和细节克制。",
+        layout: "减少元素数量，主标题和主视觉留出足够呼吸空间，信息对齐到清楚网格。",
+        type: "用稳定字重的黑体/宋黑，不超过 2 种字重；标题别用太花的装饰字。",
+        color: "低饱和主色 + 大面积中性色 + 小面积高光色，避免多种跳色。",
+        graphic: "用轻阴影、细线、局部材质或高质量图片做质感，选一个就够。",
+        pitfalls: ["不要把画面整体压暗，文字读不清会显廉价。", "不要堆金色、渐变、阴影和纹理，高级感来自收敛。"],
+        nextStep: "做一版减法稿：删掉 30% 装饰，只保留主标题、主视觉和一个强调点。",
+      },
+      {
+        key: "young",
+        match: /年轻感|年轻一点|活泼|潮酷|清新/,
+        name: "年轻 / 活泼 / 清新",
+        judge: "年轻感来自轻快节奏和清楚传播，不是把颜色全部做亮。",
+        layout: "标题节奏可以更大，局部错位、倾斜或贴纸式标签制造动势。",
+        type: "标题可用圆体、粗黑或更有性格的字体，正文保持干净易读。",
+        color: "提高明度，保留一个跳色给核心信息，背景用浅色或干净渐变承托。",
+        graphic: "加入简单图形、贴纸、箭头、手绘线或轻量纹理，让画面更有节奏。",
+        pitfalls: ["不要超过一个跳色，否则会乱。", "不要让装饰抢走标题，小屏里要先读到主信息。"],
+        nextStep: "做一版传播稿：放大主标题，加一个跳色标签，再用手机缩略图看 3 秒。",
+      },
+      {
+        key: "tech",
+        match: /科技感|未来感|赛博/,
+        name: "科技 / 未来 / 赛博",
+        judge: "科技感来自信息秩序、冷色光感和精确图形，不只是蓝紫渐变。",
+        layout: "用网格、分栏、数据模块或中心聚焦结构，让画面有系统感。",
+        type: "用几何黑体、窄体或等宽感字体；数字和标签可以更硬朗。",
+        color: "深色或冷灰底，搭配蓝/青/紫色光感，小面积高亮强调关键点。",
+        graphic: "用细线、网格、发光边、数据框、扫描线或粒子做辅助。",
+        pitfalls: ["不要到处发光，焦点会散。", "不要只套蓝紫渐变，信息结构不硬朗就不像科技。"],
+        nextStep: "先搭一张黑底网格稿，只让主标题或核心主体有一处发光。",
+      },
+      {
+        key: "chinese",
+        match: /国潮|国风|中国风/,
+        name: "国潮 / 国风",
+        judge: "国潮不是把祥云、印章、毛笔字全塞进去，而是传统元素和现代版式的组合。",
+        layout: "用现代海报结构承载传统元素，主标题或主视觉只选一个最强符号。",
+        type: "标题可用宋体、书法感字体或复古标题字，正文仍用清楚字体。",
+        color: "可用红、金、墨、米白或青绿，但控制在 2-3 个主色关系内。",
+        graphic: "选择一种传统元素：纹样、印章、山水、窗棂、纸纹或器物轮廓。",
+        pitfalls: ["不要同时用太多传统符号，会像素材拼贴。", "书法字体只适合短标题，长文会读不清。"],
+        nextStep: "先选一个传统符号做视觉锚点，再用现代网格排标题和信息。",
+      },
+      {
+        key: "cute",
+        match: /可爱|童趣/,
+        name: "可爱 / 童趣",
+        judge: "可爱感来自圆润比例、轻松节奏和柔和颜色，不是简单加很多卡通贴纸。",
+        layout: "用更圆润的图形和更松的间距，信息组块像积木一样清楚。",
+        type: "标题可用圆体或手写感字体，正文保持简单，不要整张图都卡通化。",
+        color: "低对比柔和色，主色偏暖或高明度，强调色只点在关键互动位置。",
+        graphic: "用圆角贴纸、简单表情、手绘线、小图标或软阴影增加亲和感。",
+        pitfalls: ["不要让可爱装饰影响信息阅读。", "可爱不等于幼稚，商业项目要保留清楚的品牌和行动信息。"],
+        nextStep: "先把所有硬边元素改成圆角/柔和形状，再保留一个最可爱的视觉点。",
+      },
+    ];
+    return recipes.find((item) => item.match.test(text)) || {
+      key: "minimal",
+      name: "极简 / 克制",
+      judge: "极简不是空，而是只留下最重要的信息和最清楚的秩序。",
+      layout: "一屏只保留一个第一视觉，其他信息按网格弱化排列。",
+      type: "字体少、字重少、字号层级明确，靠比例和留白建立气质。",
+      color: "中性色或单主色为主，强调色只用于一个行动点。",
+      graphic: "装饰尽量少，用线条、留白、材质或局部图片制造细节。",
+      pitfalls: ["不要删到信息不完整。", "不要用过小文字假装高级，交付时仍要可读。"],
+      nextStep: "先做黑白稿，只用字号、字重和留白建立完整层级。",
+    };
+  }
+
+  function buildStyleContext(project, text, style) {
+    const context = [];
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    if (/小红书|朋友圈|社媒|封面|头图|Banner/i.test(combined)) {
+      context.push("这是偏传播场景，风格必须先服务小屏第一眼，标题和核心利益点不能被氛围吃掉。");
+    }
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      context.push("如果要印刷，材质、细线、发光和低对比颜色都要提前考虑打样效果。");
+    }
+    if (/品牌|VI|Logo|logo/.test(combined)) {
+      context.push("品牌项目先遵守品牌色、字体和 Logo 规则，再做风格化表达。");
+    }
+    if (project.goal && !/待补充/.test(project.goal)) {
+      context.push(`当前目标是「${project.goal}」，${style.name}也要能解释这个目标。`);
+    }
+    if (project.dueDate && daysUntil(project.dueDate) <= 1) {
+      context.push("时间紧时先做一个风格锚点，不要整张图同时大改。");
+    }
+    return Array.from(new Set(context)).slice(0, 4);
+  }
+
   function adaptMultiFormat(project, analysis) {
     const targets = detectAdaptTargets(project, analysis.text);
     const lines = [`多尺寸适配方案：${project.name}`];
@@ -1983,6 +2112,7 @@
         "recommend_layout_structure",
         "recommend_typography_system",
         "recommend_color_system",
+        "translate_style_keyword",
         "solve_design_issue",
         "cancel_task",
         "complete_checklist",
@@ -2769,6 +2899,7 @@
     recommendLayoutStructure,
     recommendTypographySystem,
     recommendColorSystem,
+    translateStyleKeyword,
     generateDesignDirections,
     compareDesignOptions,
     generateReview,

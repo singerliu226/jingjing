@@ -351,6 +351,7 @@
       "recommend_layout_structure",
       "recommend_typography_system",
       "recommend_color_system",
+      "translate_style_keyword",
       "solve_design_issue",
       "cancel_task",
       "complete_checklist",

@@ -977,4 +977,43 @@ function freshState() {
   assert.ok(result.reply.includes("品牌一致性检查"));
 }
 
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员招募海报";
+  project.type = "社媒图";
+  project.goal = "让用户觉得会员活动更有品质";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "高级感怎么做出来？", fixedNow);
+  assert.equal(result.analysis.behavior, "translate_style_keyword");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("风格关键词翻译"));
+  assert.ok(result.reply.includes("构图"));
+  assert.ok(result.reply.includes("字体"));
+  assert.ok(result.reply.includes("不要这样做"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "科技感视觉语言怎么落地？", fixedNow);
+  assert.equal(result.analysis.behavior, "translate_style_keyword");
+  assert.ok(result.reply.includes("科技 / 未来 / 赛博"));
+  assert.ok(result.reply.includes("网格"));
+  assert.ok(result.reply.includes("发光"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "给我三个高级感设计方向。", fixedNow);
+  assert.equal(result.analysis.behavior, "ask_design_directions");
+  assert.ok(result.reply.includes("设计方向草案"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "主管说要高级一点，明天改。", fixedNow);
+  assert.equal(result.analysis.behavior, "record_feedback");
+  assert.ok(result.reply.includes("反馈已翻译为"));
+}
+
 console.log("All Design Desk Agent tests passed.");
