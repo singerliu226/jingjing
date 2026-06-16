@@ -447,6 +447,13 @@
       return "organize_delivery_files";
     }
     if (/交付检查|导出检查|检查.*(出血|转曲|源文件|打包)|清单/.test(text)) return "ask_checklist";
+    if (
+      /(尺寸|规格|比例|像素|安全区|导出尺寸|画布|多大|做多大)/.test(text) &&
+      /(多少|多大|怎么设|怎么定|用什么|应该|建议|比例|安全区)/.test(text) &&
+      !/适配|横版.*竖版|竖版.*横版|裁切|改成/.test(text)
+    ) {
+      return "recommend_platform_specs";
+    }
     if (/作品集|归档|面试|复盘|案例/.test(text)) return "ask_portfolio";
     if (/(v|V)\s*\d+|第[一二三四五六七八九十\d]+版|版本/.test(text)) return "record_version";
     if (/素材|图片|照片|图太糊|太糊|清晰度|分辨率|抠图|扣图|边缘|锯齿|水印|找不到图|没有合适的图|素材不统一|图片风格不统一/.test(text)) {
@@ -767,6 +774,7 @@
       "diagnose_ambiguous_issue",
       "fix_asset_quality",
       "organize_delivery_files",
+      "recommend_platform_specs",
       "adapt_multi_format",
       "check_brand_consistency",
       "guide_visual_effect",
@@ -803,6 +811,7 @@
     if (analysis.behavior === "diagnose_ambiguous_issue") return diagnoseAmbiguousIssue(project, analysis);
     if (analysis.behavior === "fix_asset_quality") return fixAssetQuality(project, analysis);
     if (analysis.behavior === "organize_delivery_files") return organizeDeliveryFiles(project, analysis);
+    if (analysis.behavior === "recommend_platform_specs") return recommendPlatformSpecs(project, analysis);
     if (analysis.behavior === "adapt_multi_format") return adaptMultiFormat(project, analysis);
     if (analysis.behavior === "check_brand_consistency") return checkBrandConsistency(project, analysis);
     if (analysis.behavior === "guide_visual_effect") return guideVisualEffect(project, analysis);
@@ -1137,6 +1146,118 @@
     return checks.slice(0, 6);
   }
 
+  function recommendPlatformSpecs(project, analysis) {
+    const targets = detectSpecTargets(project, analysis.text);
+    const lines = [`规格建议：${project.name}`];
+    lines.push("先按这些常用起稿规格开文件；发布前或交付前，再以客户给的广告位、平台后台或印刷厂要求为准。");
+    targets.forEach((target) => {
+      lines.push(`${target.name}`);
+      lines.push(`- 起稿：${target.size}`);
+      lines.push(`- 安全区：${target.safeArea}`);
+      lines.push(`- 导出：${target.export}`);
+      lines.push(`- 注意：${target.note}`);
+    });
+    lines.push("开稿前再确认：用途、投放位置、是否要源文件、是否需要多尺寸适配。");
+    const context = buildSpecContext(project, analysis.text);
+    if (context.length) {
+      lines.push("结合当前项目：");
+      context.forEach((item) => lines.push(`- ${item}`));
+    }
+    lines.push("下一步：先把确认后的尺寸写进项目小纸条，小画桌会把规格检查放进今日待办和交付清单。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `规格确认：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function detectSpecTargets(project, text) {
+    const combined = `${(project.deliverables || []).join("、")} ${project.type || ""} ${text}`;
+    const specs = [];
+    const add = (item) => {
+      if (!specs.some((existing) => existing.name === item.name)) specs.push(item);
+    };
+    if (/小红书|封面/.test(combined)) {
+      add({
+        name: "小红书封面 / 笔记首图",
+        size: "优先 3:4 竖版，常用 1080×1440px；需要更高清时可用 1242×1660px 同比例起稿。",
+        safeArea: "主标题、人物脸、产品和价格信息离四边至少 80-120px，不要贴边。",
+        export: "JPG/PNG，RGB；发布前用手机预览，检查缩略图里标题是否清楚。",
+        note: "封面比精细小字更重要的是第一眼标题和主体，文字尽量少。",
+      });
+    }
+    if (/朋友圈|微信海报|社群海报/.test(combined)) {
+      add({
+        name: "朋友圈 / 社群海报",
+        size: "常用 1080×1440px 或 1080×1920px；如果客户要方图，再做 1080×1080px 版本。",
+        safeArea: "二维码、CTA 和活动时间不要贴底，底部至少留 120px 呼吸空间。",
+        export: "JPG/PNG，RGB；二维码区域不要被压缩或加复杂纹理。",
+        note: "朋友圈里用户扫得很快，主标题和利益点要比装饰更醒目。",
+      });
+    }
+    if (/公众号.*头图|头图|公众号封面|公众号/.test(combined)) {
+      add({
+        name: "公众号头图 / 封面",
+        size: "常用横图 900×383px 或同等 2.35:1 比例起稿；封面缩略图也要单独预览。",
+        safeArea: "重要文字放中间偏左/偏中区域，避免边缘在列表页或转发场景被裁切。",
+        export: "JPG/PNG，RGB；文字不要太小，压缩后也要清楚。",
+        note: "公众号头图空间横向很宽，适合主标题 + 主视觉左右分区。",
+      });
+    }
+    if (/Banner|banner|横幅|广告位/.test(combined)) {
+      add({
+        name: "Banner / 横幅广告位",
+        size: "先问清真实广告位；没有规格时可先用 1920×640px 或 1200×400px 做比例草稿。",
+        safeArea: "主标题、按钮和产品放在中间安全区域，左右边缘预留给响应式裁切。",
+        export: "JPG/PNG，RGB；网页 Banner 注意体积，避免大图加载慢。",
+        note: "Banner 不适合塞长文案，只保留一句主信息和一个行动点。",
+      });
+    }
+    if (/PPT|ppt|幻灯片|提案/.test(combined)) {
+      add({
+        name: "PPT / 提案页",
+        size: "优先 16:9，常用 1920×1080px 或 PowerPoint 宽屏尺寸。",
+        safeArea: "标题和页码离边至少 48px；投影场景字号要比屏幕稿更大。",
+        export: "PPTX + PDF 预览；含特殊字体时要转 PDF 或嵌入/打包字体。",
+        note: "PPT 先保证远看可读，别按海报密度排满。",
+      });
+    }
+    if (/印刷|A4|A3|海报|折页|画册/.test(combined)) {
+      add({
+        name: "印刷海报 / 画册类",
+        size: "按成品尺寸起稿；没有要求时可先问 A4/A3/正度/大度，图片按 300dpi 准备。",
+        safeArea: "出血常用 3mm，重要文字离裁切线至少 5-8mm。",
+        export: "PDF 印刷稿；常见要求包括 CMYK、出血、图片嵌入、文字转曲。",
+        note: "印刷规格必须问清印厂或客户，不能只按屏幕尺寸猜。",
+      });
+    }
+    if (!specs.length) {
+      add({
+        name: "当前物料",
+        size: "先确认投放平台、成品尺寸和比例；线上图按像素起稿，印刷物按成品尺寸 + 出血起稿。",
+        safeArea: "主标题、Logo、二维码和 CTA 都不要贴边，先预留 8%-10% 边距。",
+        export: "线上通常 JPG/PNG/RGB；印刷通常 PDF/CMYK/出血/转曲。",
+        note: "没有明确尺寸时，先别精修，先发确认话术拿到规格。",
+      });
+    }
+    return specs.slice(0, 5);
+  }
+
+  function buildSpecContext(project, text) {
+    const context = [];
+    const risks = currentProjectRisks(project);
+    if (risks.some((risk) => /尺寸|规格/.test(risk))) {
+      context.push("当前项目还缺尺寸规格，先把这个确认掉，后面版式才不会返工。");
+    }
+    if (risks.some((risk) => /交付格式/.test(risk))) {
+      context.push("交付格式也还没确认，建议一起问清 JPG/PNG/PDF/源文件是否都要。");
+    }
+    if (/多尺寸|适配|一稿多/.test(text) || (project.deliverables || []).length >= 2) {
+      context.push("如果要一稿多尺寸，先做母版，再按每个平台重排，不要直接拉伸。");
+    }
+    if (project.dueDate && daysUntil(project.dueDate) <= 1) {
+      context.push("时间很近，今天先锁定尺寸、主信息和导出格式，复杂视觉细节后置。");
+    }
+    return Array.from(new Set(context)).slice(0, 4);
+  }
+
   function adaptMultiFormat(project, analysis) {
     const targets = detectAdaptTargets(project, analysis.text);
     const lines = [`多尺寸适配方案：${project.name}`];
@@ -1432,6 +1553,7 @@
         "diagnose_ambiguous_issue",
         "fix_asset_quality",
         "organize_delivery_files",
+        "recommend_platform_specs",
         "adapt_multi_format",
         "check_brand_consistency",
         "guide_visual_effect",
@@ -2214,6 +2336,7 @@
     diagnoseAmbiguousIssue,
     fixAssetQuality,
     organizeDeliveryFiles,
+    recommendPlatformSpecs,
     adaptMultiFormat,
     checkBrandConsistency,
     guideVisualEffect,

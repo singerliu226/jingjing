@@ -830,4 +830,37 @@ function freshState() {
   assert.ok(result.reply.includes("品牌一致性检查"));
 }
 
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品首图";
+  project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "小红书封面尺寸应该做多大？安全区怎么留？", fixedNow);
+  assert.equal(result.analysis.behavior, "recommend_platform_specs");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("规格建议"));
+  assert.ok(result.reply.includes("1080×1440"));
+  assert.ok(result.reply.includes("安全区"));
+  assert.ok(result.reply.includes("平台后台"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "公众号头图比例是多少？", fixedNow);
+  assert.equal(result.analysis.behavior, "recommend_platform_specs");
+  assert.ok(result.reply.includes("900×383"));
+  assert.ok(result.reply.includes("2.35:1"));
+  assert.ok(result.reply.includes("发布前"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const result = Core.applyInput(state, "尺寸是1080x1440px，导出 jpg。", fixedNow);
+  assert.equal(result.analysis.behavior, "update_project_specs");
+  assert.ok(project.specs.includes("1080x1440px"));
+  assert.ok(project.formats.includes("jpg"));
+}
+
 console.log("All Design Desk Agent tests passed.");

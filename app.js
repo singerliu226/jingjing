@@ -344,6 +344,7 @@
       "diagnose_ambiguous_issue",
       "fix_asset_quality",
       "organize_delivery_files",
+      "recommend_platform_specs",
       "adapt_multi_format",
       "check_brand_consistency",
       "guide_visual_effect",
