@@ -475,6 +475,20 @@
     ) {
       return "guide_visual_effect";
     }
+    if (
+      /版式模板|排版模板|版式结构|排版结构|画面结构|构图模板|构图结构|海报怎么排|封面怎么排|Banner怎么排|banner怎么排|怎么排版|如何排版|怎么构图|如何构图/.test(text) &&
+      !/画面乱|太乱|看不清|字太多|不协调|哪里怪|怎么改|优化/.test(text)
+    ) {
+      return "recommend_layout_structure";
+    }
+    if (
+      analysisBits.designIssue &&
+      !analysisBits.feedback &&
+      !/文案|标题|主标题|副标题|slogan|口号|标语|卖点|利益点|CTA|按钮文案|文字太多|精简|怎么写/.test(text) &&
+      /不知道|怎么改|怎么优化|优化|卡住了|没思路|没灵感|太乱|画面乱|看不清|不协调|哪里怪|字太多|太普通|不好看|不高级|不精致/.test(text)
+    ) {
+      return "solve_design_issue";
+    }
     if (analysisBits.designerQuestion) return "answer_design_question";
     if (/文案|标题|主标题|副标题|slogan|口号|标语|卖点|利益点|CTA|按钮文案|文字太多|精简.*文字|怎么写/.test(text)) {
       return "refine_copywriting";
@@ -778,6 +792,7 @@
       "adapt_multi_format",
       "check_brand_consistency",
       "guide_visual_effect",
+      "recommend_layout_structure",
       "solve_design_issue",
       "cancel_task",
       "complete_checklist",
@@ -815,6 +830,7 @@
     if (analysis.behavior === "adapt_multi_format") return adaptMultiFormat(project, analysis);
     if (analysis.behavior === "check_brand_consistency") return checkBrandConsistency(project, analysis);
     if (analysis.behavior === "guide_visual_effect") return guideVisualEffect(project, analysis);
+    if (analysis.behavior === "recommend_layout_structure") return recommendLayoutStructure(project, analysis);
     if (analysis.behavior === "ask_checklist") return generateChecklistText(state, project);
     if (analysis.behavior === "update_project_name" || analysis.behavior === "update_project_type" || analysis.behavior === "update_project_specs") {
       applyProjectMeta(state, project, analysis.meta);
@@ -1258,6 +1274,153 @@
     return Array.from(new Set(context)).slice(0, 4);
   }
 
+  function recommendLayoutStructure(project, analysis) {
+    const structures = buildLayoutStructures(project, analysis.text);
+    const lines = [`版式结构建议：${project.name}`];
+    lines.push("先不要急着做细节。第一版先搭黑白线框，把信息顺序跑通，再加颜色、图片和风格。");
+    structures.forEach((item, index) => {
+      lines.push(`结构 ${index + 1}｜${item.name}`);
+      lines.push(`- 画面骨架：${item.skeleton}`);
+      lines.push(`- 信息顺序：${item.hierarchy}`);
+      lines.push(`- 适合：${item.bestFor}`);
+      lines.push(`- 注意：${item.warning}`);
+    });
+    lines.push("首版开稿顺序：");
+    lines.push("1. 先把主标题、核心利益点、时间/地点/CTA 分成 3 个信息层级。");
+    lines.push("2. 只用黑白灰排出主视觉和文字位置，不加装饰。");
+    lines.push("3. 缩小到真实预览尺寸看 3 秒，能读懂再进入风格细化。");
+    const context = buildLayoutContext(project, analysis.text);
+    if (context.length) {
+      lines.push("结合当前项目：");
+      context.forEach((item) => lines.push(`- ${item}`));
+    }
+    lines.push("下一步：先选一个结构做 15 分钟小稿；如果卡住，就优先选“上标题 + 中主体 + 下信息”的稳妥结构。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `版式结构探索：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildLayoutStructures(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    if (/Banner|banner|横幅|公众号头图|头图/.test(combined)) {
+      return [
+        {
+          name: "左右分区",
+          skeleton: "左侧放主标题和按钮/利益点，右侧放产品、人物或主视觉。",
+          hierarchy: "主标题 -> 主视觉 -> CTA/补充信息。",
+          bestFor: "公众号头图、网页 Banner、横向广告位。",
+          warning: "左右两边不要平均用力，一边必须成为第一视觉。",
+        },
+        {
+          name: "中心聚焦",
+          skeleton: "主视觉居中，标题叠在上方或左上，辅助信息放下方成组。",
+          hierarchy: "主视觉 -> 标题 -> 时间/标签/按钮。",
+          bestFor: "产品发布、活动主视觉、需要强冲击的横幅。",
+          warning: "标题压图时要加遮罩或留空区，别让文字落在复杂纹理上。",
+        },
+        {
+          name: "三段式横排",
+          skeleton: "左侧主题，中间主体图，右侧 CTA 或活动信息。",
+          hierarchy: "主题 -> 主体图 -> 行动信息。",
+          bestFor: "信息比较多但仍要横向展示的广告位。",
+          warning: "只保留一个 CTA，不要在横幅里塞完整说明文。",
+        },
+      ];
+    }
+    if (/PPT|ppt|提案|幻灯片/.test(combined)) {
+      return [
+        {
+          name: "一句话结论页",
+          skeleton: "顶部一句结论，左侧图/数据，右侧 3 个要点。",
+          hierarchy: "结论 -> 证据 -> 补充说明。",
+          bestFor: "向老板或客户解释方案判断。",
+          warning: "PPT 不是海报，字号和留白要让远处也能读。",
+        },
+        {
+          name: "对比页",
+          skeleton: "左右两栏对比，顶部写判断标准，底部写推荐结论。",
+          hierarchy: "标准 -> A/B 差异 -> 推荐理由。",
+          bestFor: "展示两个方向、改稿前后、竞品对比。",
+          warning: "两栏里的信息量要对齐，否则比较会失真。",
+        },
+        {
+          name: "流程页",
+          skeleton: "横向 3-5 个步骤，每步一个短标题和一句说明。",
+          hierarchy: "阶段 -> 动作 -> 结果。",
+          bestFor: "讲设计过程、项目计划、交付流程。",
+          warning: "步骤不要超过 5 个，超过就拆页。",
+        },
+      ];
+    }
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      return [
+        {
+          name: "网格秩序",
+          skeleton: "先建立 2-3 栏网格，标题、图片和正文都贴着网格走。",
+          hierarchy: "标题 -> 主图 -> 正文分组 -> 注释/规格。",
+          bestFor: "画册、折页、品牌物料、需要显得稳定可靠的印刷品。",
+          warning: "重要文字离裁切线远一点，出血和安全边距先开好。",
+        },
+        {
+          name: "大图封面",
+          skeleton: "一张高质量主图占主要面积，标题和 Logo 放在干净区域。",
+          hierarchy: "主图情绪 -> 标题 -> 品牌/说明。",
+          bestFor: "封面、产品介绍页、品牌形象物料。",
+          warning: "素材清晰度必须够，低清图不要硬撑满版。",
+        },
+        {
+          name: "信息卡片组",
+          skeleton: "把信息拆成 3-4 个卡片或模块，每组只讲一类内容。",
+          hierarchy: "模块标题 -> 关键数字/卖点 -> 说明文字。",
+          bestFor: "活动规则、产品卖点、服务流程。",
+          warning: "卡片间距要统一，不要做成一堆漂浮小块。",
+        },
+      ];
+    }
+    return [
+      {
+        name: "上标题 + 中主体 + 下信息",
+        skeleton: "顶部放主标题，中间放产品/人物/主视觉，底部放时间、地点、CTA 或二维码。",
+        hierarchy: "主标题 -> 主视觉 -> 行动信息。",
+        bestFor: "大多数海报、小红书封面、朋友圈活动图的首版。",
+        warning: "底部信息要成组，不要零散贴在四周。",
+      },
+      {
+        name: "左文右图 / 右文左图",
+        skeleton: "一侧放标题和利益点，另一侧放主体图，二级信息靠近文字区。",
+        hierarchy: "标题 -> 主体图 -> 卖点/按钮。",
+        bestFor: "产品海报、课程活动、需要清楚说明的社媒图。",
+        warning: "文字区要留足空白，别让主体图挤压阅读空间。",
+      },
+      {
+        name: "中心大标题",
+        skeleton: "主标题居中最大，背景用图形/纹理/照片做氛围，辅助信息绕开主标题。",
+        hierarchy: "标题 -> 情绪氛围 -> 补充信息。",
+        bestFor: "节日主题、品牌氛围、标题本身很有传播力的画面。",
+        warning: "标题必须够短够强，长标题不适合这个结构。",
+      },
+    ];
+  }
+
+  function buildLayoutContext(project, text) {
+    const context = [];
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${text}`;
+    if (/小红书|朋友圈|社媒|封面/.test(combined)) {
+      context.push("社媒图先按手机缩略图检查，主标题要比你在电脑上看到的更大一点。");
+    }
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      context.push("印刷物先开出血和安全边距，再排版；不要最后才补裁切空间。");
+    }
+    if (project.goal && !/待补充/.test(project.goal)) {
+      context.push(`当前目标是「${project.goal}」，结构选择要服务这个目标。`);
+    } else {
+      context.push("项目目标还没写清楚，先用最稳结构起稿，等目标确认后再做风格化构图。");
+    }
+    if (project.dueDate && daysUntil(project.dueDate) <= 1) {
+      context.push("时间紧时不要试太多创意结构，先用稳妥结构保证可读和交付。");
+    }
+    return Array.from(new Set(context)).slice(0, 4);
+  }
+
   function adaptMultiFormat(project, analysis) {
     const targets = detectAdaptTargets(project, analysis.text);
     const lines = [`多尺寸适配方案：${project.name}`];
@@ -1557,6 +1720,7 @@
         "adapt_multi_format",
         "check_brand_consistency",
         "guide_visual_effect",
+        "recommend_layout_structure",
         "solve_design_issue",
         "cancel_task",
         "complete_checklist",
@@ -2340,6 +2504,7 @@
     adaptMultiFormat,
     checkBrandConsistency,
     guideVisualEffect,
+    recommendLayoutStructure,
     generateDesignDirections,
     compareDesignOptions,
     generateReview,

@@ -863,4 +863,36 @@ function freshState() {
   assert.ok(project.formats.includes("jpg"));
 }
 
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品海报";
+  project.type = "社媒图";
+  project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "小红书海报怎么排版？有没有版式结构？", fixedNow);
+  assert.equal(result.analysis.behavior, "recommend_layout_structure");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("版式结构建议"));
+  assert.ok(result.reply.includes("上标题 + 中主体 + 下信息"));
+  assert.ok(result.reply.includes("黑白线框"));
+  assert.ok(result.reply.includes("手机缩略图"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "Banner怎么排版比较稳？", fixedNow);
+  assert.equal(result.analysis.behavior, "recommend_layout_structure");
+  assert.ok(result.reply.includes("左右分区"));
+  assert.ok(result.reply.includes("公众号头图"));
+  assert.ok(result.reply.includes("第一视觉"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "画面太乱了，怎么排版优化？", fixedNow);
+  assert.equal(result.analysis.behavior, "solve_design_issue");
+  assert.ok(result.reply.includes("设计卡点"));
+}
+
 console.log("All Design Desk Agent tests passed.");

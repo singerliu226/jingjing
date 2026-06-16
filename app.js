@@ -348,6 +348,7 @@
       "adapt_multi_format",
       "check_brand_consistency",
       "guide_visual_effect",
+      "recommend_layout_structure",
       "solve_design_issue",
       "cancel_task",
       "complete_checklist",
