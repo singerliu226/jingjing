@@ -532,6 +532,9 @@
     if (/项目.*复盘|复盘一下|帮我复盘|总结.*经验|经验沉淀|下次.*注意|踩坑|哪里做得好|哪里没做好|做完.*学到|结束.*学到/.test(text) && !/作品集|归档|面试|案例/.test(text)) {
       return "project_retrospective";
     }
+    if (isProjectClosureRecordRequest(text)) {
+      return "record_project_outcome";
+    }
     if (/作品集|归档|面试|案例/.test(text)) return "ask_portfolio";
     if (
       /修改说明|修改点|改了什么|改了哪些|版本变化|版本对比|整理.*版本|整理.*修改|V\s*\d+.*V\s*\d+|v\s*\d+.*v\s*\d+/i.test(text) &&
@@ -698,6 +701,13 @@
     const asksHow = /怎么|如何|为什么|哪里|设置|步骤|操作|总是|应该|要不要|能不能|检查/.test(text);
     const aiProduct = /AI产品|AI工具|AI助手|人工智能|模型|千问|api|API|接口/.test(text);
     return toolMention && operationMention && asksHow && !aiProduct;
+  }
+
+  function isProjectClosureRecordRequest(text) {
+    const closureSignal = /已上线|上线了|发布了|投放了|已投放|已交付|交付完成|客户确认最终稿|客户确认了最终稿|老板确认最终稿|最终稿确认|定稿了|过稿了|收尾|归档一下|整理结果|记录结果|效果不错|数据不错|点击|曝光|转化|报名|阅读量|收藏|点赞|成交/.test(text);
+    const recordIntent = /记录|整理|归档|收尾|复盘|作品集|结果|完成|已|了|一下/.test(text);
+    const onlyWaiting = /等反馈|待反馈|等确认|还没确认|没确认/.test(text);
+    return closureSignal && recordIntent && !onlyWaiting;
   }
 
   function extractProjectMeta(text) {
@@ -961,6 +971,7 @@
       "ask_checklist",
       "ask_portfolio",
       "project_retrospective",
+      "record_project_outcome",
       "generate_growth_profile",
       "ask_confirmation_message",
       "request_missing_assets",
@@ -1022,6 +1033,7 @@
       return generatePortfolioCase(project, state.feedback.filter((item) => item.projectId === project.id));
     }
     if (analysis.behavior === "project_retrospective") return generateProjectRetrospective(state, project, analysis, now);
+    if (analysis.behavior === "record_project_outcome") return recordProjectOutcome(state, project, analysis, now);
     if (analysis.behavior === "generate_growth_profile") return generateGrowthProfile(state, analysis, now);
     if (analysis.behavior === "request_missing_assets") return requestMissingAssets(state, project, analysis, now);
     if (analysis.behavior === "clarify_vague_feedback") return clarifyVagueFeedback(state, project, analysis, now);
@@ -3017,6 +3029,7 @@
         "ask_checklist",
         "ask_portfolio",
         "project_retrospective",
+        "record_project_outcome",
         "generate_growth_profile",
         "ask_confirmation_message",
         "request_missing_assets",
@@ -3508,6 +3521,100 @@
       hasProcess: Boolean(project.portfolio.process),
     });
     return lines.join("\n");
+  }
+
+  function recordProjectOutcome(state, project, analysis, now = new Date()) {
+    project.status = "done";
+    state.tasks
+      .filter((task) => task.projectId === project.id && task.status !== "done" && /交付|导出|源文件|定稿|反馈|确认|推进|设计/.test(task.title))
+      .forEach((task) => {
+        task.status = "done";
+      });
+    const outcome = extractProjectOutcomeSummary(analysis.text, project);
+    project.portfolio.result = outcome.result;
+    project.portfolio.reflection = project.portfolio.reflection && !/记录项目过程/.test(project.portfolio.reflection)
+      ? project.portfolio.reflection
+      : outcome.reflection;
+    project.portfolio.process = appendSentence(project.portfolio.process, `项目收尾：${analysis.text}`);
+    project.portfolioScore = scorePortfolio({
+      deliverables: project.deliverables,
+      feedbackCount: state.feedback.filter((item) => item.projectId === project.id).length,
+      hasProcess: Boolean(project.portfolio.process),
+    });
+    pushUniqueTask(state, {
+      projectId: project.id,
+      title: "归档项目结果和交付证据",
+      priority: "normal",
+      dueDate: formatDate(now),
+      status: "todo",
+      nextAction: "保存最终图、上线截图、客户确认记录、源文件包和一句结果总结。",
+      feedbackIds: [],
+    });
+
+    const lines = [`项目收尾记录：${project.name}`];
+    lines.push(`最终状态：已完成。`);
+    lines.push(`结果摘要：${outcome.result}`);
+    lines.push("现在要补齐的证据：");
+    buildOutcomeEvidenceList(project, analysis.text).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("作品集可用表达：");
+    lines.push(`- ${buildOutcomePortfolioLine(project, outcome)}`);
+    lines.push("收尾检查：");
+    buildOutcomeCloseoutChecks(project).forEach((item) => lines.push(`- ${item}`));
+    lines.push("小画桌已把项目标记为已完成，并新增“归档项目结果和交付证据”任务。");
+    return lines.join("\n");
+  }
+
+  function extractProjectOutcomeSummary(text, project) {
+    const metrics = [];
+    Array.from(text.matchAll(/(?:阅读量|曝光|点击|转化|报名|收藏|点赞|成交|浏览|到店)[^\d]{0,6}(\d+(?:\.\d+)?\s*(?:万|千|%|人|次)?)/g)).forEach((match) => {
+      metrics.push(match[0]);
+    });
+    const confirmation = /客户|老板|主管|甲方/.test(text) && /确认|通过|定稿|满意|认可/.test(text) ? "客户/负责人已确认最终稿" : "";
+    const published = /已上线|上线了|发布了|投放了|已投放/.test(text) ? "已上线/投放" : "";
+    const delivered = /已交付|交付完成|发给|提交/.test(text) ? "交付完成" : "";
+    const pieces = [published, delivered, confirmation].filter(Boolean);
+    if (metrics.length) pieces.push(`结果数据：${metrics.slice(0, 3).join("、")}`);
+    const result = pieces.length ? pieces.join("；") : "项目已完成，最终结果和交付证据待补充。";
+    const reflection = buildOutcomeReflection(project, text, metrics);
+    return { result, reflection, metrics };
+  }
+
+  function buildOutcomeReflection(project, text, metrics) {
+    if (metrics.length) return "这次可以重点复盘：哪些信息和视觉策略带来了可见结果，并把数据作为作品集证据。";
+    if ((project.versions || []).length || /改|反馈|确认/.test(text)) return "这次最值得沉淀的是：用反馈和版本迭代把设计推进到最终确认。";
+    if ((project.deliverables || []).length >= 2) return "这次重点经验是：多物料项目要在收尾阶段统一命名、导出和归档证据。";
+    return "这次项目已完成，后续要补最终图、确认记录和一句复盘，避免作品集只剩截图。";
+  }
+
+  function buildOutcomeEvidenceList(project, text) {
+    const evidence = [
+      "最终交付图：保留最终导出图和源文件，不要只留聊天截图。",
+      "确认记录：保存客户/老板确认最终稿的聊天记录或邮件。",
+      "过程证据：保留至少一张修改前后对比，说明为什么这样改。",
+    ];
+    if (/已上线|上线|发布|投放/.test(text)) evidence.unshift("上线证据：保存上线页面/投放位置截图，记录日期和平台。");
+    if (/阅读量|曝光|点击|转化|报名|收藏|点赞|成交/.test(text)) evidence.unshift("数据证据：记录阅读、曝光、点击、报名、转化等数据来源和日期。");
+    if ((project.deliverables || []).length >= 2) evidence.push("多物料证据：把不同尺寸/平台的最终图放在同一组，展示延展能力。");
+    return Array.from(new Set(evidence)).slice(0, 6);
+  }
+
+  function buildOutcomePortfolioLine(project, outcome) {
+    const target = project.goal && !/待补充|待从/.test(project.goal) ? `围绕「${project.goal}」` : "围绕项目传播目标";
+    const deliverables = (project.deliverables || []).length ? `完成 ${project.deliverables.join("、")}` : "完成最终视觉交付";
+    return `${target}，我${deliverables}，经过反馈和交付检查后完成上线/交付；最终结果为：${outcome.result}。`;
+  }
+
+  function buildOutcomeCloseoutChecks(project) {
+    const checks = [
+      "源文件、导出图、参考素材和授权说明分开放好。",
+      "文件名补上项目名、物料、尺寸、版本和日期。",
+      "把最终图、修改过程、确认记录放进项目归档。",
+      "写一句复盘：这次解决了什么、下次要提前确认什么。",
+    ];
+    if (/印刷|包装|画册|折页/.test(`${project.type} ${(project.deliverables || []).join("、")}`)) {
+      checks.unshift("印刷项目保留可编辑版、转曲版、印刷 PDF 和打样/印厂确认记录。");
+    }
+    return checks.slice(0, 6);
   }
 
   function buildRetrospectiveWins(project, feedbackItems, doneTasks, doneChecklist) {
@@ -4957,6 +5064,7 @@
     decomposeBrief,
     planDesignConcepts,
     generateProjectRetrospective,
+    recordProjectOutcome,
     generateGrowthProfile,
     generateProjectWorkflow,
     generateConfirmationMessage,

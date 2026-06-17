@@ -338,6 +338,7 @@
       "ask_checklist",
       "ask_portfolio",
       "project_retrospective",
+      "record_project_outcome",
       "generate_growth_profile",
       "ask_confirmation_message",
       "clarify_vague_feedback",

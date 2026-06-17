@@ -1382,6 +1382,38 @@ function freshState() {
 
 {
   const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品海报";
+  project.type = "社媒图";
+  project.goal = "让用户知道新品上市并愿意进店";
+  project.deliverables = ["小红书封面", "朋友圈海报"];
+  state.tasks.push({
+    id: "t-closeout-test",
+    projectId: project.id,
+    title: "交付前自检与导出文件",
+    priority: "normal",
+    dueDate: "2026-06-13",
+    status: "todo",
+    nextAction: "检查命名和导出",
+    feedbackIds: [],
+  });
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "客户确认最终稿了，今天已上线，阅读量 2.3 万，帮我记录结果。", fixedNow);
+  assert.equal(result.analysis.behavior, "record_project_outcome");
+  assert.equal(project.status, "done");
+  assert.ok(project.portfolio.result.includes("已上线"));
+  assert.ok(project.portfolio.result.includes("阅读量 2.3 万"));
+  assert.ok(state.tasks.some((task) => task.id === "t-closeout-test" && task.status === "done"));
+  assert.equal(state.tasks.length, beforeTasks + 1);
+  assert.ok(state.tasks.at(-1).title.includes("归档项目结果"));
+  assert.ok(result.reply.includes("项目收尾记录"));
+  assert.ok(result.reply.includes("结果摘要"));
+  assert.ok(result.reply.includes("作品集可用表达"));
+  assert.ok(result.reply.includes("收尾检查"));
+}
+
+{
+  const state = freshState();
   const result = Core.applyInput(state, "帮我把这个项目整理成作品集案例。", fixedNow);
   assert.equal(result.analysis.behavior, "ask_portfolio");
   assert.ok(result.reply.includes("项目归档草稿"));
