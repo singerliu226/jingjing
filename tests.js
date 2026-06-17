@@ -557,6 +557,26 @@ function freshState() {
 {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
+  project.name = "小红书新品封面";
+  project.type = "社媒图";
+  project.deliverables = ["小红书封面", "朋友圈海报", "公众号头图"];
+  project.dueDate = "2026-06-12";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "今天要交但我来不及了，怎么跟老板说延期或者砍范围？", fixedNow);
+  assert.equal(result.analysis.behavior, "negotiate_deadline_scope");
+  assert.equal(project.status, "waiting");
+  assert.equal(state.tasks.length, beforeTasks + 1);
+  assert.ok(state.tasks.at(-1).title.includes("沟通延期"));
+  assert.ok(result.reply.includes("延期/范围沟通"));
+  assert.ok(result.reply.includes("必须守住"));
+  assert.ok(result.reply.includes("可以后置"));
+  assert.ok(result.reply.includes("可以直接这样说"));
+  assert.ok(result.reply.includes("如果对方不同意延期"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
   project.name = "品牌活动物料";
   state.tasks.push({
     id: "t-many-1",

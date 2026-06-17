@@ -497,6 +497,9 @@
     if (isInformationHierarchyRequest(text, analysisBits)) {
       return "organize_information_hierarchy";
     }
+    if (isDeadlineNegotiationRequest(text)) {
+      return "negotiate_deadline_scope";
+    }
     if (/来不及|赶不完|太多了|任务太多|很乱|乱成|焦虑|崩溃|不知道先做哪个|老板.*催|客户.*催|马上要|今天.*交.*还没/.test(text)) {
       return "triage_overload";
     }
@@ -663,6 +666,13 @@
       /意见.*(不一致|不一样|冲突|打架)|反馈.*(不一致|不一样|冲突|打架)|各说各|一个说|另一个说|听谁|按谁|谁说了算|谁拍板|怎么取舍|优先听|优先级/.test(text) &&
       !/话术|怎么问|怎么说|帮我问|催|没回|没回复/.test(text)
     );
+  }
+
+  function isDeadlineNegotiationRequest(text) {
+    const timePressure = /来不及|赶不完|做不完|时间不够|今天交|明天交|马上要|下班前|截止|ddl|deadline|太赶|任务太多/.test(text);
+    const negotiationIntent = /延期|延后|推迟|改期|争取时间|怎么跟.*说|怎么说|话术|沟通|砍需求|砍范围|降范围|少做|先交|分批|取舍|保哪|舍哪|能不能/.test(text);
+    const stakeholder = /老板|客户|主管|甲方|领导|运营|产品|对方|他们|负责人/.test(text);
+    return timePressure && negotiationIntent && stakeholder;
   }
 
   function isMissingAssetRequest(text) {
@@ -983,6 +993,7 @@
       "ask_design_directions",
       "compare_design_options",
       "triage_overload",
+      "negotiate_deadline_scope",
       "estimate_design_workload",
       "prepare_feedback_request",
       "refine_copywriting",
@@ -1045,6 +1056,7 @@
     if (analysis.behavior === "ask_design_directions") return generateDesignDirections(project, analysis);
     if (analysis.behavior === "compare_design_options") return compareDesignOptions(project, analysis);
     if (analysis.behavior === "triage_overload") return generateTriagePlan(state, project, analysis, now);
+    if (analysis.behavior === "negotiate_deadline_scope") return negotiateDeadlineScope(state, project, analysis, now);
     if (analysis.behavior === "estimate_design_workload") return estimateDesignWorkload(state, project, analysis, now);
     if (analysis.behavior === "prepare_feedback_request") return prepareFeedbackRequest(state, project, analysis, now);
     if (analysis.behavior === "refine_copywriting") return refineCopywriting(project, analysis);
@@ -3041,6 +3053,7 @@
         "ask_design_directions",
         "compare_design_options",
         "triage_overload",
+        "negotiate_deadline_scope",
         "estimate_design_workload",
         "prepare_feedback_request",
         "refine_copywriting",
@@ -3890,6 +3903,88 @@
     if (urgent) lines.push("今天的标准不是做到完美，而是先交一版清楚、可解释、能继续反馈的稿。");
     project.portfolio.process = appendSentence(project.portfolio.process, `紧急推进：${analysis.text}`);
     return lines.join("\n");
+  }
+
+  function negotiateDeadlineScope(state, project, analysis, now = new Date()) {
+    project.status = "waiting";
+    if (!project.risks.includes("时间不足，需要确认交付范围和截止时间")) {
+      project.risks.push("时间不足，需要确认交付范围和截止时间");
+    }
+    const recipient = guessNegotiationRecipient(analysis.text);
+    const tradeoff = buildDeadlineTradeoff(project, analysis, now);
+    pushUniqueTask(state, {
+      projectId: project.id,
+      title: `沟通延期/降范围：${recipient}`,
+      priority: "high",
+      dueDate: formatDate(now),
+      status: "waiting",
+      nextAction: "先同步风险和可交付方案，让负责人选择延期、降范围或分批交付。",
+      feedbackIds: [],
+    });
+    project.portfolio.process = appendSentence(project.portfolio.process, `时间/范围沟通：${analysis.text}`);
+
+    const lines = [`延期/范围沟通：${project.name}`];
+    lines.push("先不要只说“我来不及”。要把问题说成“时间、范围、质量三者需要取舍”。");
+    lines.push("我建议这样拆：");
+    lines.push(`- 必须守住：${tradeoff.mustKeep.join("、")}`);
+    lines.push(`- 可以后置：${tradeoff.canDefer.join("、")}`);
+    lines.push(`- 需要对方选择：${tradeoff.needDecision.join("、")}`);
+    lines.push("可以直接这样说：");
+    lines.push(buildDeadlineNegotiationMessage(project, recipient, tradeoff));
+    lines.push("如果对方不同意延期：");
+    buildDeadlineFallbacks(project, tradeoff).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("小画桌已把项目切到待确认，并新增“沟通延期/降范围”任务。");
+    return lines.join("\n");
+  }
+
+  function guessNegotiationRecipient(text) {
+    if (/客户|甲方/.test(text)) return "客户/甲方";
+    if (/老板|领导|主管/.test(text)) return "老板/主管";
+    if (/运营/.test(text)) return "运营同事";
+    if (/产品/.test(text)) return "产品同事";
+    return "负责人";
+  }
+
+  function buildDeadlineTradeoff(project, analysis, now) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${analysis.text}`;
+    const mustKeep = ["主信息清楚可读", "尺寸和导出格式正确", "最终交付物不缺项"];
+    const canDefer = ["复杂动效/材质细节", "非核心装饰元素", "第三套以上的备选方向"];
+    const needDecision = ["是否允许先交可用版，再补精修版", "是否减少交付物或先交主尺寸", "是否调整截止时间"];
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      mustKeep.push("出血、CMYK、图片精度和转曲检查");
+      canDefer.push("非必要工艺效果模拟");
+    }
+    if (/多尺寸|小红书|朋友圈|公众号|Banner|banner|多平台/.test(combined) || (project.deliverables || []).length >= 2) {
+      needDecision.unshift("多平台是否分批交付：先主渠道，后适配渠道");
+      canDefer.unshift("次要平台尺寸适配");
+    }
+    if (project.dueDate) {
+      const days = daysUntil(project.dueDate, now);
+      if (days <= 0) needDecision.unshift("今天是否只验收信息和方向，细节另约时间");
+      if (days === 1) needDecision.unshift("明天交付是否接受先交首版/主版");
+    }
+    return {
+      mustKeep: Array.from(new Set(mustKeep)).slice(0, 5),
+      canDefer: Array.from(new Set(canDefer)).slice(0, 5),
+      needDecision: Array.from(new Set(needDecision)).slice(0, 5),
+    };
+  }
+
+  function buildDeadlineNegotiationMessage(project, recipient, tradeoff) {
+    const deliverables = (project.deliverables || []).length ? `目前交付物包含 ${project.deliverables.join("、")}` : "目前交付范围还需要再确认";
+    const deadline = project.dueDate ? `，截止时间是 ${project.dueDate}` : "";
+    return `${recipient}好，我同步一下当前风险：${deliverables}${deadline}。如果保持现在的范围和时间，精修质量会受影响。为了先保证「${tradeoff.mustKeep.slice(0, 2).join("、")}」，我建议二选一：A 先交主尺寸/可用版，其他适配和细节后补；B 截止时间延后，我把完整精修和交付检查一次性补齐。你看这版更适合按哪种方式推进？`;
+  }
+
+  function buildDeadlineFallbacks(project, tradeoff) {
+    const fallbacks = [
+      `先交最低可用版：只保留 ${tradeoff.mustKeep.slice(0, 3).join("、")}。`,
+      `砍细节：${tradeoff.canDefer.slice(0, 3).join("、")} 暂时后置，不影响核心交付。`,
+      "分批交付：先交主平台/主尺寸，次要尺寸在方向确认后补。",
+      "保留证据：把这次取舍记录到项目过程里，后续复盘说明时间限制和交付策略。",
+    ];
+    if ((project.risks || []).some((risk) => /缺少/.test(risk))) fallbacks.unshift(`先确认缺失信息：${currentProjectRisks(project).slice(0, 2).join("、")}。`);
+    return fallbacks.slice(0, 5);
   }
 
   function estimateDesignWorkload(state, project, analysis, now = new Date()) {
@@ -5075,6 +5170,7 @@
     handleScopeChange,
     answerDesignQuestion,
     generateTriagePlan,
+    negotiateDeadlineScope,
     estimateDesignWorkload,
     prepareFeedbackRequest,
     refineCopywriting,

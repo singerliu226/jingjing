@@ -349,6 +349,7 @@
       "ask_design_directions",
       "compare_design_options",
       "triage_overload",
+      "negotiate_deadline_scope",
       "estimate_design_workload",
       "prepare_feedback_request",
       "refine_copywriting",
