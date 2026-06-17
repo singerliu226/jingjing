@@ -558,6 +558,9 @@
     if (isAssetLicenseAuditRequest(text)) {
       return "audit_asset_license";
     }
+    if (isReferenceSimilarityNegotiationRequest(text)) {
+      return "negotiate_reference_similarity";
+    }
     if (/版权|授权|字体授权|图片版权|商用|素材能不能用|侵权/.test(text)) {
       return "answer_design_question";
     }
@@ -741,6 +744,14 @@
     const asksHelp = /帮我|怎么写|写一组|给我|生成|整理|做|出|要/.test(text);
     const illustratorContext = /AI里|AI 里|AI怎么|AI 怎么|Adobe AI|Illustrator|illustrator|转曲|画板|导出/.test(text);
     return promptIntent && imageUse && asksHelp && !illustratorContext;
+  }
+
+  function isReferenceSimilarityNegotiationRequest(text) {
+    const referenceIntent = /参考图|参考案例|竞品|案例|别人家|照这个|照着|像这个|还原|一模一样|越像越好|模仿|抄|照抄/.test(text);
+    const stakeholder = /老板|客户|主管|甲方|领导|对方|他们/.test(text);
+    const communicationIntent = /怎么说|怎么解释|怎么回|话术|沟通|说服|回复|婉拒|风险|版权|侵权|还原度|一模一样|越像越好|像但不抄/.test(text);
+    const pureReferenceAnalysis = /拆解|分析|借鉴/.test(text) && !/怎么说|怎么解释|怎么回|话术|沟通|说服|版权|侵权|风险|越像越好|一模一样/.test(text);
+    return referenceIntent && stakeholder && communicationIntent && !pureReferenceAnalysis;
   }
 
   function isMultiConceptPlanningRequest(text) {
@@ -1059,6 +1070,7 @@
       "diagnose_ambiguous_issue",
       "fix_asset_quality",
       "guide_design_software_operation",
+      "negotiate_reference_similarity",
       "analyze_reference",
       "unify_series_visual_system",
       "organize_delivery_files",
@@ -1127,6 +1139,7 @@
     if (analysis.behavior === "diagnose_ambiguous_issue") return diagnoseAmbiguousIssue(project, analysis);
     if (analysis.behavior === "fix_asset_quality") return fixAssetQuality(project, analysis);
     if (analysis.behavior === "guide_design_software_operation") return guideDesignSoftwareOperation(project, analysis);
+    if (analysis.behavior === "negotiate_reference_similarity") return negotiateReferenceSimilarity(project, analysis);
     if (analysis.behavior === "analyze_reference") return analyzeReference(project, analysis);
     if (analysis.behavior === "unify_series_visual_system") return unifySeriesVisualSystem(project, analysis);
     if (analysis.behavior === "organize_delivery_files") return organizeDeliveryFiles(project, analysis);
@@ -1866,6 +1879,71 @@
     lines.push("下一步：用 15 分钟做一个“方法迁移小稿”：只借一个方法，比如构图、配色、字体比例或视觉锚点，不要一次借完整画面。");
     project.portfolio.process = appendSentence(project.portfolio.process, `参考拆解：${analysis.text}`);
     return lines.join("\n");
+  }
+
+  function negotiateReferenceSimilarity(project, analysis) {
+    const plan = buildReferenceSimilarityPlan(project, analysis.text);
+    const lines = [`参考还原度沟通：${project.name}`];
+    lines.push("先把“像参考”拆成可借鉴的方法，而不是复制画面长相。");
+    lines.push("可以保留：");
+    plan.keep.forEach((item) => lines.push(`- ${item}`));
+    lines.push("必须改掉：");
+    plan.change.forEach((item) => lines.push(`- ${item}`));
+    lines.push("像但不抄的做法：");
+    plan.actions.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("可以这样说：");
+    lines.push(buildReferenceSimilarityMessage(project, plan));
+    lines.push("给对方确认：");
+    plan.questions.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("下一步：先做一张“方法迁移小稿”，只保留参考里的结构/情绪/节奏，替换具体素材、字体、配色和识别元素。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `参考还原度沟通：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildReferenceSimilarityPlan(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${text}`;
+    const keep = [
+      "信息顺序：例如先看到主题，再看到卖点/行动入口。",
+      "版式逻辑：例如左右分区、居中主视觉、标题压主体或大留白结构。",
+      "情绪方向：例如更年轻、更高级、更节日、更科技，但不复制具体元素。",
+    ];
+    const change = [
+      "具体素材、插画、摄影、图标和可识别构图。",
+      "字体、色值、装饰符号和品牌识别元素。",
+      "竞品独有的文案结构、人物姿态、图形组合和版面比例。",
+    ];
+    const actions = [
+      "先用一句话写出参考图可借鉴的方法，而不是描述它的长相。",
+      "保留一个方法：构图、层级、配色关系或视觉节奏，只选一个作为主借鉴点。",
+      "替换两到三类表达：换素材/主体、换字体气质、换配色或图形语言。",
+      "回到自己的目标、受众和交付尺寸，检查是否比原参考更适合当前项目。",
+    ];
+    const questions = [
+      "这张参考最想保留的是信息顺序、氛围情绪、版式结构，还是视觉冲击？",
+      "有没有必须避开的品牌、竞品或版权元素？",
+      "如果不能一模一样，优先保留“感觉像”还是“信息结构像”？",
+    ];
+    if (/竞品|别人家|同行/.test(text)) {
+      change.unshift("竞品的识别元素和核心符号不能复制，只能借策略和信息结构。");
+      questions.unshift("这张参考是竞品还是普通灵感图？如果是竞品，需要降低相似度。");
+    }
+    if (/客户|甲方/.test(text)) {
+      questions.push("客户是否接受先看一版“参考方法迁移稿”，再确认相似度范围？");
+    }
+    if (/小红书|朋友圈|社媒|公众号|Banner|banner/.test(combined)) {
+      actions.push("放到真实平台尺寸里预览，确认不是因为复制参考才显得完整。");
+    }
+    return {
+      keep: Array.from(new Set(keep)).slice(0, 5),
+      change: Array.from(new Set(change)).slice(0, 5),
+      actions: Array.from(new Set(actions)).slice(0, 5),
+      questions: Array.from(new Set(questions)).slice(0, 5),
+    };
+  }
+
+  function buildReferenceSimilarityMessage(project, plan) {
+    const goal = project.goal && !/待补充|待从/.test(project.goal) ? `，同时更贴合「${project.goal}」这个目标` : "";
+    return `我理解这张参考想要的感觉。我建议不要直接照抄具体素材、字体和构图，这样会有版权和品牌相似风险。我们可以保留它的${plan.keep.slice(0, 2).join("、")}，但把主体、字体、配色和图形语言换成适合我们项目的表达${goal}。我先做一版“像但不抄”的方向给你看，再一起确认相似度是否合适。`;
   }
 
   function planReferenceResearch(state, project, analysis, now = new Date()) {
@@ -3494,6 +3572,7 @@
         "diagnose_ambiguous_issue",
         "fix_asset_quality",
         "guide_design_software_operation",
+        "negotiate_reference_similarity",
         "analyze_reference",
         "unify_series_visual_system",
         "organize_delivery_files",
@@ -5698,6 +5777,7 @@
     fixAssetQuality,
     guideDesignSoftwareOperation,
     requestMissingAssets,
+    negotiateReferenceSimilarity,
     analyzeReference,
     unifySeriesVisualSystem,
     organizeDeliveryFiles,

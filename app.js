@@ -364,6 +364,7 @@
       "fix_asset_quality",
       "guide_design_software_operation",
       "request_missing_assets",
+      "negotiate_reference_similarity",
       "analyze_reference",
       "unify_series_visual_system",
       "organize_delivery_files",

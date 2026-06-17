@@ -1790,6 +1790,28 @@ function freshState() {
 {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员活动海报";
+  project.goal = "让用户理解活动并扫码报名";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "客户让参考图还原得越像越好，但我怕照抄侵权，怎么跟客户解释？", fixedNow);
+  assert.equal(result.analysis.behavior, "negotiate_reference_similarity");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("参考还原度沟通"));
+  assert.ok(result.reply.includes("可以保留"));
+  assert.ok(result.reply.includes("必须改掉"));
+  assert.ok(result.reply.includes("可以这样说"));
+  assert.ok(result.reply.includes("像但不抄"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "这张参考图怎么拆解，哪些地方可以借鉴但不要照抄？", fixedNow);
+  assert.equal(result.analysis.behavior, "analyze_reference");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
   project.name = "新品活动海报";
   project.goal = "让用户扫码报名活动";
   const beforeTasks = state.tasks.length;
