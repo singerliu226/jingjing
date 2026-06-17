@@ -331,6 +331,7 @@
     return [
       "ask_plan",
       "ask_summary",
+      "organize_meeting_notes",
       "decompose_brief",
       "ask_checklist",
       "ask_portfolio",

@@ -431,6 +431,12 @@
     if (/今天.*(做什么|安排)|今日.*安排|先做什么|排一下|计划一下/.test(text)) return "ask_plan";
     if (/日报|今天总结|工作总结|周报/.test(text)) return "ask_summary";
     if (
+      /会议纪要|沟通纪要|开会|会议|电话|语音|群里|微信.*聊|刚聊完|沟通了一堆|聊了一堆|会后/.test(text) &&
+      /整理|纪要|总结|记录|帮我理|帮我梳理|待办|确认|决定|说了/.test(text)
+    ) {
+      return "organize_meeting_notes";
+    }
+    if (
       /拆brief|拆 brief|拆需求|需求拆解|帮我拆|这个brief|这个 brief|brief怎么|需求不清|不知道从哪开始|从哪开始/.test(text) &&
       !/参考图|参考案例|竞品|情绪板|moodboard/i.test(text)
     ) {
@@ -905,6 +911,7 @@
     return [
       "ask_plan",
       "ask_summary",
+      "organize_meeting_notes",
       "decompose_brief",
       "ask_review",
       "ask_checklist",
@@ -957,6 +964,7 @@
   function applyCommandBehavior(state, project, analysis, now) {
     if (analysis.behavior === "ask_plan") return generateDailyPlan(state, now);
     if (analysis.behavior === "ask_summary") return generateDailySummary(state, now);
+    if (analysis.behavior === "organize_meeting_notes") return organizeMeetingNotes(state, project, analysis, now);
     if (analysis.behavior === "decompose_brief") return decomposeBrief(state, project, analysis, now);
     if (analysis.behavior === "ask_review") {
       return generateReview(project, state.feedback.filter((item) => item.projectId === project.id));
@@ -2605,6 +2613,7 @@
       [
         "ask_plan",
         "ask_summary",
+        "organize_meeting_notes",
         "decompose_brief",
         "ask_review",
         "ask_checklist",
@@ -2952,6 +2961,119 @@
       `等待确认：${dashboard.waiting.length ? dashboard.waiting.map((task) => task.title).join("；") : "暂无等待确认"}`,
       `风险：${dashboard.risks.length ? dashboard.risks.map((risk) => `${risk.projectName} - ${risk.text}`).join("；") : "暂无明显风险"}`,
     ].join("\n");
+  }
+
+  function organizeMeetingNotes(state, project, analysis, now = new Date()) {
+    if (analysis.deliverables && analysis.deliverables.length) {
+      project.deliverables = Array.from(new Set((project.deliverables || []).concat(analysis.deliverables)));
+    }
+    if (analysis.dueDate) {
+      project.dueDate = analysis.dueDate;
+      applyDeadlineToOpenTasks(state, project, analysis.dueDate);
+    }
+    const notes = extractMeetingNotes(project, analysis.text);
+    const dueDate = analysis.dueDate || project.dueDate || "";
+    notes.actions.slice(0, 3).forEach((action) => {
+      pushUniqueTask(state, {
+        projectId: project.id,
+        title: `会后执行：${action}`,
+        priority: dueDate && daysUntil(dueDate, now) <= 1 ? "high" : "normal",
+        dueDate,
+        status: "todo",
+        nextAction: "先按沟通纪要完成这一项，完成后记录版本变化或反馈处理结果。",
+        feedbackIds: [],
+      });
+    });
+    if (notes.confirmations.length) {
+      project.status = "waiting";
+      const risk = `会后待确认：${notes.confirmations[0]}`;
+      if (!project.risks.includes(risk)) project.risks.push(risk);
+      pushUniqueTask(state, {
+        projectId: project.id,
+        title: `会后确认：${notes.confirmations[0]}`,
+        priority: dueDate && daysUntil(dueDate, now) <= 1 ? "high" : "normal",
+        dueDate,
+        status: "waiting",
+        nextAction: "把待确认项发给负责人，拿到明确回复后再继续精修。",
+        feedbackIds: [],
+      });
+    }
+    project.portfolio.process = appendSentence(project.portfolio.process, `沟通纪要：${notes.summary}`);
+
+    const lines = [`沟通纪要整理：${project.name}`];
+    lines.push("已确认：");
+    notes.decisions.forEach((item) => lines.push(`- ${item}`));
+    lines.push("设计动作：");
+    notes.actions.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("待确认：");
+    notes.confirmations.forEach((item) => lines.push(`- ${item}`));
+    lines.push("发给对方可以这样收口：");
+    lines.push(buildMeetingConfirmationMessage(project, notes));
+    lines.push(notes.confirmations.length ? "小画桌已把待确认项放进等待清单。" : "小画桌已把会后动作放进今日推进清单。");
+    return lines.join("\n");
+  }
+
+  function extractMeetingNotes(project, text) {
+    const sentences = splitMeetingSentences(text);
+    const decisions = uniqueList(
+      sentences.filter((item) => /确认|确定|决定|定了|先按|保持|采用|不需要|不用|优先/.test(item) && !/待确认|还没确认|需要确认|问一下|怎么确认/.test(item))
+    );
+    const confirmations = uniqueList(
+      sentences.filter((item) => /待确认|还没确认|需要确认|问一下|不确定|没定|未定|谁拍板|确认一下|再确认/.test(item))
+    );
+    const actions = uniqueList(
+      sentences.filter(
+        (item) =>
+          /要|需要|改|调整|补|做|出|导出|适配|检查|整理|发给|提交|加|删|弱化|突出/.test(item) &&
+          !confirmations.includes(item) &&
+          !/帮我整理|会议纪要|沟通纪要/.test(item)
+      )
+    );
+    if (!decisions.length) {
+      const goal = project.goal && !/待补充|待从/.test(project.goal) ? project.goal : "这次沟通的核心目标还需要补一句";
+      decisions.push(`当前项目目标按「${goal}」继续推进。`);
+    }
+    if (!actions.length) {
+      actions.push("先把会议信息转成一版执行清单：目标、主信息、交付物、截止时间。");
+    }
+    if (!confirmations.length) {
+      const missing = currentProjectRisks(project);
+      confirmations.push(missing.length ? missing[0] : "最终确认人和下一轮反馈时间。");
+    }
+    return {
+      decisions: decisions.slice(0, 5),
+      actions: actions.slice(0, 5),
+      confirmations: confirmations.slice(0, 5),
+      summary: sentences.slice(0, 3).join("；") || text,
+    };
+  }
+
+  function splitMeetingSentences(text) {
+    return String(text || "")
+      .replace(/^(帮我|请帮我)?(整理|总结|记录)?(一下)?(会议纪要|沟通纪要)?[：:，,]?\s*/, "")
+      .split(/[。；;\n]/)
+      .map((item) => item.replace(/^(然后|另外|还有|以及|并且|今天|刚才|会上|会议里|群里|微信里)/, "").trim())
+      .filter((item) => item.length >= 4);
+  }
+
+  function uniqueList(items) {
+    return Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)));
+  }
+
+  function pushUniqueTask(state, task) {
+    const exists = state.tasks.some((item) => item.projectId === task.projectId && item.title === task.title && item.status === task.status);
+    if (exists) return;
+    state.tasks.push({
+      id: uid("t"),
+      ...task,
+    });
+  }
+
+  function buildMeetingConfirmationMessage(project, notes) {
+    const decisions = notes.decisions.slice(0, 2).join("；");
+    const actions = notes.actions.slice(0, 2).join("；");
+    const confirmations = notes.confirmations.slice(0, 3).join("；");
+    return `我整理一下刚才沟通结果：已确认「${decisions}」。我接下来会先处理「${actions}」。还需要确认「${confirmations}」，确认后我再继续出下一版。`;
   }
 
   function generateProjectRetrospective(state, project, analysis, now = new Date()) {

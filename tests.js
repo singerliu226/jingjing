@@ -1522,4 +1522,36 @@ function freshState() {
   assert.equal(result.analysis.behavior, "ask_summary");
 }
 
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "新品活动海报";
+  project.goal = "让用户扫码报名活动";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(
+    state,
+    "帮我整理会议纪要：客户确认先做小红书封面和朋友圈海报；老板说主标题要更突出，二维码不要太小；尺寸还没确认，需要问运营；明天下午前给下一版。",
+    fixedNow
+  );
+  assert.equal(result.analysis.behavior, "organize_meeting_notes");
+  assert.equal(project.status, "waiting");
+  assert.equal(project.dueDate, "2026-06-13");
+  assert.ok(project.deliverables.includes("小红书封面"));
+  assert.ok(project.deliverables.includes("朋友圈海报"));
+  assert.ok(state.tasks.length >= beforeTasks + 2);
+  assert.ok(state.tasks.some((task) => task.title.includes("会后执行")));
+  assert.ok(state.tasks.some((task) => task.status === "waiting" && task.title.includes("会后确认")));
+  assert.ok(result.reply.includes("沟通纪要整理"));
+  assert.ok(result.reply.includes("已确认"));
+  assert.ok(result.reply.includes("设计动作"));
+  assert.ok(result.reply.includes("待确认"));
+  assert.ok(result.reply.includes("发给对方可以这样收口"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "帮我整理这些反馈优先级，先改什么？", fixedNow);
+  assert.equal(result.analysis.behavior, "synthesize_feedback_batch");
+}
+
 console.log("All Design Desk Agent tests passed.");
