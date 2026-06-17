@@ -346,6 +346,7 @@
       "synthesize_feedback_batch",
       "handle_scope_change",
       "answer_design_question",
+      "audit_asset_license",
       "ask_design_directions",
       "compare_design_options",
       "triage_overload",

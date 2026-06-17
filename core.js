@@ -546,6 +546,9 @@
       return "summarize_version_changes";
     }
     if (/(v|V)\s*\d+|第[一二三四五六七八九十\d]+版|版本/.test(text)) return "record_version";
+    if (isAssetLicenseAuditRequest(text)) {
+      return "audit_asset_license";
+    }
     if (/版权|授权|字体授权|图片版权|商用|素材能不能用|侵权/.test(text)) {
       return "answer_design_question";
     }
@@ -691,6 +694,14 @@
     const qualityOrRights = /风格不统一|图片风格|图太糊|太糊|清晰度|分辨率|抠图|扣图|水印|版权|授权|商用|侵权|找不到合适/.test(text);
     const specOnly = /尺寸|规格|交付格式|格式|出血|CMYK|转曲/.test(text) && !assetMention;
     return assetMention && missingIntent && !qualityOrRights && !specOnly;
+  }
+
+  function isAssetLicenseAuditRequest(text) {
+    const rightsTerms = /版权|授权|字体授权|图片版权|商用|侵权|可商用|商用风险|授权风险|素材来源|来源不清|网上找的图|网上下载|免费字体|免费素材|图库|字体能不能用|图片能不能用/.test(text);
+    const projectUse = /项目|这张图|海报|封面|物料|客户|公司|商用|对外|上线|发布|投放|交付|源文件|最终稿|用了|准备/.test(text);
+    const auditIntent = /帮我|检查|审查|确认|整理|列|风险|清单|能不能|可不可以|要不要|怎么办|怎么处理/.test(text);
+    const pureQuestion = /^版权|^授权/.test(text) && !/项目|这张|用了|客户|交付|商用|对外/.test(text);
+    return rightsTerms && projectUse && auditIntent && !pureQuestion;
   }
 
   function isVagueFeedbackClarificationRequest(text) {
@@ -1000,6 +1011,7 @@
       "synthesize_feedback_batch",
       "handle_scope_change",
       "answer_design_question",
+      "audit_asset_license",
       "ask_design_directions",
       "compare_design_options",
       "triage_overload",
@@ -1064,6 +1076,7 @@
     if (analysis.behavior === "synthesize_feedback_batch") return synthesizeFeedbackBatch(state, project, analysis, now);
     if (analysis.behavior === "handle_scope_change") return handleScopeChange(state, project, analysis, now);
     if (analysis.behavior === "answer_design_question") return answerDesignQuestion(project, analysis);
+    if (analysis.behavior === "audit_asset_license") return auditAssetLicense(state, project, analysis, now);
     if (analysis.behavior === "ask_design_directions") return generateDesignDirections(project, analysis);
     if (analysis.behavior === "compare_design_options") return compareDesignOptions(project, analysis);
     if (analysis.behavior === "triage_overload") return generateTriagePlan(state, project, analysis, now);
@@ -1515,6 +1528,97 @@
     if (assets.some((item) => /Logo|品牌/.test(item))) checks.unshift("Logo 是否有透明背景、矢量版本和安全距离要求。");
     if (assets.some((item) => /图片|产品图/.test(item))) checks.unshift("产品图是否够大、主体完整、背景和画面风格是否可控。");
     return Array.from(new Set(checks)).slice(0, 6);
+  }
+
+  function auditAssetLicense(state, project, analysis, now = new Date()) {
+    project.status = "waiting";
+    if (!project.risks.includes("素材/字体授权未确认，商用前需要留证据")) {
+      project.risks.push("素材/字体授权未确认，商用前需要留证据");
+    }
+    const risks = detectLicenseRisks(analysis.text);
+    pushUniqueTask(state, {
+      projectId: project.id,
+      title: "确认素材和字体授权",
+      priority: project.dueDate && daysUntil(project.dueDate, now) <= 1 ? "high" : "normal",
+      dueDate: project.dueDate || "",
+      status: "waiting",
+      nextAction: "确认字体、图片、插画、图标和客户素材是否允许当前项目商用，并保存授权证据。",
+      feedbackIds: [],
+    });
+    project.portfolio.process = appendSentence(project.portfolio.process, `授权风险审查：${analysis.text}`);
+
+    const lines = [`素材授权审查：${project.name}`];
+    lines.push("先按风险分级，不要只凭“网上写免费”就直接商用。");
+    lines.push("高风险项：");
+    risks.high.forEach((item) => lines.push(`- ${item}`));
+    lines.push("中风险项：");
+    risks.medium.forEach((item) => lines.push(`- ${item}`));
+    lines.push("低风险/可保留：");
+    risks.low.forEach((item) => lines.push(`- ${item}`));
+    lines.push("处理建议：");
+    buildLicenseActions(project, analysis.text).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("可以这样确认：");
+    lines.push(buildLicenseConfirmationMessage(project, analysis.text));
+    lines.push("归档时要保存：");
+    buildLicenseEvidenceList(analysis.text).forEach((item) => lines.push(`- ${item}`));
+    lines.push("小画桌已把项目切到待确认，并新增“确认素材和字体授权”任务。");
+    return lines.join("\n");
+  }
+
+  function detectLicenseRisks(text) {
+    const high = [];
+    const medium = [];
+    const low = [];
+    if (/网上找|网上下载|百度|小红书|Pinterest|花瓣|站酷|截图|水印|来源不清/.test(text)) {
+      high.push("来源不清的网上图片/插画/截图：不能直接用于商业发布或客户交付。");
+    }
+    if (/字体|免费字体|字库|商用字体/.test(text)) {
+      high.push("字体授权范围未确认：免费可下载不等于允许商用、嵌入或转交源文件。");
+    }
+    if (/图标|插画|素材|图库|模板/.test(text)) {
+      medium.push("图库/模板素材：需要确认授权范围、署名要求、是否允许二次修改和客户商用。");
+    }
+    if (/客户给|甲方给|公司素材|品牌素材/.test(text)) {
+      medium.push("客户/公司提供素材：仍要确认是否拥有对外发布和二次加工权限。");
+    }
+    if (/可商用|授权文件|购买|公司素材库|品牌手册/.test(text)) {
+      low.push("已有授权或公司素材库内容：可以使用，但要保存授权截图、订单或素材库链接。");
+    }
+    if (!high.length) high.push("凡是来源不清、无授权记录、无法证明可商用的素材，都先按高风险处理。");
+    if (!medium.length) medium.push("可商用素材也要确认使用范围：平台、地区、期限、是否可修改、是否可交付源文件。");
+    if (!low.length) low.push("客户原创内容、公司已购素材、明确可商用字体，在留存证据后风险较低。");
+    return {
+      high: Array.from(new Set(high)).slice(0, 4),
+      medium: Array.from(new Set(medium)).slice(0, 4),
+      low: Array.from(new Set(low)).slice(0, 4),
+    };
+  }
+
+  function buildLicenseActions(project, text) {
+    const actions = [
+      "把所有不确定素材列成表：名称、来源、用途、是否商用、授权证据、替代方案。",
+      "高风险素材先替换：用公司素材库、已购图库、可商用字体，或改成自绘图形/色块/文字表达。",
+      "如果必须使用客户提供素材，让客户明确确认拥有使用权和对外发布权限。",
+      "交付源文件前检查字体和图片授权是否允许转交源文件；不允许时交转曲版/嵌图版和预览图。",
+    ];
+    if (/印刷|包装|画册|折页/.test(`${project.type} ${text}`)) actions.push("印刷项目额外确认图片授权是否覆盖印量、地区和物料类型。");
+    return actions.slice(0, 5);
+  }
+
+  function buildLicenseConfirmationMessage(project, text) {
+    const target = detectPeople(text) || "负责人";
+    return `${target}好，我在整理「${project.name}」的素材授权。为了避免商用风险，我想确认一下：当前使用的字体、图片、插画/图标和客户提供素材，是否都允许用于这次对外发布/商业使用？如果有已购买链接、授权截图或公司素材库来源，也麻烦发我一下。我会把不确定素材先用可商用替代方案处理。`;
+  }
+
+  function buildLicenseEvidenceList(text) {
+    const evidence = [
+      "字体名称、授权范围、购买/下载来源截图。",
+      "图片/插画/图标来源链接、授权截图或订单记录。",
+      "客户提供素材的确认记录：允许用于本次项目和对外发布。",
+      "最终交付包里的授权说明 README。",
+    ];
+    if (/源文件|ai|psd|figma/i.test(text)) evidence.push("源文件交付许可：确认字体、图片是否允许随源文件转交。");
+    return evidence.slice(0, 5);
   }
 
   function buildAssetQualitySteps(project, text) {
@@ -3137,6 +3241,7 @@
         "synthesize_feedback_batch",
         "handle_scope_change",
         "answer_design_question",
+        "audit_asset_license",
         "ask_design_directions",
         "compare_design_options",
         "triage_overload",
@@ -5257,6 +5362,7 @@
     summarizeVersionChanges,
     handleScopeChange,
     answerDesignQuestion,
+    auditAssetLicense,
     generateTriagePlan,
     negotiateDeadlineScope,
     estimateDesignWorkload,

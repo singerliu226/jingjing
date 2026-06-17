@@ -1121,7 +1121,25 @@ function freshState() {
 
 {
   const state = freshState();
-  const result = Core.applyInput(state, "参考图素材版权能不能商用？", fixedNow);
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "新品活动海报";
+  project.dueDate = "2026-06-13";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "这张海报用了网上找的参考图素材和免费字体，客户要商用，帮我检查版权风险。", fixedNow);
+  assert.equal(result.analysis.behavior, "audit_asset_license");
+  assert.equal(project.status, "waiting");
+  assert.equal(state.tasks.length, beforeTasks + 1);
+  assert.ok(state.tasks.at(-1).title.includes("确认素材和字体授权"));
+  assert.ok(result.reply.includes("素材授权审查"));
+  assert.ok(result.reply.includes("高风险项"));
+  assert.ok(result.reply.includes("处理建议"));
+  assert.ok(result.reply.includes("可以这样确认"));
+  assert.ok(result.reply.includes("归档时要保存"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "字体授权和图片版权要注意什么？", fixedNow);
   assert.equal(result.analysis.behavior, "answer_design_question");
   assert.ok(result.reply.includes("素材与授权"));
 }
