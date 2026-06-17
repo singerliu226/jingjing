@@ -442,6 +442,9 @@
     ) {
       return "decompose_brief";
     }
+    if (isMultiConceptPlanningRequest(text)) {
+      return "plan_design_concepts";
+    }
     if (isMoodboardPlanningRequest(text)) {
       return "plan_reference_research";
     }
@@ -670,6 +673,13 @@
     const existingReference = /这张参考|这个参考|已有参考|参考图.*(怎么拆|拆解|分析|借鉴|不要抄|不抄|好在哪里)|照着做/.test(text);
     const rightsOrSourceOnly = /版权|授权|商用|侵权|网站|平台|网址|哪里下载/.test(text);
     return referenceIntent && planningIntent && !existingReference && !rightsOrSourceOnly;
+  }
+
+  function isMultiConceptPlanningRequest(text) {
+    const multiConceptIntent = /两版|2版|二版|三版|3版|多版|几版|AB方案|A\/B|A B|方案A|方案B|两套|三套|多套|几个方案|几种方案|提案方向|方向区分|方案区分|不要换皮|不想只是换颜色/.test(text);
+    const planningIntent = /出|做|给|规划|设计|方向|方案|提案|区分|怎么分|怎么讲|怎么汇报|怎么安排/.test(text);
+    const choosingIntent = /选哪个|哪个更好|该选|要不要|方案A.*方案B.*选|A.*B.*选/.test(text);
+    return multiConceptIntent && planningIntent && !choosingIntent;
   }
 
   function isDesignSoftwareOperationRequest(text) {
@@ -935,6 +945,7 @@
       "ask_summary",
       "organize_meeting_notes",
       "decompose_brief",
+      "plan_design_concepts",
       "plan_reference_research",
       "ask_review",
       "ask_checklist",
@@ -990,6 +1001,7 @@
     if (analysis.behavior === "ask_summary") return generateDailySummary(state, now);
     if (analysis.behavior === "organize_meeting_notes") return organizeMeetingNotes(state, project, analysis, now);
     if (analysis.behavior === "decompose_brief") return decomposeBrief(state, project, analysis, now);
+    if (analysis.behavior === "plan_design_concepts") return planDesignConcepts(project, analysis);
     if (analysis.behavior === "plan_reference_research") return planReferenceResearch(state, project, analysis, now);
     if (analysis.behavior === "ask_review") {
       return generateReview(project, state.feedback.filter((item) => item.projectId === project.id));
@@ -2900,6 +2912,7 @@
         "ask_summary",
         "organize_meeting_notes",
         "decompose_brief",
+        "plan_design_concepts",
         "plan_reference_research",
         "ask_review",
         "ask_checklist",
@@ -4110,6 +4123,87 @@
     return lines.join("\n");
   }
 
+  function planDesignConcepts(project, analysis) {
+    const text = `${project.name} ${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${project.audience || ""} ${project.scene || ""} ${analysis.text}`;
+    const concepts = buildDesignConceptPlans(project, text);
+    const lines = [`多方案提案规划：${project.name}`];
+    lines.push("先把方案差异做成“策略不同”，不要只换颜色、字体或装饰。");
+    lines.push("提案总逻辑：");
+    buildConceptProposalLogic(project, text).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    concepts.forEach((concept, index) => {
+      lines.push(`方案 ${String.fromCharCode(65 + index)}｜${concept.name}`);
+      lines.push(`- 核心假设：${concept.hypothesis}`);
+      lines.push(`- 画面策略：${concept.visual}`);
+      lines.push(`- 适合：${concept.bestFor}`);
+      lines.push(`- 风险：${concept.risk}`);
+      lines.push(`- 汇报话术：${concept.pitch}`);
+    });
+    lines.push("怎么分工做小稿：");
+    buildConceptDraftSteps(project, concepts).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("提交前自检：三版放在一起看，第一眼差异应该是“解决问题的方式不同”，不是同一张图换了皮肤。");
+    project.portfolio.process = appendSentence(project.portfolio.process, `多方案提案规划：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildConceptProposalLogic(project, text) {
+    const logic = [];
+    if (project.goal && !/待补充|待从/.test(project.goal)) {
+      logic.push(`先声明共同目标：所有方案都服务「${project.goal}」，不是纯审美对比。`);
+    } else {
+      logic.push("先补一句共同目标：这张图到底让谁在什么场景下做什么。");
+    }
+    logic.push("每个方案只强调一个核心判断：信息效率、情绪记忆点、品牌/交付稳定性。");
+    logic.push("先做低精小稿给老板/客户选方向，方向确认后再精修细节。");
+    if (/明天|今天|马上|赶/.test(text)) logic.push("时间紧时最多做 2 个方向，不要硬凑 3 个导致都不完整。");
+    return logic.slice(0, 4);
+  }
+
+  function buildDesignConceptPlans(project, text) {
+    const isSocial = /小红书|朋友圈|公众号|社媒|封面|头图|Banner|banner/.test(text);
+    const isPrint = /印刷|包装|画册|折页/.test(text);
+    const wantsPremium = /高级|质感|克制|品牌/.test(text);
+    const wantsYoung = /年轻|活泼|可爱|童趣|节日|促销/.test(text);
+    const concepts = [
+      {
+        name: "信息效率方案",
+        hypothesis: "用户最需要先看懂主题、利益点和行动入口。",
+        visual: "主标题/主图做第一视觉，次要信息按时间、价格、二维码或说明分组，装饰尽量少。",
+        bestFor: "需求还不够稳、时间紧、需要先让负责人放心的首版。",
+        risk: "视觉惊喜偏少，需要一个小锚点避免太普通。",
+        pitch: "这一版优先保证传播效率，先让用户在 3 秒内读懂核心信息。",
+      },
+      {
+        name: wantsYoung ? "年轻传播方案" : "记忆点方案",
+        hypothesis: wantsYoung ? "项目需要更轻快、更容易被刷到时停住。" : "项目需要一个能被记住的视觉钩子。",
+        visual: wantsYoung ? "放大标题节奏，用更明亮的主色和一个跳色标签，加入轻量图形动势。" : "围绕一个视觉锚点做构图，比如特殊标题、主体放大、符号或材质。",
+        bestFor: isSocial ? "社媒封面、活动传播、需要抢第一眼的物料。" : "需要提案时拉开差异、避免看起来太常规的方向。",
+        risk: "如果信息层级没压住，容易变花或影响可读性。",
+        pitch: wantsYoung ? "这一版增强年轻感和传播节奏，让画面更容易在信息流里被注意到。" : "这一版用视觉锚点提升记忆度，让方案不只是把信息排出来。",
+      },
+      {
+        name: isPrint || wantsPremium ? "品牌质感方案" : "交付适配方案",
+        hypothesis: isPrint || wantsPremium ? "项目需要更稳定、更有品牌感或交付安全感。" : "项目后续可能需要多平台延展，规则比单张效果更重要。",
+        visual: isPrint || wantsPremium ? "控制颜色和字体数量，强化留白、对齐、材质与细节克制。" : "建立母版规则：标题区、主体区、辅助信息区固定，再做不同尺寸延展。",
+        bestFor: isPrint ? "印刷/包装/画册等需要稳定落地的项目。" : "品牌项目、多物料活动、后续需要延展的项目。",
+        risk: isPrint || wantsPremium ? "可能显得保守，需要用材质或局部细节补质感。" : "单张视觉冲击不一定最强，但后续复用更稳。",
+        pitch: isPrint || wantsPremium ? "这一版强调品牌秩序和交付稳定，减少后期返工。" : "这一版先搭规则，方便后面快速适配不同平台和物料。",
+      },
+    ];
+    return concepts.slice(0, /两版|2版|二版|两套/.test(text) ? 2 : 3);
+  }
+
+  function buildConceptDraftSteps(project, concepts) {
+    const steps = [
+      `每个方案先做 30%-50% 完成度小稿，保持同一份文案和交付尺寸，方便公平比较。`,
+      "每版只精修第一屏/主视觉，不要一开始把所有细节都做满。",
+      "给每版写一句判断标准：它解决什么问题、适合谁、风险是什么。",
+      "发给老板/客户时先讲共同目标，再讲方案差异，最后问要保留哪一个方向继续深入。",
+    ];
+    if ((project.risks || []).length) steps.unshift(`动手前先确认：${project.risks.slice(0, 2).join("、")}。`);
+    if (concepts.length >= 3) steps.push("三版里至少有一版要稳妥可交付，避免全是实验方向。");
+    return steps.slice(0, 6);
+  }
+
   function buildDirectionOptions(text) {
     const isSocial = /小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(text);
     const isPrint = /印刷|包装|画册|折页/.test(text);
@@ -4761,6 +4855,7 @@
     generateDailySummary,
     generateDailyPlan,
     decomposeBrief,
+    planDesignConcepts,
     generateProjectRetrospective,
     generateGrowthProfile,
     generateProjectWorkflow,

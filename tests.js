@@ -496,6 +496,26 @@ function freshState() {
 {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品提案";
+  project.type = "社媒图";
+  project.goal = "让用户知道新品上市并愿意进店";
+  project.audience = "年轻上班族";
+  project.scene = "小红书和朋友圈";
+  project.deliverables = ["小红书封面", "朋友圈海报"];
+  const result = Core.applyInput(state, "老板让我出三版提案方向，但不要只是换颜色换字体，怎么区分？", fixedNow);
+  assert.equal(result.analysis.behavior, "plan_design_concepts");
+  assert.ok(result.reply.includes("多方案提案规划"));
+  assert.ok(result.reply.includes("核心假设"));
+  assert.ok(result.reply.includes("方案 A"));
+  assert.ok(result.reply.includes("方案 B"));
+  assert.ok(result.reply.includes("方案 C"));
+  assert.ok(result.reply.includes("汇报话术"));
+  assert.ok(result.reply.includes("不要只换颜色"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
   project.name = "活动海报";
   project.goal = "让用户快速看到报名入口";
   project.dueDate = "2026-06-13";
