@@ -858,6 +858,23 @@ function freshState() {
 {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员活动海报";
+  project.type = "社媒图";
+  project.goal = "让用户快速看到报名入口";
+  project.deliverables = ["小红书封面"];
+  const result = Core.applyInput(state, "这张封面看起来很廉价、像模板，怎么改得更精致？", fixedNow);
+  assert.equal(result.analysis.behavior, "improve_visual_polish");
+  assert.ok(result.reply.includes("廉价感诊断与精修"));
+  assert.ok(result.reply.includes("最可能的问题"));
+  assert.ok(result.reply.includes("按这个顺序改"));
+  assert.ok(result.reply.includes("不要这样做"));
+  assert.ok(result.reply.includes("提交前看这 4 个标准"));
+  assert.ok(result.reply.includes("减法精修稿"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
   project.name = "咖啡新品封面";
   project.type = "社媒图";
   const result = Core.applyInput(state, "毛玻璃效果怎么做才不影响文字可读性？", fixedNow);

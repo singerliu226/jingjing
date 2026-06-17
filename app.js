@@ -368,6 +368,7 @@
       "recommend_platform_specs",
       "adapt_multi_format",
       "check_brand_consistency",
+      "improve_visual_polish",
       "guide_visual_effect",
       "recommend_layout_structure",
       "recommend_typography_system",

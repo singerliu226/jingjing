@@ -577,6 +577,9 @@
     if (/品牌规范|视觉规范|VI|vi|品牌色|品牌字体|logo.*使用|Logo.*使用|不符合品牌|不像品牌|品牌一致|调性统一|品牌调性/.test(text)) {
       return "check_brand_consistency";
     }
+    if (isVisualPolishRequest(text, analysisBits)) {
+      return "improve_visual_polish";
+    }
     if (
       /高级质感|质感|阴影|投影|光影|毛玻璃|玻璃拟态|金属|渐变|颗粒|噪点|发光|霓虹|立体字|材质|氛围光/.test(text) &&
       /怎么|如何|想做|做出|调|加|处理|效果|教程|方法|不影响|可读性/.test(text)
@@ -673,6 +676,13 @@
     const negotiationIntent = /延期|延后|推迟|改期|争取时间|怎么跟.*说|怎么说|话术|沟通|砍需求|砍范围|降范围|少做|先交|分批|取舍|保哪|舍哪|能不能/.test(text);
     const stakeholder = /老板|客户|主管|甲方|领导|运营|产品|对方|他们|负责人/.test(text);
     return timePressure && negotiationIntent && stakeholder;
+  }
+
+  function isVisualPolishRequest(text, analysisBits = {}) {
+    const polishProblem = /廉价|显土|很土|太土|土气|低级|不精致|粗糙|像模板|模板感|网感太强|淘宝感|影楼感|塑料感|脏|乱糟糟|不高级|没质感/.test(text);
+    const asksAction = /怎么|如何|为什么|哪里|看起来|感觉|优化|提升|改|修|调整|处理|诊断|帮我看/.test(text);
+    const plainFeedback = analysisBits.feedback && /老板|客户|主管|甲方|运营|产品/.test(text) && !/怎么|如何|为什么|哪里|诊断|帮我看|改|优化|提升/.test(text);
+    return polishProblem && asksAction && !plainFeedback;
   }
 
   function isMissingAssetRequest(text) {
@@ -1011,6 +1021,7 @@
       "recommend_platform_specs",
       "adapt_multi_format",
       "check_brand_consistency",
+      "improve_visual_polish",
       "guide_visual_effect",
       "recommend_layout_structure",
       "recommend_typography_system",
@@ -1074,6 +1085,7 @@
     if (analysis.behavior === "recommend_platform_specs") return recommendPlatformSpecs(project, analysis);
     if (analysis.behavior === "adapt_multi_format") return adaptMultiFormat(project, analysis);
     if (analysis.behavior === "check_brand_consistency") return checkBrandConsistency(project, analysis);
+    if (analysis.behavior === "improve_visual_polish") return improveVisualPolish(project, analysis);
     if (analysis.behavior === "guide_visual_effect") return guideVisualEffect(project, analysis);
     if (analysis.behavior === "recommend_layout_structure") return recommendLayoutStructure(project, analysis);
     if (analysis.behavior === "recommend_typography_system") return recommendTypographySystem(project, analysis);
@@ -2760,6 +2772,81 @@
     return Array.from(new Set(checks)).slice(0, 7);
   }
 
+  function improveVisualPolish(project, analysis) {
+    const diagnosis = buildVisualPolishDiagnosis(project, analysis.text);
+    const lines = [`廉价感诊断与精修：${project.name}`];
+    lines.push(`先判断：${diagnosis.judge}`);
+    lines.push("最可能的问题：");
+    diagnosis.problems.forEach((item) => lines.push(`- ${item}`));
+    lines.push("按这个顺序改：");
+    diagnosis.steps.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("不要这样做：");
+    diagnosis.donts.forEach((item) => lines.push(`- ${item}`));
+    lines.push("提交前看这 4 个标准：");
+    buildVisualPolishChecks(project, analysis.text).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push(`下一步：${diagnosis.nextStep}`);
+    project.portfolio.process = appendSentence(project.portfolio.process, `视觉精修诊断：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildVisualPolishDiagnosis(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${text}`;
+    const problems = [];
+    const steps = [];
+    const donts = [
+      "不要先加更多阴影、渐变、发光或纹理；堆效果通常会更廉价。",
+      "不要为了高级感把整体压暗，文字读不清会直接掉质感。",
+      "不要同时换颜色、字体、素材和版式；一次只修一个主问题。",
+    ];
+    if (/颜色|配色|脏|土|廉价|淘宝感/.test(combined)) {
+      problems.push("颜色数量太多、饱和度太平均，强调色没有只服务重点。");
+      steps.push("先减色：保留 1 个主色、1 个辅助色、1 个强调色，其余颜色降成中性色。");
+    }
+    if (/字体|字|模板|粗糙|不精致/.test(combined)) {
+      problems.push("字体层级和间距可能不稳，标题、正文、标签在抢同一个位置。");
+      steps.push("收字体：控制 1-2 个字体家族，字号只保留 3 档，统一字重和行距。");
+    }
+    if (/素材|图片|抠图|塑料感|影楼感/.test(combined)) {
+      problems.push("素材质量或抠图边缘可能拉低画面，主体和背景不像同一套光线。");
+      steps.push("修素材：换高清图或缩小低清素材，统一光源、色温和颗粒感。");
+    }
+    if (/阴影|渐变|发光|质感|高级|低级|不高级/.test(combined)) {
+      problems.push("效果可能太重或方向不统一，质感没有服务层级。");
+      steps.push("轻效果：只给主视觉或主信息加一层轻阴影/材质，其他元素保持干净。");
+    }
+    if (!problems.length) {
+      problems.push("整体秩序不足：颜色、字体、间距、素材风格里至少有一项没有统一。");
+      steps.push("先做减法版：去掉 50% 装饰，只保留主标题、主体、必要信息和一个视觉锚点。");
+    }
+    steps.push("拉开主次：主标题或主体只选一个当第一视觉，辅助信息降一档。");
+    steps.push("统一间距：相同层级用相同边距和对齐方式，避免元素像临时摆上去。");
+    if (/小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(combined)) {
+      steps.push("缩到手机预览看 3 秒，主标题和主体还清楚，才算精修有效。");
+    }
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      steps.push("按真实尺寸看边距、字号和图片精度，别只在屏幕缩放状态判断质感。");
+    }
+    return {
+      judge: "廉价感通常不是缺一个效果，而是颜色、字体、素材、间距和层级没有统一。",
+      problems: Array.from(new Set(problems)).slice(0, 5),
+      steps: Array.from(new Set(steps)).slice(0, 6),
+      donts: Array.from(new Set(donts)).slice(0, 4),
+      nextStep: "复制当前稿做一版“减法精修稿”：先减色、收字体、统一间距，再只保留一个质感细节。",
+    };
+  }
+
+  function buildVisualPolishChecks(project, text) {
+    const checks = [
+      "颜色：除了图片本身，画面主色是否控制在 2-3 类以内？",
+      "字体：标题、正文、标签是否各有明确层级，而不是都很抢？",
+      "间距：同类信息的边距和对齐是否一致？",
+      "素材：主体图、背景和装饰是否像同一套光线与风格？",
+    ];
+    if (project.goal && !/待补充|待从/.test(project.goal)) checks.unshift(`目标：这些精修是否帮助「${project.goal}」，而不是只让画面更复杂？`);
+    if (/高级|质感|不高级|廉价/.test(text)) checks.push("高级感：是否能删掉一个效果后仍然成立？如果不能，说明结构还不稳。");
+    return Array.from(new Set(checks)).slice(0, 5);
+  }
+
   function guideVisualEffect(project, analysis) {
     const recipe = pickVisualEffectRecipe(analysis.text);
     const lines = [`视觉效果做法：${project.name}`];
@@ -3071,6 +3158,7 @@
         "recommend_platform_specs",
         "adapt_multi_format",
         "check_brand_consistency",
+        "improve_visual_polish",
         "guide_visual_effect",
         "recommend_layout_structure",
         "recommend_typography_system",
@@ -5189,6 +5277,7 @@
     recommendPlatformSpecs,
     adaptMultiFormat,
     checkBrandConsistency,
+    improveVisualPolish,
     guideVisualEffect,
     recommendLayoutStructure,
     recommendTypographySystem,
