@@ -1311,6 +1311,37 @@ function freshState() {
 {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品小红书封面";
+  project.type = "社媒图";
+  project.specs = ["1080x1440px"];
+  project.deliverables = ["小红书封面"];
+  const result = Core.applyInput(state, "PS 导出小红书封面总是模糊，应该怎么设置？", fixedNow);
+  assert.equal(result.analysis.behavior, "guide_design_software_operation");
+  assert.ok(result.reply.includes("软件操作小抄"));
+  assert.ok(result.reply.includes("Photoshop"));
+  assert.ok(result.reply.includes("清晰导出"));
+  assert.ok(result.reply.includes("操作步骤"));
+  assert.ok(result.reply.includes("交付前确认"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "AI 里文字怎么转曲，交付前怕字体丢。", fixedNow);
+  assert.equal(result.analysis.behavior, "guide_design_software_operation");
+  assert.ok(result.reply.includes("Illustrator"));
+  assert.ok(result.reply.includes("文字转曲"));
+  assert.ok(result.reply.includes("可编辑版"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "发印厂前出血、CMYK、文字转曲怎么检查？", fixedNow);
+  assert.equal(result.analysis.behavior, "guide_print_prepress");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
   project.name = "咖啡新品海报";
   project.type = "社媒图";
   project.goal = "让用户一眼知道新品上市";

@@ -355,6 +355,7 @@
       "handle_negative_feedback",
       "diagnose_ambiguous_issue",
       "fix_asset_quality",
+      "guide_design_software_operation",
       "request_missing_assets",
       "analyze_reference",
       "unify_series_visual_system",

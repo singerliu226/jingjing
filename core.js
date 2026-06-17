@@ -506,6 +506,9 @@
     if (/源文件.*(整理|打包|命名)|文件.*(整理|命名|打包|太乱)|怎么.*(命名|打包|整理).*文件|交付包|命名规范|文件夹/.test(text)) {
       return "organize_delivery_files";
     }
+    if (isDesignSoftwareOperationRequest(text)) {
+      return "guide_design_software_operation";
+    }
     if (
       /印前|印刷|印刷前|发印厂|印厂|打样|出血|CMYK|cmyk|转曲|文字转曲|四色黑|专色|覆膜|模切|刀版|包装印刷/.test(text) &&
       /怎么|如何|要注意|检查|导出|交付|发|给|确认|清单|设置/.test(text)
@@ -667,6 +670,14 @@
     const existingReference = /这张参考|这个参考|已有参考|参考图.*(怎么拆|拆解|分析|借鉴|不要抄|不抄|好在哪里)|照着做/.test(text);
     const rightsOrSourceOnly = /版权|授权|商用|侵权|网站|平台|网址|哪里下载/.test(text);
     return referenceIntent && planningIntent && !existingReference && !rightsOrSourceOnly;
+  }
+
+  function isDesignSoftwareOperationRequest(text) {
+    const toolMention = /Photoshop|photoshop|PS|ps|Figma|figma|Illustrator|illustrator|AI里|AI 里|AI怎么|AI 怎么|Adobe AI|Canva|canva|稿定|创客贴/.test(text);
+    const operationMention = /导出|另存|保存|转曲|文字转曲|打包|嵌入|链接|切图|画板|画布|蒙版|智能对象|分辨率|像素|颜色模式|CMYK|RGB|PDF|png|jpg|svg|切片|出图|压缩|模糊|糊了/.test(text);
+    const asksHow = /怎么|如何|为什么|哪里|设置|步骤|操作|总是|应该|要不要|能不能|检查/.test(text);
+    const aiProduct = /AI产品|AI工具|AI助手|人工智能|模型|千问|api|API|接口/.test(text);
+    return toolMention && operationMention && asksHow && !aiProduct;
   }
 
   function extractProjectMeta(text) {
@@ -948,6 +959,7 @@
       "handle_negative_feedback",
       "diagnose_ambiguous_issue",
       "fix_asset_quality",
+      "guide_design_software_operation",
       "analyze_reference",
       "unify_series_visual_system",
       "organize_delivery_files",
@@ -1006,6 +1018,7 @@
     if (analysis.behavior === "handle_negative_feedback") return handleNegativeFeedback(state, project, analysis, now);
     if (analysis.behavior === "diagnose_ambiguous_issue") return diagnoseAmbiguousIssue(project, analysis);
     if (analysis.behavior === "fix_asset_quality") return fixAssetQuality(project, analysis);
+    if (analysis.behavior === "guide_design_software_operation") return guideDesignSoftwareOperation(project, analysis);
     if (analysis.behavior === "analyze_reference") return analyzeReference(project, analysis);
     if (analysis.behavior === "unify_series_visual_system") return unifySeriesVisualSystem(project, analysis);
     if (analysis.behavior === "organize_delivery_files") return organizeDeliveryFiles(project, analysis);
@@ -1393,6 +1406,158 @@
     alternatives.push("如果素材质量都不够，改用图形化表达：关键词、线条、色块、图标和材质纹理。");
     alternatives.push("如果客户必须用原图，把原图作为小尺寸信息图，主视觉交给标题和版式。");
     return alternatives.slice(0, 4);
+  }
+
+  function guideDesignSoftwareOperation(project, analysis) {
+    const tool = detectDesignSoftwareTool(analysis.text);
+    const operation = detectSoftwareOperation(analysis.text);
+    const lines = [`软件操作小抄：${tool.label} ${operation.label}`];
+    lines.push("先判断：");
+    buildSoftwarePrechecks(project, tool, operation, analysis.text).forEach((item) => lines.push(`- ${item}`));
+    lines.push("操作步骤：");
+    buildSoftwareOperationSteps(tool, operation, analysis.text).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("容易出错：");
+    buildSoftwareOperationPitfalls(tool, operation, analysis.text).forEach((item) => lines.push(`- ${item}`));
+    lines.push("交付前确认：");
+    buildSoftwareDeliveryChecks(project, tool, operation).forEach((item) => lines.push(`- ${item}`));
+    lines.push(`下一步：先另存一份“测试导出”文件，用实际发布尺寸打开检查，再覆盖正式导出。`);
+    project.portfolio.process = appendSentence(project.portfolio.process, `${tool.label} 操作记录：${operation.label}`);
+    return lines.join("\n");
+  }
+
+  function detectDesignSoftwareTool(text) {
+    if (/Figma|figma/.test(text)) return { key: "figma", label: "Figma" };
+    if (/Illustrator|illustrator|AI里|AI 里|AI怎么|AI 怎么|Adobe AI/.test(text)) return { key: "illustrator", label: "Illustrator" };
+    if (/Canva|canva|稿定|创客贴/.test(text)) return { key: "template", label: "在线设计工具" };
+    return { key: "photoshop", label: "Photoshop" };
+  }
+
+  function detectSoftwareOperation(text) {
+    if (/转曲|文字转曲|轮廓化|创建轮廓/.test(text)) return { key: "outline", label: "文字转曲" };
+    if (/打包|链接|嵌入|字体.*丢|图片.*丢/.test(text)) return { key: "package", label: "文件打包" };
+    if (/切图|切片|svg|图标|组件|导出.*图层|导出.*元素/.test(text)) return { key: "slice", label: "切图/元素导出" };
+    if (/模糊|糊了|分辨率|像素|压缩|不清楚|导出/.test(text)) return { key: "export", label: "清晰导出" };
+    if (/颜色|偏色|CMYK|RGB|色差/.test(text)) return { key: "color", label: "颜色模式检查" };
+    return { key: "general", label: "基础操作" };
+  }
+
+  function buildSoftwarePrechecks(project, tool, operation, text) {
+    const checks = [];
+    if ((project.specs || []).length) checks.push(`当前记录尺寸：${project.specs.join("、")}，导出前先确认画布/画板就是这个尺寸。`);
+    else checks.push("先确认最终尺寸和平台，不要用截图或预览图当正式导出。");
+    if (/小红书|朋友圈|公众号|社媒|Banner|banner/.test(`${project.type} ${(project.deliverables || []).join("、")} ${text}`)) {
+      checks.push("线上图通常用 RGB；先按 1x 正式尺寸导出，再看是否需要 2x 备份。");
+    }
+    if (/印刷|包装|画册|折页|CMYK|出血/.test(`${project.type} ${text}`)) {
+      checks.push("印刷稿不要只按屏幕效果导出，先确认 CMYK、出血、图片精度和 PDF 要求。");
+    }
+    if (operation.key === "outline") checks.push("转曲前先另存可编辑版本，转曲后文字不好再改。");
+    if (tool.key === "figma") checks.push("Figma 要选中 Frame 导出，不要只选里面的零散图层。");
+    return Array.from(new Set(checks)).slice(0, 5);
+  }
+
+  function buildSoftwareOperationSteps(tool, operation, text) {
+    if (tool.key === "photoshop") return buildPhotoshopSteps(operation, text);
+    if (tool.key === "illustrator") return buildIllustratorSteps(operation, text);
+    if (tool.key === "figma") return buildFigmaSteps(operation, text);
+    return buildTemplateToolSteps(operation, text);
+  }
+
+  function buildPhotoshopSteps(operation, text) {
+    if (operation.key === "export") {
+      return [
+        "先看“图像大小”：画布像素要等于最终交付尺寸，插入素材不能低于画面实际显示尺寸。",
+        "用“导出为”或“存储副本”导出 PNG/JPG，不要直接截屏。",
+        "线上图选 RGB / sRGB；JPG 品质设高，PNG 用于透明背景或文字较多的图。",
+        "导出后用 100% 缩放打开检查文字边缘，不要只看软件里的缩放预览。",
+      ];
+    }
+    if (operation.key === "color") {
+      return [
+        "线上物料保持 RGB/sRGB；印刷物再按印厂要求转 CMYK。",
+        "如果颜色变灰，检查是不是提前把线上图转成了 CMYK。",
+        "导出后用常用设备预览一次，特别是手机端。",
+      ];
+    }
+    return [
+      "先另存一个操作副本，保留原 PSD。",
+      "检查图层命名和智能对象，避免误删可编辑内容。",
+      "导出前合并预览层检查一次，不直接覆盖源文件。",
+    ];
+  }
+
+  function buildIllustratorSteps(operation, text) {
+    if (operation.key === "outline") {
+      return [
+        "先另存一份“可编辑版.ai”，再复制出“转曲交付版.ai”。",
+        "全选文字，执行“文字/Type -> 创建轮廓/Create Outlines”。",
+        "检查有没有漏掉的文字：用选择菜单找文本对象，或尝试点选文字看是否还能编辑。",
+        "链接图片要嵌入或随文件一起打包，再导出 PDF。",
+      ];
+    }
+    if (operation.key === "package") {
+      return [
+        "检查 Links/链接面板，确认图片没有丢失或低清替代。",
+        "用 Package/打包收集 AI、链接图片和字体；交付时再附 PDF 预览。",
+        "如果字体不能外发，另存一份转曲版，同时保留可编辑源文件。",
+      ];
+    }
+    return [
+      "先确认画板尺寸和出血设置，画板外不要放正式内容。",
+      "线上图按画板导出 PNG/JPG；印刷稿按印厂要求导出 PDF。",
+      "导出后检查文字、图片链接、颜色模式和裁切范围。",
+    ];
+  }
+
+  function buildFigmaSteps(operation, text) {
+    if (operation.key === "slice") {
+      return [
+        "选中完整 Frame 或需要导出的组件，不要框选一堆零散图层。",
+        "右侧 Export 添加 PNG/JPG/SVG/PDF；普通位图先用 PNG/JPG，图标再考虑 SVG。",
+        "按需要设 1x 或 2x；社媒封面通常先确认 1x 正式尺寸是否清楚。",
+        "导出后打开文件检查裁切，尤其是阴影、描边和超出 Frame 的元素。",
+      ];
+    }
+    return [
+      "先确认 Frame 尺寸就是交付尺寸，Frame 名称可直接作为导出文件名。",
+      "右侧 Export 选择格式和倍率；文字多的图优先 PNG，照片多的图可用 JPG。",
+      "如果导出缺内容，检查元素是否在 Frame 内、是否被 Clip content 裁掉。",
+      "导出后用手机或实际展示尺寸预览可读性。",
+    ];
+  }
+
+  function buildTemplateToolSteps(operation, text) {
+    return [
+      "先确认模板画布尺寸和平台一致，不要只改内容不改尺寸。",
+      "导出时选择高清 PNG/JPG；需要印刷时优先 PDF，并确认是否支持出血。",
+      "导出后检查水印、字体替换、图片压缩和边缘裁切。",
+      "重要商用项目保留素材来源和授权说明。",
+    ];
+  }
+
+  function buildSoftwareOperationPitfalls(tool, operation, text) {
+    const pitfalls = [
+      "不要用聊天软件截图当正式图，截图会压缩且尺寸不可控。",
+      "不要在未确认尺寸时反复导出，先锁定画布/画板。",
+      "不要覆盖源文件；测试导出、转曲版、交付版分开保存。",
+    ];
+    if (operation.key === "export") pitfalls.unshift("导出后模糊通常不是“清晰度按钮”问题，而是画布尺寸、素材分辨率或平台二次压缩问题。");
+    if (operation.key === "outline") pitfalls.unshift("转曲后文字不可编辑，改字必须回到可编辑版。");
+    if (tool.key === "figma") pitfalls.push("Figma 里超出 Frame 的阴影/装饰可能导出时被裁掉。");
+    return Array.from(new Set(pitfalls)).slice(0, 5);
+  }
+
+  function buildSoftwareDeliveryChecks(project, tool, operation) {
+    const checks = [
+      "文件名包含项目、物料、尺寸、版本和日期。",
+      "导出图和源文件分开，预览图不要和最终交付混在一起。",
+      "手机/实际尺寸预览一次，确认主标题和二维码/价格/时间不糊。",
+    ];
+    if (/印刷|包装|画册|折页/.test(`${project.type} ${(project.deliverables || []).join("、")}`) || operation.key === "outline") {
+      checks.push("印刷交付再检查出血、CMYK、图片精度、转曲版和可编辑版。");
+    }
+    if (tool.key === "illustrator") checks.push("检查链接图片是否嵌入或随包发送。");
+    return checks.slice(0, 5);
   }
 
   function analyzeReference(project, analysis) {
@@ -2759,6 +2924,7 @@
         "handle_negative_feedback",
         "diagnose_ambiguous_issue",
         "fix_asset_quality",
+        "guide_design_software_operation",
         "analyze_reference",
         "unify_series_visual_system",
         "organize_delivery_files",
@@ -4614,6 +4780,7 @@
     handleNegativeFeedback,
     diagnoseAmbiguousIssue,
     fixAssetQuality,
+    guideDesignSoftwareOperation,
     requestMissingAssets,
     analyzeReference,
     unifySeriesVisualSystem,
