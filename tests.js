@@ -1193,6 +1193,43 @@ function freshState() {
 
 {
   const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品海报";
+  project.type = "社媒图";
+  project.goal = "让用户一眼知道新品上市";
+  project.deliverables = ["小红书封面"];
+  project.dueDate = "2026-06-14";
+  state.tasks.push({
+    id: "t-progress-done",
+    projectId: project.id,
+    title: "确认尺寸和主文案",
+    priority: "normal",
+    dueDate: "2026-06-13",
+    status: "done",
+    nextAction: "已确认",
+    feedbackIds: [],
+  });
+  state.tasks.push({
+    id: "t-progress-open",
+    projectId: project.id,
+    title: "完成首版设计",
+    priority: "high",
+    dueDate: "2026-06-14",
+    status: "todo",
+    nextAction: "先搭主标题和产品图层级",
+    feedbackIds: [],
+  });
+  const result = Core.applyInput(state, "老板问我现在进度做到哪了，什么时候能给，我怎么回复？", fixedNow);
+  assert.equal(result.analysis.behavior, "report_progress_status");
+  assert.ok(result.reply.includes("进度汇报话术"));
+  assert.ok(result.reply.includes("已完成"));
+  assert.ok(result.reply.includes("正在推进"));
+  assert.ok(result.reply.includes("可以直接这样回"));
+  assert.ok(result.reply.includes("如果对方继续催"));
+}
+
+{
+  const state = freshState();
   const result = Core.applyInput(state, "今天来不及了，任务太多怎么办？", fixedNow);
   assert.equal(result.analysis.behavior, "triage_overload");
   assert.ok(result.reply.includes("紧急推进方案"));

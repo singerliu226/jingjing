@@ -351,6 +351,7 @@
       "compare_design_options",
       "triage_overload",
       "negotiate_deadline_scope",
+      "report_progress_status",
       "estimate_design_workload",
       "prepare_feedback_request",
       "refine_copywriting",

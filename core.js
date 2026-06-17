@@ -503,6 +503,9 @@
     if (/来不及|赶不完|太多了|任务太多|很乱|乱成|焦虑|崩溃|不知道先做哪个|老板.*催|客户.*催|马上要|今天.*交.*还没/.test(text)) {
       return "triage_overload";
     }
+    if (isProgressStatusReportRequest(text)) {
+      return "report_progress_status";
+    }
     if (
       /多久|多长时间|几小时|几天|工时|估时|估个时间|时间预估|要多久|多久能|能不能.*(做完|出|交)|今天能.*做完|什么时候能出|多久出一版|出一版/.test(text) &&
       !/来不及|赶不完|任务太多|不知道先做哪个|催/.test(text)
@@ -679,6 +682,13 @@
     const negotiationIntent = /延期|延后|推迟|改期|争取时间|怎么跟.*说|怎么说|话术|沟通|砍需求|砍范围|降范围|少做|先交|分批|取舍|保哪|舍哪|能不能/.test(text);
     const stakeholder = /老板|客户|主管|甲方|领导|运营|产品|对方|他们|负责人/.test(text);
     return timePressure && negotiationIntent && stakeholder;
+  }
+
+  function isProgressStatusReportRequest(text) {
+    const progressIntent = /进度|做到哪|做到哪里|做到什么程度|目前情况|现在情况|阶段|状态|汇报一下|同步一下|催稿|催我|问我|什么时候能给|什么时候可以给|什么时候出|多久能给|能不能先给|先给一版/.test(text);
+    const stakeholder = /老板|客户|主管|甲方|领导|运营|产品|对方|他们|负责人/.test(text);
+    const wantsReply = /怎么回|怎么回复|怎么说|话术|汇报|同步|整理|告诉|问我|催/.test(text);
+    return progressIntent && stakeholder && wantsReply && !/延期|延后|推迟|砍范围|降范围|来不及/.test(text);
   }
 
   function isVisualPolishRequest(text, analysisBits = {}) {
@@ -1016,6 +1026,7 @@
       "compare_design_options",
       "triage_overload",
       "negotiate_deadline_scope",
+      "report_progress_status",
       "estimate_design_workload",
       "prepare_feedback_request",
       "refine_copywriting",
@@ -1081,6 +1092,7 @@
     if (analysis.behavior === "compare_design_options") return compareDesignOptions(project, analysis);
     if (analysis.behavior === "triage_overload") return generateTriagePlan(state, project, analysis, now);
     if (analysis.behavior === "negotiate_deadline_scope") return negotiateDeadlineScope(state, project, analysis, now);
+    if (analysis.behavior === "report_progress_status") return reportProgressStatus(state, project, analysis, now);
     if (analysis.behavior === "estimate_design_workload") return estimateDesignWorkload(state, project, analysis, now);
     if (analysis.behavior === "prepare_feedback_request") return prepareFeedbackRequest(state, project, analysis, now);
     if (analysis.behavior === "refine_copywriting") return refineCopywriting(project, analysis);
@@ -3246,6 +3258,7 @@
         "compare_design_options",
         "triage_overload",
         "negotiate_deadline_scope",
+        "report_progress_status",
         "estimate_design_workload",
         "prepare_feedback_request",
         "refine_copywriting",
@@ -4178,6 +4191,87 @@
     ];
     if ((project.risks || []).some((risk) => /缺少/.test(risk))) fallbacks.unshift(`先确认缺失信息：${currentProjectRisks(project).slice(0, 2).join("、")}。`);
     return fallbacks.slice(0, 5);
+  }
+
+  function reportProgressStatus(state, project, analysis, now = new Date()) {
+    const recipient = guessProgressRecipient(analysis.text);
+    const progress = buildProgressSnapshot(state, project, now);
+    project.portfolio.process = appendSentence(project.portfolio.process, `进度汇报：${analysis.text}`);
+    const lines = [`进度汇报话术：${project.name}`];
+    lines.push("先按“已完成 -> 正在做 -> 卡点 -> 下一步时间”说，不要只回复“在做了”。");
+    lines.push("当前状态：");
+    lines.push(`- 已完成：${progress.done}`);
+    lines.push(`- 正在推进：${progress.doing}`);
+    lines.push(`- 等待/卡点：${progress.blockers}`);
+    lines.push(`- 下一步：${progress.next}`);
+    lines.push("可以直接这样回：");
+    lines.push(buildProgressStatusMessage(project, recipient, progress));
+    lines.push("如果对方继续催：");
+    buildProgressFollowups(project, progress).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("小画桌已把这次进度同步写进项目过程，后续可用于日报/复盘。");
+    return lines.join("\n");
+  }
+
+  function guessProgressRecipient(text) {
+    if (/客户|甲方/.test(text)) return "客户/甲方";
+    if (/老板|领导|主管/.test(text)) return "老板/主管";
+    if (/运营/.test(text)) return "运营同事";
+    if (/产品/.test(text)) return "产品同事";
+    return "负责人";
+  }
+
+  function buildProgressSnapshot(state, project, now) {
+    const tasks = state.tasks.filter((task) => task.projectId === project.id);
+    const doneTasks = tasks.filter((task) => task.status === "done");
+    const waitingTasks = tasks.filter((task) => task.status === "waiting");
+    const openTasks = tasks.filter((task) => task.status !== "done" && task.status !== "waiting");
+    const urgent = openTasks.find((task) => task.priority === "high") || openTasks[0];
+    const risks = currentProjectRisks(project);
+    const due = project.dueDate || (urgent && urgent.dueDate) || "";
+    return {
+      done: doneTasks.length ? doneTasks.slice(-2).map((task) => task.title).join("；") : buildProgressFallbackDone(project),
+      doing: urgent ? `${urgent.title}（${urgent.nextAction || "继续推进当前稿"}）` : "当前没有未完成待办，建议检查交付包和最终确认记录",
+      blockers: waitingTasks.length ? waitingTasks.slice(0, 2).map((task) => task.title).join("；") : risks.length ? risks.slice(0, 2).join("；") : "暂无明显卡点",
+      next: buildProgressNextStep(project, urgent, due, now),
+      due,
+      waitingCount: waitingTasks.length,
+      riskCount: risks.length,
+    };
+  }
+
+  function buildProgressFallbackDone(project) {
+    const facts = [];
+    if ((project.deliverables || []).length) facts.push(`已明确交付物：${project.deliverables.join("、")}`);
+    if (project.goal && !/待补充|待从/.test(project.goal)) facts.push(`已明确目标：${project.goal}`);
+    if ((project.versions || []).length) facts.push(`已记录版本：${project.versions[project.versions.length - 1].name}`);
+    return facts.length ? facts.slice(0, 2).join("；") : "已开始整理需求和当前项目小纸条";
+  }
+
+  function buildProgressNextStep(project, urgent, due, now) {
+    if (urgent) {
+      const deadline = due ? `，预计按 ${due} 前推进` : "";
+      return `${urgent.nextAction || urgent.title}${deadline}`;
+    }
+    if (project.status === "done") return "准备归档最终结果和作品集材料";
+    if (due && daysUntil(due, now) <= 1) return "先做交付前检查和低风险预览";
+    return "继续补齐确认信息，并推进下一版设计";
+  }
+
+  function buildProgressStatusMessage(project, recipient, progress) {
+    const due = progress.due ? `目前计划节点是 ${progress.due}。` : "";
+    const blocker = progress.blockers === "暂无明显卡点" ? "" : `当前需要留意/确认的是：${progress.blockers}。`;
+    return `${recipient}好，我同步一下「${project.name}」进度：已完成 ${progress.done}；现在正在处理 ${progress.doing}。${blocker}${due}下一步我会先推进 ${progress.next}，有新的确认点我会及时同步。`;
+  }
+
+  function buildProgressFollowups(project, progress) {
+    const followups = [];
+    if (progress.waitingCount || progress.riskCount) {
+      followups.push("把卡点单独列出来，请对方确认后再承诺最终时间。");
+    }
+    followups.push("如果只需要先看方向，可以先发低清预览/首版，不要直接发未整理源文件。");
+    followups.push("如果对方要精确时间，用“可反馈稿时间”和“定稿时间”分开说。");
+    if ((project.deliverables || []).length >= 2) followups.push("多物料项目先同步主尺寸进度，再说明其他尺寸会在方向确认后适配。");
+    return followups.slice(0, 5);
   }
 
   function estimateDesignWorkload(state, project, analysis, now = new Date()) {
@@ -5365,6 +5459,7 @@
     auditAssetLicense,
     generateTriagePlan,
     negotiateDeadlineScope,
+    reportProgressStatus,
     estimateDesignWorkload,
     prepareFeedbackRequest,
     refineCopywriting,
