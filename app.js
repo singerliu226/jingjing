@@ -333,6 +333,7 @@
       "ask_summary",
       "organize_meeting_notes",
       "decompose_brief",
+      "plan_reference_research",
       "ask_checklist",
       "ask_portfolio",
       "project_retrospective",

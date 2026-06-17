@@ -442,6 +442,9 @@
     ) {
       return "decompose_brief";
     }
+    if (isMoodboardPlanningRequest(text)) {
+      return "plan_reference_research";
+    }
     if (/老板会问|客户会问|主管会问|会被问|可能被问|答辩|预演|怎么回答|怎么解释.*(为什么|方案|设计)|被问.*怎么/.test(text)) {
       return "simulate_design_defense";
     }
@@ -656,6 +659,14 @@
     const qualityOrRights = /风格不统一|图片风格|图太糊|太糊|清晰度|分辨率|抠图|扣图|水印|版权|授权|商用|侵权|找不到合适/.test(text);
     const specOnly = /尺寸|规格|交付格式|格式|出血|CMYK|转曲/.test(text) && !assetMention;
     return assetMention && missingIntent && !qualityOrRights && !specOnly;
+  }
+
+  function isMoodboardPlanningRequest(text) {
+    const referenceIntent = /找参考|参考怎么找|去哪找参考|灵感|情绪板|moodboard|Moodboard|关键词.*参考|参考关键词|素材方向|视觉参考|竞品参考|参考方向|收集参考|建.*参考|建.*情绪板/.test(text);
+    const planningIntent = /怎么|如何|帮我|给我|列|规划|计划|方向|关键词|清单|收集|找|整理|开始/.test(text);
+    const existingReference = /这张参考|这个参考|已有参考|参考图.*(怎么拆|拆解|分析|借鉴|不要抄|不抄|好在哪里)|照着做/.test(text);
+    const rightsOrSourceOnly = /版权|授权|商用|侵权|网站|平台|网址|哪里下载/.test(text);
+    return referenceIntent && planningIntent && !existingReference && !rightsOrSourceOnly;
   }
 
   function extractProjectMeta(text) {
@@ -913,6 +924,7 @@
       "ask_summary",
       "organize_meeting_notes",
       "decompose_brief",
+      "plan_reference_research",
       "ask_review",
       "ask_checklist",
       "ask_portfolio",
@@ -966,6 +978,7 @@
     if (analysis.behavior === "ask_summary") return generateDailySummary(state, now);
     if (analysis.behavior === "organize_meeting_notes") return organizeMeetingNotes(state, project, analysis, now);
     if (analysis.behavior === "decompose_brief") return decomposeBrief(state, project, analysis, now);
+    if (analysis.behavior === "plan_reference_research") return planReferenceResearch(state, project, analysis, now);
     if (analysis.behavior === "ask_review") {
       return generateReview(project, state.feedback.filter((item) => item.projectId === project.id));
     }
@@ -1400,6 +1413,113 @@
     lines.push("下一步：用 15 分钟做一个“方法迁移小稿”：只借一个方法，比如构图、配色、字体比例或视觉锚点，不要一次借完整画面。");
     project.portfolio.process = appendSentence(project.portfolio.process, `参考拆解：${analysis.text}`);
     return lines.join("\n");
+  }
+
+  function planReferenceResearch(state, project, analysis, now = new Date()) {
+    const plan = buildReferenceResearchPlan(project, analysis.text);
+    const dueDate = analysis.dueDate || project.dueDate || "";
+    pushUniqueTask(state, {
+      projectId: project.id,
+      title: "收集参考并整理情绪板",
+      priority: dueDate && daysUntil(dueDate, now) <= 1 ? "high" : "normal",
+      dueDate,
+      status: "todo",
+      nextAction: "按层级、风格、平台/竞品三类各收 2 张，并写一句可借鉴的方法。",
+      feedbackIds: [],
+    });
+    project.portfolio.strategy = appendSentence(project.portfolio.strategy, `参考策略：${plan.strategy}`);
+    project.portfolio.process = appendSentence(project.portfolio.process, "建立参考收集计划，用于明确视觉方向和避免照抄。");
+
+    const lines = [`参考收集计划：${project.name}`];
+    lines.push("先找这 3 类：");
+    plan.buckets.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("搜索关键词：");
+    plan.keywords.forEach((item) => lines.push(`- ${item}`));
+    lines.push("保留标准：");
+    plan.keepRules.forEach((item) => lines.push(`- ${item}`));
+    lines.push("淘汰标准：");
+    plan.rejectRules.forEach((item) => lines.push(`- ${item}`));
+    lines.push("25 分钟动作：");
+    plan.steps.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("小画桌已加入任务：收集参考并整理情绪板。");
+    return lines.join("\n");
+  }
+
+  function buildReferenceResearchPlan(project, text) {
+    const combined = `${project.name} ${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${project.audience || ""} ${project.scene || ""} ${text}`;
+    const keywords = buildReferenceSearchKeywords(combined);
+    const buckets = [
+      "信息层级参考：找主标题、卖点、时间/价格/二维码如何排序的图，不看风格先看结构。",
+      "视觉调性参考：找颜色、字体、图形、材质如何表达关键词的图，只记录方法。",
+      "交付场景参考：找同平台、同尺寸、同媒介的图，检查缩略图/移动端/印刷限制。",
+    ];
+    if (/竞品|同类|同行/.test(combined)) buckets.push("竞品参考：只看信息策略和用户路径，不复制识别元素。");
+    if (/包装|印刷|画册|折页/.test(combined)) buckets.push("工艺参考：收出血、纸张、工艺、版面留白和材质呈现方式。");
+    if (/品牌|VI|logo|Logo/.test(combined)) buckets.push("品牌系统参考：收色彩比例、字体气质、图形延展规则，而不是单张好看的图。");
+    return {
+      strategy: buildReferenceStrategy(project, combined),
+      buckets: Array.from(new Set(buckets)).slice(0, 5),
+      keywords,
+      keepRules: buildReferenceKeepRules(project, combined),
+      rejectRules: buildReferenceRejectRules(combined),
+      steps: buildReferenceResearchSteps(project, keywords),
+    };
+  }
+
+  function buildReferenceStrategy(project, combined) {
+    if (project.goal && !/待补充|待从/.test(project.goal)) {
+      return `围绕「${project.goal}」收参考，优先找能解决同类传播问题的方法。`;
+    }
+    if (/新品|上市|活动|促销/.test(combined)) return "围绕信息第一眼和行动转化收参考，先保证用户知道看什么、做什么。";
+    if (/品牌|VI|logo|Logo/.test(combined)) return "围绕识别一致性收参考，优先看规则如何延展。";
+    return "围绕目标、受众、场景收参考，先分清结构、风格和交付限制。";
+  }
+
+  function buildReferenceSearchKeywords(text) {
+    const base = [];
+    if (/小红书|社媒|朋友圈|公众号|封面/.test(text)) base.push("小红书封面 信息层级", "社媒海报 年轻 配色", "朋友圈海报 手机可读性");
+    if (/Banner|banner|横幅/.test(text)) base.push("banner 主视觉 构图", "电商 banner 信息层级", "广告位 安全区 版式");
+    if (/包装|印刷|画册|折页/.test(text)) base.push("包装设计 版式 留白", "印刷物 出血 信息层级", "画册 排版 网格");
+    if (/品牌|VI|logo|Logo/.test(text)) base.push("品牌视觉系统 色彩比例", "VI 延展 版式规范", "logo 使用规范 应用");
+    if (/高级|质感/.test(text)) base.push("高级感 海报 留白", "低饱和 配色 质感", "品牌海报 克制排版");
+    if (/年轻|活泼|可爱|童趣/.test(text)) base.push("年轻化 海报 跳色", "可爱 图形 版式", "活泼 社媒视觉");
+    if (/咖啡|饮品|食品/.test(text)) base.push("咖啡新品海报", "饮品促销社媒图", "食品摄影 海报排版");
+    if (/节日|万圣|圣诞|春节|七夕|年货/.test(text)) base.push("节日主题海报 信息层级", "节日活动主视觉", "节日促销社媒封面");
+    if (!base.length) base.push("海报 信息层级 参考", "设计情绪板 视觉关键词", "社媒视觉 版式参考");
+    return Array.from(new Set(base)).slice(0, 8);
+  }
+
+  function buildReferenceKeepRules(project, combined) {
+    const rules = [
+      "一眼能说出它解决了什么问题：突出主题、解释卖点、营造情绪或引导行动。",
+      "能拆出一个可迁移方法：构图、比例、配色、字体关系、材质或视觉锚点。",
+      "和当前交付场景一致：同平台、同尺寸、同观看距离优先。",
+    ];
+    if (project.goal && !/待补充|待从/.test(project.goal)) rules.unshift(`能服务当前目标「${project.goal}」。`);
+    if (/小红书|社媒|朋友圈|公众号/.test(combined)) rules.push("缩成手机预览后主标题仍然清楚。");
+    if (/品牌|VI|logo|Logo/.test(combined)) rules.push("不依赖某个单张画面好看，而是有可复用的视觉规则。");
+    return Array.from(new Set(rules)).slice(0, 6);
+  }
+
+  function buildReferenceRejectRules(text) {
+    const rules = [
+      "只觉得好看，但说不出可借鉴方法的图先删掉。",
+      "信息量、平台和当前项目不一致的图不要当主参考。",
+      "过度依赖特殊摄影、插画或版权素材，自己项目无法复现的图不要重押。",
+      "和竞品识别太接近的图不要用作直接方向。",
+    ];
+    if (/赶|今天|明天|马上/.test(text)) rules.unshift("时间紧时，淘汰需要复杂建模、精修合成或大规模找素材的方向。");
+    return Array.from(new Set(rules)).slice(0, 5);
+  }
+
+  function buildReferenceResearchSteps(project, keywords) {
+    const deliverable = (project.deliverables || [project.type || "当前物料"])[0];
+    return [
+      `用前 8 分钟搜关键词：${keywords.slice(0, 3).join(" / ")}。`,
+      `每类只留 2 张：层级 2 张、风格 2 张、${deliverable} 场景 2 张。`,
+      "每张参考写一句：我借它的什么方法，不写“好看”。",
+      "最后选 1 个主方向和 1 个备选方向，再开始做小稿。",
+    ];
   }
 
   function buildReferenceAngles(project, text) {
@@ -2615,6 +2735,7 @@
         "ask_summary",
         "organize_meeting_notes",
         "decompose_brief",
+        "plan_reference_research",
         "ask_review",
         "ask_checklist",
         "ask_portfolio",

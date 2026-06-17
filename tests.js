@@ -1525,6 +1525,32 @@ function freshState() {
 {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品小红书封面";
+  project.type = "社媒图";
+  project.goal = "让用户一眼知道新品上市并想进店";
+  project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "我还没灵感，帮我规划一下情绪板和参考关键词，咖啡新品要年轻一点。", fixedNow);
+  assert.equal(result.analysis.behavior, "plan_reference_research");
+  assert.equal(state.tasks.length, beforeTasks + 1);
+  assert.ok(state.tasks.at(-1).title.includes("收集参考"));
+  assert.ok(result.reply.includes("参考收集计划"));
+  assert.ok(result.reply.includes("搜索关键词"));
+  assert.ok(result.reply.includes("保留标准"));
+  assert.ok(result.reply.includes("淘汰标准"));
+  assert.ok(result.reply.includes("25 分钟动作"));
+  assert.ok(project.portfolio.strategy.includes("参考策略"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "这张参考图怎么拆解，哪些地方可以借鉴但不要照抄？", fixedNow);
+  assert.equal(result.analysis.behavior, "analyze_reference");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
   project.name = "新品活动海报";
   project.goal = "让用户扫码报名活动";
   const beforeTasks = state.tasks.length;
