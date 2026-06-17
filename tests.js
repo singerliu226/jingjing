@@ -763,6 +763,26 @@ function freshState() {
 
 {
   const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员活动页面";
+  project.type = "Banner";
+  project.deliverables = ["活动页头图", "按钮图标"];
+  project.specs = ["1440x520px"];
+  project.formats = ["png", "figma"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "这个 Figma 设计稿要交给开发，帮我整理交接说明和标注注意事项。", fixedNow);
+  assert.equal(result.analysis.behavior, "prepare_design_handoff");
+  assert.equal(state.tasks.length, beforeTasks + 1);
+  assert.ok(state.tasks.at(-1).title.includes("准备设计交接说明"));
+  assert.ok(result.reply.includes("设计交接说明"));
+  assert.ok(result.reply.includes("开发同事"));
+  assert.ok(result.reply.includes("README 模板"));
+  assert.ok(result.reply.includes("使用/修改边界"));
+  assert.ok(result.reply.includes("可以这样发"));
+}
+
+{
+  const state = freshState();
   const result = Core.applyInput(state, "文件命名规范怎么写？不要最终最终版那种。", fixedNow);
   assert.equal(result.analysis.behavior, "organize_delivery_files");
   assert.ok(result.reply.includes("版本号只递增"));

@@ -367,6 +367,7 @@
       "analyze_reference",
       "unify_series_visual_system",
       "organize_delivery_files",
+      "prepare_design_handoff",
       "guide_print_prepress",
       "recommend_platform_specs",
       "adapt_multi_format",

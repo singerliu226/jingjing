@@ -521,6 +521,9 @@
     if (/源文件.*(整理|打包|命名)|文件.*(整理|命名|打包|太乱)|怎么.*(命名|打包|整理).*文件|交付包|命名规范|文件夹/.test(text)) {
       return "organize_delivery_files";
     }
+    if (isDesignHandoffRequest(text)) {
+      return "prepare_design_handoff";
+    }
     if (isDesignSoftwareOperationRequest(text)) {
       return "guide_design_software_operation";
     }
@@ -753,6 +756,13 @@
     const asksHow = /怎么|如何|为什么|哪里|设置|步骤|操作|总是|应该|要不要|能不能|检查/.test(text);
     const aiProduct = /AI产品|AI工具|AI助手|人工智能|模型|千问|api|API|接口/.test(text);
     return toolMention && operationMention && asksHow && !aiProduct;
+  }
+
+  function isDesignHandoffRequest(text) {
+    const handoffIntent = /交接|交给开发|给开发|给运营|给同事|给市场|给印厂|交付说明|使用说明|标注说明|设计标注|切图说明|怎么标注|怎么交接|handoff|Handoff/.test(text);
+    const designArtifact = /设计稿|源文件|Figma|figma|psd|PSD|ai|AI|切图|图标|组件|物料|海报|页面|Banner|banner|运营图|模板/.test(text);
+    const asksHelp = /怎么|如何|帮我|整理|写|生成|准备|要给|需要/.test(text);
+    return handoffIntent && designArtifact && asksHelp;
   }
 
   function isProjectClosureRecordRequest(text) {
@@ -1052,6 +1062,7 @@
       "analyze_reference",
       "unify_series_visual_system",
       "organize_delivery_files",
+      "prepare_design_handoff",
       "guide_print_prepress",
       "recommend_platform_specs",
       "adapt_multi_format",
@@ -1119,6 +1130,7 @@
     if (analysis.behavior === "analyze_reference") return analyzeReference(project, analysis);
     if (analysis.behavior === "unify_series_visual_system") return unifySeriesVisualSystem(project, analysis);
     if (analysis.behavior === "organize_delivery_files") return organizeDeliveryFiles(project, analysis);
+    if (analysis.behavior === "prepare_design_handoff") return prepareDesignHandoff(state, project, analysis, now);
     if (analysis.behavior === "guide_print_prepress") return guidePrintPrepress(project, analysis);
     if (analysis.behavior === "recommend_platform_specs") return recommendPlatformSpecs(project, analysis);
     if (analysis.behavior === "adapt_multi_format") return adaptMultiFormat(project, analysis);
@@ -2151,6 +2163,96 @@
     lines.push("交付话术：我已经把导出图、源文件、参考素材和授权说明分开放好，文件名按日期/项目/物料/版本命名，方便后续查找和修改。");
     project.portfolio.process = appendSentence(project.portfolio.process, `交付文件整理：${analysis.text}`);
     return lines.join("\n");
+  }
+
+  function prepareDesignHandoff(state, project, analysis, now = new Date()) {
+    const recipient = guessHandoffRecipient(analysis.text);
+    pushUniqueTask(state, {
+      projectId: project.id,
+      title: `准备设计交接说明：${recipient}`,
+      priority: project.dueDate && daysUntil(project.dueDate, now) <= 1 ? "high" : "normal",
+      dueDate: project.dueDate || "",
+      status: "todo",
+      nextAction: "整理交接说明、可编辑范围、切图/导出规则和使用注意事项。",
+      feedbackIds: [],
+    });
+    project.portfolio.process = appendSentence(project.portfolio.process, `设计交接说明：${analysis.text}`);
+
+    const lines = [`设计交接说明：${project.name}`];
+    lines.push(`交接对象：${recipient}`);
+    lines.push("先准备这些内容：");
+    buildHandoffChecklist(project, analysis.text, recipient).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("README 模板：");
+    buildHandoffReadme(project, recipient).forEach((item) => lines.push(`- ${item}`));
+    lines.push("使用/修改边界：");
+    buildHandoffRules(project, analysis.text, recipient).forEach((item) => lines.push(`- ${item}`));
+    lines.push("可以这样发：");
+    lines.push(buildHandoffMessage(project, recipient));
+    lines.push("小画桌已新增“准备设计交接说明”任务。");
+    return lines.join("\n");
+  }
+
+  function guessHandoffRecipient(text) {
+    if (/开发|前端|程序/.test(text)) return "开发同事";
+    if (/运营/.test(text)) return "运营同事";
+    if (/市场/.test(text)) return "市场同事";
+    if (/印厂|打印|制作/.test(text)) return "印厂/制作方";
+    if (/客户|甲方/.test(text)) return "客户/甲方";
+    return "接手同事";
+  }
+
+  function buildHandoffChecklist(project, text, recipient) {
+    const checks = [
+      "最终导出图：按平台/尺寸分开，不要把预览图和正式图混在一起。",
+      "源文件：清理废稿、隐藏图层、无用画板，并给关键图层命名。",
+      "尺寸规格：写清画布尺寸、安全区、出血/裁切要求和导出格式。",
+      "字体与素材：标明字体、图片、图标来源和授权状态。",
+    ];
+    if (/开发|前端/.test(recipient)) {
+      checks.unshift("标注关键尺寸：间距、字号、颜色值、圆角、按钮状态和切图倍率。");
+      checks.push("交互状态：如果有 hover/点击/禁用/错误状态，要单独列出。");
+    }
+    if (/运营|市场/.test(recipient)) {
+      checks.unshift("可替换区域：标明哪些文字/图片可以改，哪些主视觉和品牌元素不要动。");
+      checks.push("复用规则：给 1-2 个示例，说明换标题、换日期、换产品图时怎么保持统一。");
+    }
+    if (/印厂|制作/.test(recipient)) {
+      checks.unshift("印刷文件：提供可编辑版、转曲/嵌图版、印刷 PDF 和打样要求。");
+      checks.push("制作要求：纸张、工艺、刀版、出血、CMYK 和专色信息要写清。");
+    }
+    return Array.from(new Set(checks)).slice(0, 7);
+  }
+
+  function buildHandoffReadme(project, recipient) {
+    const deliverables = (project.deliverables || []).length ? project.deliverables.join("、") : "待补充";
+    const specs = (project.specs || []).length ? project.specs.join("、") : "待确认";
+    const formats = (project.formats || []).length ? project.formats.join("、") : "待确认";
+    return [
+      `项目：${project.name}`,
+      `交接对象：${recipient}`,
+      `交付物：${deliverables}`,
+      `尺寸/规格：${specs}`,
+      `格式：${formats}`,
+      `版本：当前最终交接版，后续修改请另存新版本`,
+      "注意：字体/图片授权、可修改范围、禁改项请看下方说明",
+    ];
+  }
+
+  function buildHandoffRules(project, text, recipient) {
+    const rules = [
+      "不要拉伸 Logo、产品图和二维码。",
+      "不要随意替换品牌色、字体和主视觉比例。",
+      "修改文案后要重新检查换行、字号和移动端可读性。",
+      "新增物料时先复制母版规则，再换内容，不要重新发明一套版式。",
+    ];
+    if (/开发|前端/.test(recipient)) rules.unshift("开发切图时优先使用导出切图，不直接截图设计稿。");
+    if (/运营|市场/.test(recipient)) rules.unshift("运营复用时只改可替换区域：标题、日期、产品图和二维码。");
+    if (/印厂|制作/.test(recipient)) rules.unshift("印厂输出前不要覆盖可编辑源文件，转曲版和可编辑版分开保存。");
+    return Array.from(new Set(rules)).slice(0, 6);
+  }
+
+  function buildHandoffMessage(project, recipient) {
+    return `${recipient}好，我把「${project.name}」的设计交接包整理好了：里面包含最终导出图、源文件/可编辑文件、尺寸与格式说明、字体素材授权说明，以及可修改范围和注意事项。后续如果需要改文案或适配新尺寸，建议先按 README 的母版规则调整，避免破坏整体视觉一致性。`;
   }
 
   function sanitizeFileName(value) {
@@ -3395,6 +3497,7 @@
         "analyze_reference",
         "unify_series_visual_system",
         "organize_delivery_files",
+        "prepare_design_handoff",
         "guide_print_prepress",
         "recommend_platform_specs",
         "adapt_multi_format",
@@ -5598,6 +5701,7 @@
     analyzeReference,
     unifySeriesVisualSystem,
     organizeDeliveryFiles,
+    prepareDesignHandoff,
     guidePrintPrepress,
     recommendPlatformSpecs,
     adaptMultiFormat,
