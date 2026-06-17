@@ -468,6 +468,9 @@
     if (isMissingAssetRequest(text)) {
       return "request_missing_assets";
     }
+    if (isVagueFeedbackClarificationRequest(text)) {
+      return "clarify_vague_feedback";
+    }
     if (/话术|怎么问|怎么说|帮我问|帮我整理.*确认|催一下|催.*(反馈|确认|回复)|没回.*怎么|没回复.*怎么/.test(text)) {
       return "ask_confirmation_message";
     }
@@ -665,6 +668,13 @@
     const qualityOrRights = /风格不统一|图片风格|图太糊|太糊|清晰度|分辨率|抠图|扣图|水印|版权|授权|商用|侵权|找不到合适/.test(text);
     const specOnly = /尺寸|规格|交付格式|格式|出血|CMYK|转曲/.test(text) && !assetMention;
     return assetMention && missingIntent && !qualityOrRights && !specOnly;
+  }
+
+  function isVagueFeedbackClarificationRequest(text) {
+    const vagueFeedback = /再改改|再优化|不够好|不够有感觉|没感觉|感觉不对|不够出彩|不够高级|不够年轻|不够活泼|不够精致|太普通|不好看|有点怪|怪怪的|不对劲|说不上来|没说清楚|没讲清楚|反馈很虚|反馈太虚|只说/.test(text);
+    const asksClarify = /怎么问|如何问|追问|问清楚|确认清楚|怎么确认|怎么回复|怎么说|不冒犯|委婉|礼貌|话术|问哪些|问什么/.test(text);
+    const stakeholder = /老板|客户|主管|甲方|运营|产品|领导|对方|他们|她|他/.test(text);
+    return vagueFeedback && asksClarify && stakeholder;
   }
 
   function isMoodboardPlanningRequest(text) {
@@ -954,6 +964,7 @@
       "generate_growth_profile",
       "ask_confirmation_message",
       "request_missing_assets",
+      "clarify_vague_feedback",
       "align_stakeholder_feedback",
       "synthesize_feedback_batch",
       "handle_scope_change",
@@ -1013,6 +1024,7 @@
     if (analysis.behavior === "project_retrospective") return generateProjectRetrospective(state, project, analysis, now);
     if (analysis.behavior === "generate_growth_profile") return generateGrowthProfile(state, analysis, now);
     if (analysis.behavior === "request_missing_assets") return requestMissingAssets(state, project, analysis, now);
+    if (analysis.behavior === "clarify_vague_feedback") return clarifyVagueFeedback(state, project, analysis, now);
     if (analysis.behavior === "ask_confirmation_message") return generateConfirmationMessage(state, project, analysis.text);
     if (analysis.behavior === "align_stakeholder_feedback") return alignStakeholderFeedback(state, project, analysis, now);
     if (analysis.behavior === "synthesize_feedback_batch") return synthesizeFeedbackBatch(state, project, analysis, now);
@@ -1237,6 +1249,93 @@
       lines.push(`时间提醒：当前截止是 ${analysis.dueDate || project.dueDate}，建议先确认重做范围，再投入精修。`);
     }
     return lines.join("\n");
+  }
+
+  function clarifyVagueFeedback(state, project, analysis, now = new Date()) {
+    project.status = "waiting";
+    const stakeholder = analysis.from || guessConfirmationRecipient(analysis.text, state.feedback.filter((item) => item.projectId === project.id));
+    const vaguePoint = extractVagueFeedbackPoint(analysis.text);
+    if (!project.risks.includes("模糊反馈需要追问标准")) {
+      project.risks.push("模糊反馈需要追问标准");
+    }
+    const feedbackItem = {
+      id: uid("f"),
+      projectId: project.id,
+      from: stakeholder || "待补充",
+      raw: vaguePoint,
+      action: "先追问判断标准：目标方向、信息层级、风格情绪、具体保留/调整范围。",
+      reason: "反馈原话偏主观，直接改会变成猜审美，容易反复返工。",
+      conflict: false,
+      handled: false,
+      version: project.versions && project.versions.length ? project.versions[project.versions.length - 1].name : "",
+    };
+    state.feedback.push(feedbackItem);
+    pushUniqueTask(state, {
+      projectId: project.id,
+      title: `追问模糊反馈：${stakeholder || "对方"}`,
+      priority: project.dueDate && daysUntil(project.dueDate, now) <= 1 ? "high" : "normal",
+      dueDate: project.dueDate || "",
+      status: "waiting",
+      nextAction: "先用礼貌话术确认判断标准，再决定下一版改层级、风格还是细节。",
+      feedbackIds: [feedbackItem.id],
+    });
+    project.portfolio.process = appendSentence(project.portfolio.process, `模糊反馈追问：${vaguePoint}`);
+
+    const lines = [`模糊反馈追问：${project.name}`];
+    lines.push(`对方原话：${vaguePoint}`);
+    lines.push("先别这样问：");
+    lines.push("- 不要问“哪里不好看？”这会让对方继续给主观评价。");
+    lines.push("- 不要马上说“我再改一版”，否则修改范围会失控。");
+    lines.push("建议追问 3 个判断标准：");
+    buildVagueFeedbackQuestions(project, analysis.text).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("可以直接这样发：");
+    lines.push(buildVagueFeedbackMessage(project, stakeholder, vaguePoint));
+    lines.push("对方回答后这样改：");
+    buildVagueFeedbackDecisionMap(project).forEach((item) => lines.push(`- ${item}`));
+    lines.push("小画桌已把项目切到待确认，并记录这条模糊反馈。");
+    return lines.join("\n");
+  }
+
+  function extractVagueFeedbackPoint(text) {
+    const quoted = text.match(/[“"「](.+?)[”"」]/);
+    if (quoted) return quoted[1];
+    const said = text.match(/(?:说|反馈|觉得|只说|提到)(.{4,50}?)(?:，|。|；|,|$)/);
+    if (said) return said[1].trim();
+    const vague = text.match(/(再改改|再优化|不够好|不够有感觉|没感觉|感觉不对|不够出彩|不够高级|不够年轻|不够活泼|太普通|不好看|有点怪|怪怪的|不对劲|说不上来)/);
+    return vague ? vague[1] : "反馈还不够具体";
+  }
+
+  function buildVagueFeedbackQuestions(project, text) {
+    const questions = [
+      "这版主要是不符合方向，还是方向对但画面执行不够？",
+      "最需要调整的是主信息层级、整体风格、颜色字体，还是某个具体元素？",
+      "下一版更希望接近哪个关键词：更清楚、更高级、更年轻、更热闹，还是更有记忆点？",
+    ];
+    if (project.goal && !/待补充|待从/.test(project.goal)) {
+      questions.unshift(`如果围绕目标「${project.goal}」看，当前最影响目标的是哪一部分？`);
+    }
+    if (/老板|主管|领导/.test(text)) questions.push("这版有哪些部分可以保留，避免我把已经认可的内容也推翻？");
+    if (/客户|甲方/.test(text)) questions.push("有没有一张更接近预期的参考，或者一个不希望出现的方向？");
+    return Array.from(new Set(questions)).slice(0, 5);
+  }
+
+  function buildVagueFeedbackMessage(project, stakeholder, vaguePoint) {
+    const target = stakeholder && !/你好/.test(stakeholder) ? stakeholder : "老师";
+    const goal = project.goal && !/待补充|待从/.test(project.goal) ? `，同时保证「${project.goal}」这个目标不偏` : "";
+    return `${target}，我收到这版需要“${vaguePoint}”。为了下一版更准确，我想先确认一下：主要是方向不对，还是信息层级/风格细节还不够？如果方便的话，也请帮我指出最需要保留和最需要调整的 1-2 个点，我会按这个优先级快速改一版${goal}。`;
+  }
+
+  function buildVagueFeedbackDecisionMap(project) {
+    const map = [
+      "如果对方说“方向不对”：先停精修，回到 brief 和参考方向，做 1-2 张低精小稿。",
+      "如果对方说“信息不清”：优先改主标题、利益点、阅读顺序和字号层级。",
+      "如果对方说“风格不对”：先确认关键词，再调整配色、字体气质和图形语言。",
+      "如果对方说“细节不够”：保留大结构，只精修对齐、间距、素材质感和导出质量。",
+    ];
+    if ((project.risks || []).some((risk) => /尺寸|规格|交付格式/.test(risk))) {
+      map.unshift("如果对方同时提到裁切/看不清：先确认尺寸、安全区和交付格式，再改视觉。");
+    }
+    return map.slice(0, 5);
   }
 
   function diagnoseAmbiguousIssue(project, analysis) {
@@ -2921,6 +3020,7 @@
         "generate_growth_profile",
         "ask_confirmation_message",
         "request_missing_assets",
+        "clarify_vague_feedback",
         "align_stakeholder_feedback",
         "synthesize_feedback_batch",
         "handle_scope_change",
@@ -4860,6 +4960,7 @@
     generateGrowthProfile,
     generateProjectWorkflow,
     generateConfirmationMessage,
+    clarifyVagueFeedback,
     alignStakeholderFeedback,
     synthesizeFeedbackBatch,
     summarizeVersionChanges,

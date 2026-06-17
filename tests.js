@@ -1533,6 +1533,31 @@ function freshState() {
 
 {
   const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员活动海报";
+  project.goal = "让用户快速看到报名入口";
+  const beforeFeedback = state.feedback.length;
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "老板只说这版不够有感觉，我怎么追问才不冒犯？", fixedNow);
+  assert.equal(result.analysis.behavior, "clarify_vague_feedback");
+  assert.equal(project.status, "waiting");
+  assert.equal(state.feedback.length, beforeFeedback + 1);
+  assert.equal(state.tasks.length, beforeTasks + 1);
+  assert.ok(state.tasks.at(-1).title.includes("追问模糊反馈"));
+  assert.ok(result.reply.includes("模糊反馈追问"));
+  assert.ok(result.reply.includes("建议追问 3 个判断标准"));
+  assert.ok(result.reply.includes("可以直接这样发"));
+  assert.ok(result.reply.includes("对方回答后这样改"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "帮我问客户和老板确认尺寸和交付格式。", fixedNow);
+  assert.equal(result.analysis.behavior, "ask_confirmation_message");
+}
+
+{
+  const state = freshState();
   const result = Core.applyInput(state, "已经发给老板看了，等反馈。", fixedNow);
   assert.equal(result.analysis.behavior, "waiting_confirmation");
 }

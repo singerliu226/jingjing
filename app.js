@@ -340,6 +340,7 @@
       "project_retrospective",
       "generate_growth_profile",
       "ask_confirmation_message",
+      "clarify_vague_feedback",
       "align_stakeholder_feedback",
       "synthesize_feedback_batch",
       "handle_scope_change",
