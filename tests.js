@@ -1744,6 +1744,25 @@ function freshState() {
 
 {
   const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品小红书封面";
+  project.type = "社媒图";
+  project.goal = "让用户一眼知道新品上市并想进店";
+  project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "帮我写一组 AI 生图提示词，做咖啡新品小红书封面的年轻背景图。", fixedNow);
+  assert.equal(result.analysis.behavior, "generate_image_prompt_brief");
+  assert.equal(state.tasks.length, beforeTasks + 1);
+  assert.ok(state.tasks.at(-1).title.includes("AI 素材提示词"));
+  assert.ok(result.reply.includes("AI 生图提示词规划"));
+  assert.ok(result.reply.includes("可复制提示词"));
+  assert.ok(result.reply.includes("负面提示词"));
+  assert.ok(result.reply.includes("筛选标准"));
+  assert.ok(result.reply.includes("落地到设计稿"));
+}
+
+{
+  const state = freshState();
   const result = Core.applyInput(state, "这张参考图怎么拆解，哪些地方可以借鉴但不要照抄？", fixedNow);
   assert.equal(result.analysis.behavior, "analyze_reference");
 }

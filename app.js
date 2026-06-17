@@ -335,6 +335,7 @@
       "decompose_brief",
       "plan_design_concepts",
       "plan_reference_research",
+      "generate_image_prompt_brief",
       "ask_checklist",
       "ask_portfolio",
       "project_retrospective",

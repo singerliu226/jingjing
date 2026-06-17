@@ -448,6 +448,9 @@
     if (isMoodboardPlanningRequest(text)) {
       return "plan_reference_research";
     }
+    if (isImagePromptRequest(text)) {
+      return "generate_image_prompt_brief";
+    }
     if (/老板会问|客户会问|主管会问|会被问|可能被问|答辩|预演|怎么回答|怎么解释.*(为什么|方案|设计)|被问.*怎么/.test(text)) {
       return "simulate_design_defense";
     }
@@ -729,6 +732,14 @@
     return referenceIntent && planningIntent && !existingReference && !rightsOrSourceOnly;
   }
 
+  function isImagePromptRequest(text) {
+    const promptIntent = /AI生图|AI 生图|生图|生成图片|生成一张图|生成背景|出图提示词|提示词|prompt|Prompt|Midjourney|midjourney|MJ|mj|即梦|可灵|Stable Diffusion|stable diffusion|SD生图|豆包生图|通义万相/.test(text);
+    const imageUse = /海报|封面|背景|主视觉|素材|产品图|氛围图|插画|图标|KV|kv|小红书|朋友圈|公众号|banner|Banner|包装|画面/.test(text);
+    const asksHelp = /帮我|怎么写|写一组|给我|生成|整理|做|出|要/.test(text);
+    const illustratorContext = /AI里|AI 里|AI怎么|AI 怎么|Adobe AI|Illustrator|illustrator|转曲|画板|导出/.test(text);
+    return promptIntent && imageUse && asksHelp && !illustratorContext;
+  }
+
   function isMultiConceptPlanningRequest(text) {
     const multiConceptIntent = /两版|2版|二版|三版|3版|多版|几版|AB方案|A\/B|A B|方案A|方案B|两套|三套|多套|几个方案|几种方案|提案方向|方向区分|方案区分|不要换皮|不想只是换颜色/.test(text);
     const planningIntent = /出|做|给|规划|设计|方向|方案|提案|区分|怎么分|怎么讲|怎么汇报|怎么安排/.test(text);
@@ -1008,6 +1019,7 @@
       "decompose_brief",
       "plan_design_concepts",
       "plan_reference_research",
+      "generate_image_prompt_brief",
       "ask_review",
       "ask_checklist",
       "ask_portfolio",
@@ -1070,6 +1082,7 @@
     if (analysis.behavior === "decompose_brief") return decomposeBrief(state, project, analysis, now);
     if (analysis.behavior === "plan_design_concepts") return planDesignConcepts(project, analysis);
     if (analysis.behavior === "plan_reference_research") return planReferenceResearch(state, project, analysis, now);
+    if (analysis.behavior === "generate_image_prompt_brief") return generateImagePromptBrief(state, project, analysis, now);
     if (analysis.behavior === "ask_review") {
       return generateReview(project, state.feedback.filter((item) => item.projectId === project.id));
     }
@@ -1948,6 +1961,115 @@
       "每张参考写一句：我借它的什么方法，不写“好看”。",
       "最后选 1 个主方向和 1 个备选方向，再开始做小稿。",
     ];
+  }
+
+  function generateImagePromptBrief(state, project, analysis, now = new Date()) {
+    const brief = buildImagePromptBrief(project, analysis.text);
+    pushUniqueTask(state, {
+      projectId: project.id,
+      title: "生成并筛选 AI 素材提示词",
+      priority: project.dueDate && daysUntil(project.dueDate, now) <= 1 ? "high" : "normal",
+      dueDate: project.dueDate || "",
+      status: "todo",
+      nextAction: "先生成 3 组低风险素材方向，筛掉不能服务信息层级和版权不清的图。",
+      feedbackIds: [],
+    });
+    project.portfolio.process = appendSentence(project.portfolio.process, `AI 素材提示词规划：${analysis.text}`);
+
+    const lines = [`AI 生图提示词规划：${project.name}`];
+    lines.push("先提醒：AI 图适合做背景、氛围、辅助素材，不要直接替代最终设计判断。");
+    lines.push("生成目标：");
+    lines.push(`- ${brief.goal}`);
+    lines.push("可复制提示词：");
+    brief.prompts.forEach((prompt, index) => lines.push(`${index + 1}. ${prompt}`));
+    lines.push("负面提示词：");
+    lines.push(`- ${brief.negative}`);
+    lines.push("筛选标准：");
+    brief.checks.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("落地到设计稿：");
+    brief.usage.forEach((item) => lines.push(`- ${item}`));
+    lines.push("小画桌已新增任务：生成并筛选 AI 素材提示词。");
+    return lines.join("\n");
+  }
+
+  function buildImagePromptBrief(project, text) {
+    const combined = `${project.name} ${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${project.audience || ""} ${project.scene || ""} ${text}`;
+    const subject = inferPromptSubject(combined);
+    const style = inferPromptStyle(combined);
+    const scene = inferPromptScene(project, combined);
+    const composition = inferPromptComposition(combined);
+    const goal = project.goal && !/待补充|待从/.test(project.goal)
+      ? `为「${project.goal}」生成可作为${scene}的辅助视觉素材。`
+      : `生成一组可用于${scene}的辅助视觉素材，先服务信息层级和画面氛围。`;
+    const prompts = [
+      `${subject}，${style}，${composition}，干净背景，留出标题文字区域，商业海报辅助素材，高质量细节，柔和光线，no text`,
+      `${subject}，${style}，近景主体与留白空间，适合社媒封面/海报背景，色彩统一，视觉中心明确，no logo, no watermark, no text`,
+      `${subject}，${style}，简洁构图，轻微景深，适合叠加中文标题和活动信息，背景不过度复杂，high quality, clean composition`,
+    ];
+    return {
+      goal,
+      prompts: prompts.map((prompt) => normalizePromptText(prompt)),
+      negative: "文字、乱码、logo、水印、低清、畸形手、过度复杂背景、过曝、脏污、侵权角色、真实品牌标识、不可控人物肖像",
+      checks: buildImagePromptChecks(project, combined),
+      usage: buildImagePromptUsage(project, combined),
+    };
+  }
+
+  function inferPromptSubject(text) {
+    if (/咖啡|饮品|奶茶|茶饮/.test(text)) return "咖啡新品/饮品杯作为主体，搭配年轻轻快的生活方式氛围";
+    if (/美妆|护肤|香水/.test(text)) return "产品瓶身与柔和材质背景，强调精致质感";
+    if (/儿童|亲子|童趣/.test(text)) return "童趣图形元素与温暖明亮场景";
+    if (/科技|数码|未来/.test(text)) return "抽象科技图形、流动光线和简洁空间";
+    if (/节日|圣诞|春节|万圣|七夕|年货/.test(text)) return "节日氛围元素和礼赠场景";
+    return "与项目主题相关的抽象主视觉素材";
+  }
+
+  function inferPromptStyle(text) {
+    if (/高级|质感|克制|品牌/.test(text)) return "克制高级、低饱和、留白充足、材质细腻";
+    if (/年轻|活泼|可爱|童趣/.test(text)) return "年轻活泼、明亮配色、轻快节奏、友好亲近";
+    if (/科技|未来|赛博/.test(text)) return "科技感、干净光效、蓝绿冷色、秩序网格";
+    if (/复古|国潮|国风/.test(text)) return "复古/东方视觉气质、现代排版可融合";
+    return "清晰、干净、商业设计可用";
+  }
+
+  function inferPromptScene(project, text) {
+    if (/小红书|朋友圈|社媒|封面/.test(text)) return "社媒封面背景";
+    if (/公众号|头图|Banner|banner/.test(text)) return "横版头图或 Banner 背景";
+    if (/包装|印刷|画册|折页/.test(text)) return "印刷物辅助图形或背景素材";
+    return (project.deliverables || [project.type || "设计物料"])[0];
+  }
+
+  function inferPromptComposition(text) {
+    if (/标题|文字|信息|卖点|活动/.test(text)) return "主体偏一侧，画面保留大面积干净留白用于排版";
+    if (/产品|主视觉|主体/.test(text)) return "主体清晰居中，背景简单，便于后期叠加标题";
+    return "主体明确，背景层次轻，适合后期排版";
+  }
+
+  function normalizePromptText(prompt) {
+    return prompt.replace(/\s+/g, " ").trim();
+  }
+
+  function buildImagePromptChecks(project, text) {
+    const checks = [
+      "缩小到实际版面后，是否仍能留出主标题和核心信息的位置？",
+      "生成图是否没有文字、logo、水印、真实品牌标识或不可控人物肖像？",
+      "色彩和风格是否贴合项目目标，而不是只看起来好看？",
+      "素材是否能被裁切、加色罩或模糊处理，不影响可读性？",
+    ];
+    if (project.goal && !/待补充|待从/.test(project.goal)) checks.unshift(`是否服务目标「${project.goal}」？`);
+    if (/商用|客户|上线|发布|投放/.test(text)) checks.push("商用前保留生成记录，并避开可识别 IP、商标、名人肖像。");
+    return Array.from(new Set(checks)).slice(0, 6);
+  }
+
+  function buildImagePromptUsage(project, text) {
+    const usage = [
+      "先把 AI 图当作素材，不要把生成图直接当最终设计稿。",
+      "把主体、标题、卖点分层处理，生成图只服务氛围或视觉锚点。",
+      "选中素材后再统一调色、裁切和颗粒，保证和字体/品牌色一致。",
+      "保留生成提示词和版本截图，方便复盘和说明素材来源。",
+    ];
+    if ((project.deliverables || []).length >= 2) usage.push("多尺寸项目先测试主尺寸，再决定是否延展到其他平台。");
+    return usage.slice(0, 5);
   }
 
   function buildReferenceAngles(project, text) {
@@ -3240,6 +3362,7 @@
         "decompose_brief",
         "plan_design_concepts",
         "plan_reference_research",
+        "generate_image_prompt_brief",
         "ask_review",
         "ask_checklist",
         "ask_portfolio",
@@ -5445,6 +5568,7 @@
     generateDailyPlan,
     decomposeBrief,
     planDesignConcepts,
+    generateImagePromptBrief,
     generateProjectRetrospective,
     recordProjectOutcome,
     generateGrowthProfile,
