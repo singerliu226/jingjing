@@ -2243,9 +2243,12 @@ function freshState() {
 {
   const appSource = fs.readFileSync("app.js", "utf8");
   const serverSource = fs.readFileSync("server.js", "utf8");
-  assert.ok(appSource.includes("composeModelReply(fallbackReply, payload.reply)"));
+  assert.ok(appSource.includes("const visibleLocalReply = getVisibleLocalReply(fallbackReply, analysis)"));
+  assert.ok(appSource.includes("composeModelReply(visibleLocalReply, payload.reply)"));
   assert.ok(!appSource.includes("agentMessage.text = payload.reply || fallbackReply"));
   assert.ok(appSource.includes("localReply: fallbackReply"));
+  assert.ok(appSource.includes("\"record_feedback\""));
+  assert.ok(!appSource.match(/shouldShowLocalUpdateWithModelReply[\s\S]*?optimize_readability/));
   assert.ok(serverSource.includes("本地工作台已经先完成状态更新"));
   assert.ok(serverSource.includes("本地已整理结果"));
 }

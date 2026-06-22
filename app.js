@@ -324,7 +324,7 @@
     nodes.messageInput.value = "";
     render();
     if (result && shouldKeepLocalReply(result.analysis)) return;
-    await askQwen(clean, previousMessageCount);
+    await askQwen(clean, previousMessageCount, result ? result.analysis : null);
   }
 
   async function askQwenIntent(message) {
@@ -393,11 +393,12 @@
     return localOnlyBehaviors.includes(analysis.behavior);
   }
 
-  async function askQwen(message, previousMessageCount) {
+  async function askQwen(message, previousMessageCount, analysis) {
     const agentMessage = state.messages[previousMessageCount + 1];
     if (!agentMessage || agentMessage.role !== "agent") return;
     const fallbackReply = agentMessage.text;
-    agentMessage.text = composePendingModelReply(fallbackReply);
+    const visibleLocalReply = getVisibleLocalReply(fallbackReply, analysis);
+    agentMessage.text = composePendingModelReply(visibleLocalReply);
     render();
     try {
       const project = Core.getProject(state, state.activeProjectId);
@@ -421,24 +422,44 @@
       });
       const payload = await response.json();
       if (!response.ok || payload.error) throw new Error(payload.error || "千问请求失败");
-      agentMessage.text = composeModelReply(fallbackReply, payload.reply);
+      agentMessage.text = composeModelReply(visibleLocalReply, payload.reply);
     } catch (error) {
-      agentMessage.text = composeModelErrorReply(fallbackReply, error);
+      agentMessage.text = composeModelErrorReply(visibleLocalReply, error);
     }
     render();
   }
 
+  function getVisibleLocalReply(localReply, analysis) {
+    if (!shouldShowLocalUpdateWithModelReply(analysis)) return "";
+    return localReply;
+  }
+
+  function shouldShowLocalUpdateWithModelReply(analysis) {
+    if (!analysis) return false;
+    return [
+      "record_feedback",
+      "create_project",
+      "record_note",
+      "update_deliverables",
+      "complete_progress",
+      "waiting_confirmation",
+    ].includes(analysis.behavior);
+  }
+
   function composePendingModelReply(localReply) {
+    if (!localReply) return "正在请千问生成更贴合上下文的下一步建议...";
     return `已先整理：\n${localReply}\n\n正在请千问生成更贴合上下文的下一步建议...`;
   }
 
   function composeModelReply(localReply, modelReply) {
     const cleanModelReply = normalize(modelReply);
     if (!cleanModelReply) return localReply;
+    if (!localReply) return cleanModelReply;
     return `已先整理：\n${localReply}\n\n千问建议：\n${cleanModelReply}`;
   }
 
   function composeModelErrorReply(localReply, error) {
+    if (!localReply) return `千问暂时没有连上：${error.message}。可以先继续记录下一条，我会保留本地兜底。`;
     return `已先整理：\n${localReply}\n\n千问暂时没有连上：${error.message}。本地整理结果已保留，可以继续记录下一条。`;
   }
 
