@@ -363,6 +363,7 @@
       "prepare_design_presentation",
       "handle_negative_feedback",
       "diagnose_ambiguous_issue",
+      "integrate_composite_assets",
       "fix_asset_quality",
       "guide_design_software_operation",
       "request_missing_assets",

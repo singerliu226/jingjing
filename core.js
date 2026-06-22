@@ -573,6 +573,9 @@
     if (/版权|授权|字体授权|图片版权|商用|素材能不能用|侵权/.test(text)) {
       return "answer_design_question";
     }
+    if (isCompositeIntegrationRequest(text, analysisBits)) {
+      return "integrate_composite_assets";
+    }
     if (/素材|图片|照片|图太糊|太糊|清晰度|分辨率|抠图|扣图|边缘|锯齿|水印|找不到图|没有合适的图|素材不统一|图片风格不统一/.test(text)) {
       return "fix_asset_quality";
     }
@@ -716,6 +719,14 @@
     const pureBrandSystem = /品牌规范|视觉规范|VI|vi|品牌手册|标准色|品牌字体|禁用规则|一致性检查/.test(text);
     const plainFeedback = analysisBits.feedback && /老板|客户|主管|甲方|运营|产品/.test(text) && !asksAction;
     return logoMention && exposureIntent && designContext && asksAction && !pureBrandSystem && !plainFeedback;
+  }
+
+  function isCompositeIntegrationRequest(text, analysisBits = {}) {
+    const compositeProblem = /合成.*(假|不自然|生硬|不像)|像贴上去|贴上去|不融合|融合不进去|不像一张图|不在一个画面|光源不一致|光影不统一|色温不统一|透视不对|透视怪|阴影不对|接触阴影|产品图.*(假|不自然|贴)|人物.*(假|不自然|贴)|素材.*(不融合|不像.*世界)/.test(text);
+    const designContext = /海报|封面|banner|Banner|画面|设计|视觉|产品图|人物|素材|背景|主视觉|合成|修图/.test(text);
+    const asksAction = /怎么|如何|为什么|哪里|感觉|优化|调整|处理|诊断|帮我看|应该|修|自然|统一/.test(text);
+    const plainFeedback = analysisBits.feedback && /老板|客户|主管|甲方|运营|产品/.test(text) && !/怎么|如何|为什么|哪里|诊断|帮我看|优化|调整|处理|应该|修/.test(text);
+    return compositeProblem && designContext && asksAction && !plainFeedback;
   }
 
   function isStakeholderConflictRequest(text) {
@@ -1141,6 +1152,7 @@
       "prepare_design_presentation",
       "handle_negative_feedback",
       "diagnose_ambiguous_issue",
+      "integrate_composite_assets",
       "fix_asset_quality",
       "guide_design_software_operation",
       "negotiate_reference_similarity",
@@ -1216,6 +1228,7 @@
     if (analysis.behavior === "prepare_design_presentation") return generatePresentationScript(state, project, analysis);
     if (analysis.behavior === "handle_negative_feedback") return handleNegativeFeedback(state, project, analysis, now);
     if (analysis.behavior === "diagnose_ambiguous_issue") return diagnoseAmbiguousIssue(project, analysis);
+    if (analysis.behavior === "integrate_composite_assets") return integrateCompositeAssets(project, analysis);
     if (analysis.behavior === "fix_asset_quality") return fixAssetQuality(project, analysis);
     if (analysis.behavior === "guide_design_software_operation") return guideDesignSoftwareOperation(project, analysis);
     if (analysis.behavior === "negotiate_reference_similarity") return negotiateReferenceSimilarity(project, analysis);
@@ -1553,6 +1566,67 @@
       checks.splice(1, 0, "放到真实尺寸看：出血、边距、字号和图片精度是否靠谱。");
     }
     return checks.slice(0, 6);
+  }
+
+  function integrateCompositeAssets(project, analysis) {
+    const plan = buildCompositeIntegrationPlan(project, analysis.text);
+    const lines = [`合成自然度诊断：${project.name}`];
+    lines.push(`先判断：${plan.judge}`);
+    lines.push("优先排查：");
+    plan.causes.forEach((item) => lines.push(`- ${item}`));
+    lines.push("按这个顺序修：");
+    plan.steps.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("不要这样做：");
+    plan.donts.forEach((item) => lines.push(`- ${item}`));
+    lines.push("检查标准：");
+    plan.checks.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push(`下一步：${plan.nextStep}`);
+    project.portfolio.process = appendSentence(project.portfolio.process, `合成自然度调整：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildCompositeIntegrationPlan(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${text}`;
+    const lightIssue = /光源不一致|光影不统一|阴影不对|接触阴影/.test(combined);
+    const colorIssue = /色温不统一|不融合|不像一张图|不在一个画面|素材.*不像.*世界/.test(combined);
+    const perspectiveIssue = /透视不对|透视怪|角度不对/.test(combined);
+    const pastedIssue = /像贴上去|贴上去|合成.*(假|不自然|生硬)|产品图.*(假|不自然|贴)|人物.*(假|不自然|贴)/.test(combined);
+    const causes = [];
+    if (lightIssue) causes.push("光源方向不统一：主体高光、阴影方向和背景光线没有按同一个来源走。");
+    if (colorIssue) causes.push("色温/色调不统一：主体像来自另一张照片，冷暖、饱和度或黑白场不一致。");
+    if (perspectiveIssue) causes.push("透视角度不一致：主体的拍摄角度、地平线和背景空间不匹配。");
+    if (pastedIssue) causes.push("接触关系太弱：主体没有接触阴影、遮挡或边缘过渡，所以像浮在画面上。");
+    if (!causes.length) causes.push("合成角色不清：主体、背景和装饰没有共用同一套光线、色调和颗粒。");
+    const steps = [
+      "先确定一个光源方向：例如左上来光，所有高光和阴影都按这个方向统一。",
+      "补接触阴影：主体贴近地面/桌面/背景的位置加一层软阴影，让它“站住”。",
+      "统一色温和黑白场：用色彩平衡/曲线把主体的冷暖、最暗处和最亮处拉近背景。",
+      "处理边缘：清理抠图杂边，边缘轻微羽化 0.5-1px，避免硬切边。",
+      "统一颗粒/噪点和清晰度：主体太锐就轻微降锐，背景太糊就别让主体过度清晰。",
+    ];
+    if (perspectiveIssue) steps.unshift("先对透视：确认主体底边、地平线和背景透视方向是否一致，不一致先变形/换图。");
+    if (/包装|产品|饮品|咖啡|美妆/.test(combined)) {
+      steps.push("产品图优先保持真实材质：高光别过曝，瓶身/杯身边缘要干净，投影要轻。");
+    }
+    const donts = [
+      "不要靠套滤镜硬统一，滤镜只能最后收口，不能解决光源和透视错误。",
+      "不要给所有素材加同样重的阴影；阴影强度要按距离和层级变化。",
+      "不要把主体边缘修得过虚，过度羽化会显脏、显廉价。",
+    ];
+    const checks = [
+      "关掉颜色看黑白：主体和背景的明暗关系是否像同一空间？",
+      "看阴影方向：所有投影是否朝同一侧，接触点是否贴地？",
+      "看边缘：主体边缘有没有白边、黑边、锯齿或抠图残留？",
+      "缩小预览：主体是否自然融入画面，而不是像单独贴了一张 PNG？",
+    ];
+    return {
+      judge: "合成不自然通常不是缺一个效果，而是光源、透视、接触阴影、色温和边缘没有同时对齐。",
+      causes: Array.from(new Set(causes)).slice(0, 5),
+      steps: Array.from(new Set(steps)).slice(0, 7),
+      donts: Array.from(new Set(donts)).slice(0, 4),
+      checks: Array.from(new Set(checks)).slice(0, 5),
+      nextStep: "复制当前稿做一版“合成校准稿”：只修光源方向、接触阴影、色温和边缘，不新增装饰。",
+    };
   }
 
   function fixAssetQuality(project, analysis) {
@@ -3933,6 +4007,7 @@
         "prepare_design_presentation",
         "handle_negative_feedback",
         "diagnose_ambiguous_issue",
+        "integrate_composite_assets",
         "fix_asset_quality",
         "guide_design_software_operation",
         "negotiate_reference_similarity",
@@ -6292,6 +6367,7 @@
     generatePresentationScript,
     handleNegativeFeedback,
     diagnoseAmbiguousIssue,
+    integrateCompositeAssets,
     fixAssetQuality,
     guideDesignSoftwareOperation,
     requestMissingAssets,

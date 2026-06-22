@@ -749,6 +749,40 @@ function freshState() {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
   project.name = "咖啡新品海报";
+  project.type = "社媒图";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "产品图像贴上去的，和背景不融合，光源也不一致，怎么修得自然？", fixedNow);
+  assert.equal(result.analysis.behavior, "integrate_composite_assets");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("合成自然度诊断"));
+  assert.ok(result.reply.includes("光源方向"));
+  assert.ok(result.reply.includes("接触阴影"));
+  assert.ok(result.reply.includes("色温"));
+  assert.ok(result.reply.includes("合成校准稿"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "人物活动海报";
+  project.type = "海报";
+  const result = Core.applyInput(state, "人物合成到海报里不自然，透视和阴影不对，应该怎么处理？", fixedNow);
+  assert.equal(result.analysis.behavior, "integrate_composite_assets");
+  assert.ok(result.reply.includes("透视"));
+  assert.ok(result.reply.includes("阴影方向"));
+  assert.ok(result.reply.includes("边缘"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "主管说产品图像贴上去的，明天改。", fixedNow);
+  assert.equal(result.analysis.behavior, "record_feedback");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品海报";
   project.dueDate = "2026-06-20";
   project.deliverables = ["小红书封面", "朋友圈海报"];
   const beforeTasks = state.tasks.length;
