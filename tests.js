@@ -2191,6 +2191,36 @@ function freshState() {
 }
 
 {
+  const state = freshState();
+  const before = state.projects.length;
+  const result = Core.applyInput(
+    state,
+    "帮我把咖啡新品这个活儿先建起来。",
+    fixedNow,
+    {
+      intent: {
+        schemaVersion: "llm-intent-v1",
+        intent: "create_project",
+        confidence: 0.86,
+        summary: "创建咖啡新品项目。",
+        entities: {
+          projectName: "咖啡新品",
+          projectType: "设计项目",
+          goal: "待补充咖啡新品传播目标",
+        },
+        missing: ["交付物", "截止时间"],
+        nextAction: "先补交付物和截止时间。",
+      },
+    }
+  );
+  assert.equal(result.analysis.behavior, "create_project");
+  assert.equal(state.projects.length, before + 1);
+  assert.equal(state.projects[0].name, "咖啡新品");
+  assert.equal(state.projects[0].goal, "待补充咖啡新品传播目标");
+  assert.ok(result.reply.includes("交付物"));
+}
+
+{
   const appSource = fs.readFileSync("app.js", "utf8");
   const serverSource = fs.readFileSync("server.js", "utf8");
   assert.ok(appSource.includes("currentDate: getLocalDateString()"));

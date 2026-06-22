@@ -1036,49 +1036,73 @@
     return state.projects.find((project) => project.id === id) || state.projects[0];
   }
 
+  function buildMissingFields(analysis, activeProject, detectedType = { deliverables: [] }) {
+    const missing = [];
+    if ((analysis.createsProject || detectedType.deliverables.length) && !/尺寸|规格|px|mm|cm|出血/.test(analysis.text)) missing.push("尺寸 / 平台规格");
+    if ((analysis.createsProject || analysis.feedback) && !analysis.dueDate && !(activeProject && activeProject.dueDate)) missing.push("截止时间");
+    if ((analysis.createsProject || analysis.deliverables.length) && !/jpg|png|pdf|源文件|ai|psd|figma/i.test(analysis.text)) missing.push("交付格式");
+    if (analysis.feedback && !analysis.from) missing.push("反馈人");
+    return missing;
+  }
+
+  function applyModelIntent(localAnalysis, modelIntent, activeProject, detectedType = { deliverables: [] }) {
+    if (!modelIntent) return localAnalysis;
+    const entities = modelIntent.entities || {};
+    const deliverables = (entities.deliverables || []).length ? entities.deliverables : localAnalysis.deliverables;
+    const brief = { ...localAnalysis.brief };
+    if (entities.goal) brief.goal = entities.goal;
+    if (entities.audience) brief.audience = entities.audience;
+    if (entities.scene) brief.scene = entities.scene;
+    const meta = { ...localAnalysis.meta };
+    if (entities.projectName) meta.name = entities.projectName;
+    if (entities.projectType) meta.type = entities.projectType;
+    if ((entities.specs || []).length) meta.specs = entities.specs;
+    if ((entities.formats || []).length) meta.formats = entities.formats;
+    const merged = {
+      ...localAnalysis,
+      createsProject: modelIntent.behavior === "create_project" || localAnalysis.createsProject,
+      projectName: entities.projectName || (modelIntent.behavior === "create_project" && !localAnalysis.createsProject ? guessProjectName(localAnalysis.text, activeProject) : localAnalysis.projectName),
+      typeLabel: entities.projectType || localAnalysis.typeLabel,
+      deliverables,
+      dueDate: entities.dueDate || localAnalysis.dueDate,
+      status: entities.status || localAnalysis.status,
+      behavior: modelIntent.behavior,
+      from: entities.source || localAnalysis.from,
+      feedback: entities.feedback || localAnalysis.feedback,
+      brief,
+      meta,
+      nextAction: modelIntent.nextAction || "",
+      summary: modelIntent.summary || "",
+      modelIntent,
+    };
+    if (merged.createsProject && !merged.projectName) merged.projectName = guessProjectName(merged.text, activeProject);
+    const localMissing = buildMissingFields(merged, activeProject, detectedType);
+    merged.missing = Array.from(new Set((modelIntent.missing || []).concat(localMissing)));
+    return merged;
+  }
+
   function analyzeInput(text, state, now = new Date(), options = {}) {
     const clean = normalize(text);
     const activeProject = getProject(state, state.activeProjectId);
     const modelIntent = normalizeModelIntent(options.intent);
-    const modelEntities = modelIntent?.entities || {};
     const type = detectProjectType(clean);
-    const dueDate = modelEntities.dueDate || detectDueDate(clean, now);
-    const status = modelEntities.status || detectStatus(clean);
-    const from = modelEntities.source || detectPeople(clean);
-    const feedback = modelEntities.feedback || detectFeedback(clean);
+    const dueDate = detectDueDate(clean, now);
+    const status = detectStatus(clean);
+    const from = detectPeople(clean);
+    const feedback = detectFeedback(clean);
     const designIssue = detectDesignIssue(clean);
     const designerQuestion = detectDesignerQuestion(clean);
-    const localDeliverables = extractDeliverables(clean);
-    const modelDeliverables = modelEntities.deliverables || [];
-    const deliverables = modelDeliverables.length ? modelDeliverables : localDeliverables;
-    const createsProject = modelIntent?.behavior === "create_project" || (/新项目|创建项目|项目|客户要|需要.*(海报|头图|封面|包装|banner|PPT)/i.test(clean) && deliverables.length > 1);
-    const brief = {
-      ...extractBriefFields(clean),
-    };
-    if (modelEntities.goal) brief.goal = modelEntities.goal;
-    if (modelEntities.audience) brief.audience = modelEntities.audience;
-    if (modelEntities.scene) brief.scene = modelEntities.scene;
-    const meta = {
-      ...extractProjectMeta(clean),
-    };
-    if (modelEntities.projectName) meta.name = modelEntities.projectName;
-    if (modelEntities.projectType) meta.type = modelEntities.projectType;
-    if ((modelEntities.specs || []).length) meta.specs = modelEntities.specs;
-    if ((modelEntities.formats || []).length) meta.formats = modelEntities.formats;
-    const behavior = modelIntent?.behavior || detectBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion });
-    const projectName = modelEntities.projectName || (createsProject ? guessProjectName(clean, activeProject) : activeProject.name);
-    const missing = [];
-    if ((createsProject || type.deliverables.length) && !/尺寸|规格|px|mm|cm|出血/.test(clean)) missing.push("尺寸 / 平台规格");
-    if ((createsProject || feedback) && !dueDate && !(activeProject && activeProject.dueDate)) missing.push("截止时间");
-    if ((createsProject || deliverables.length) && !/jpg|png|pdf|源文件|ai|psd|figma/i.test(clean)) missing.push("交付格式");
-    if (feedback && !from) missing.push("反馈人");
-    const mergedMissing = Array.from(new Set((modelIntent?.missing || []).concat(missing)));
-
-    return {
+    const deliverables = extractDeliverables(clean);
+    const createsProject = /新项目|创建项目|项目|客户要|需要.*(海报|头图|封面|包装|banner|PPT)/i.test(clean) && deliverables.length > 1;
+    const brief = extractBriefFields(clean);
+    const meta = extractProjectMeta(clean);
+    const behavior = detectBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion });
+    const projectName = createsProject ? guessProjectName(clean, activeProject) : activeProject.name;
+    const localAnalysis = {
       text: clean,
       createsProject,
       projectName,
-      typeLabel: modelEntities.projectType || type.label,
+      typeLabel: type.label,
       deliverables,
       dueDate,
       status,
@@ -1089,11 +1113,13 @@
       designerQuestion,
       brief,
       meta,
-      missing: mergedMissing,
-      nextAction: modelIntent?.nextAction || "",
-      summary: modelIntent?.summary || "",
-      modelIntent,
+      missing: [],
+      nextAction: "",
+      summary: "",
+      modelIntent: null,
     };
+    localAnalysis.missing = buildMissingFields(localAnalysis, activeProject, type);
+    return applyModelIntent(localAnalysis, modelIntent, activeProject, type);
   }
 
   function applyInput(state, text, now = new Date(), options = {}) {
