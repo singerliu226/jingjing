@@ -205,16 +205,18 @@ function buildMessages(input) {
 function buildIntentMessages(input) {
   const project = input.project || {};
   const recentMessages = Array.isArray(input.recentMessages) ? input.recentMessages.slice(-6) : [];
+  const currentDate = normalizeDateInput(input.currentDate);
   const system = [
     "你是菁菁小画桌的意图识别器，只负责判断用户这句话的行为类型。",
     "只返回 JSON，不要 Markdown，不要解释，不要自然语言前后缀。",
-    "JSON 结构：{\"intent\":\"行为名\",\"confidence\":0.0到1.0,\"summary\":\"一句话总结\",\"entities\":{},\"missing\":[],\"nextAction\":\"下一步\",\"reason\":\"一句中文理由\"}",
+    "JSON 结构：{\"schemaVersion\":\"llm-intent-v1\",\"intent\":\"行为名\",\"confidence\":0.0到1.0,\"summary\":\"一句话总结\",\"entities\":{},\"missing\":[],\"nextAction\":\"下一步\",\"reason\":\"一句中文理由\"}",
     "entities 可包含：projectName、projectType、source、dueDate(YYYY-MM-DD)、deliverables、goal、audience、scene、specs、formats、status、feedback。",
     "feedback 结构：{\"raw\":\"原始反馈\",\"action\":\"可执行修改动作\",\"reason\":\"为什么要这样改\",\"conflict\":false}",
     `intent 必须从这个列表选择：${INTENT_BEHAVIORS.join(", ")}`,
     "判断原则：如果用户只是转述老板/客户/主管的要求且没有问怎么做，优先 record_feedback。",
     "如果用户在问怎么改、怎么检查、怎么讲、怎么安排，选择最具体的设计辅助行为。",
     "如果用户记录完成/等待/截止/交付物/项目信息，选择对应的工作记录行为。",
+    `解析相对日期时，以 ${currentDate || "用户当前日期"} 为今天；例如“明天”是今天后一天，“下周一”按这个日期往后推到最近的下周一。`,
     "尽量抽取用户明确给出的实体；不要编造未给出的项目名、日期、交付物或反馈人。",
     "不确定时选择 record_note，confidence 不要超过 0.55。",
   ].join("\n");
@@ -224,6 +226,7 @@ function buildIntentMessages(input) {
     `目标：${project.goal || "待补充"}`,
     `交付物：${(project.deliverables || []).join("、") || "待补充"}`,
     `截止时间：${project.dueDate || "待补充"}`,
+    `今天日期：${currentDate || "未知"}`,
   ].join("\n");
   return [
     { role: "system", content: system },
@@ -343,10 +346,16 @@ function parseJsonObject(text) {
   }
 }
 
+function normalizeDateInput(value) {
+  const text = String(value || "").trim();
+  return /^20\d{2}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
+
 function normalizeIntent(intent) {
   const behavior = String(intent.intent || intent.behavior || "").trim();
   if (!INTENT_BEHAVIORS.includes(behavior)) {
     return {
+      schemaVersion: "llm-intent-v1",
       intent: "record_note",
       behavior: "record_note",
       confidence: 0.4,
@@ -360,6 +369,7 @@ function normalizeIntent(intent) {
   const confidence = Number(intent.confidence);
   const missing = Array.isArray(intent.missing) ? intent.missing.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 6) : [];
   return {
+    schemaVersion: "llm-intent-v1",
     intent: behavior,
     behavior,
     confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.65,

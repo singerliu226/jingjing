@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const Core = require("./core.js");
 
 const fixedNow = new Date("2026-06-12T09:00:00+08:00");
@@ -2145,6 +2146,7 @@ function freshState() {
   );
   assert.equal(result.analysis.behavior, "record_feedback");
   assert.equal(result.analysis.modelIntent.source, "model");
+  assert.equal(result.analysis.modelIntent.schemaVersion, "llm-intent-v1");
   assert.equal(result.analysis.from, "主管");
   assert.equal(result.analysis.dueDate, "2026-06-13");
   assert.ok(result.analysis.deliverables.includes("海报"));
@@ -2186,6 +2188,14 @@ function freshState() {
   assert.equal(state.projects[0].goal, "让用户知道新品上市并想进店");
   assert.ok(state.projects[0].deliverables.includes("小红书封面"));
   assert.ok(result.reply.includes("尺寸"));
+}
+
+{
+  const appSource = fs.readFileSync("app.js", "utf8");
+  const serverSource = fs.readFileSync("server.js", "utf8");
+  assert.ok(appSource.includes("currentDate: getLocalDateString()"));
+  assert.ok(serverSource.includes("解析相对日期时"));
+  assert.ok(serverSource.includes("schemaVersion: \"llm-intent-v1\""));
 }
 
 {

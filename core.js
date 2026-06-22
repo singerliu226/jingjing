@@ -373,6 +373,7 @@
     if (!isKnownBehavior(behavior)) return null;
     if (Number.isFinite(confidence) && confidence > 0 && confidence < 0.45) return null;
     return {
+      schemaVersion: normalize(intent.schemaVersion || "llm-intent-v1").slice(0, 40),
       behavior,
       confidence: Number.isFinite(confidence) ? confidence : 0,
       summary: normalize(intent.summary).slice(0, 180),

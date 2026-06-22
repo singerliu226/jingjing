@@ -121,6 +121,7 @@ Core 只负责：
 
 - 定义 `LLMIntent` 数据结构。
 - 让服务端 prompt 输出 intent、entities、missing、nextAction。
+- 客户端调用 `/api/intent` 时必须传入当前日期，模型解析“今天、明天、下周一”等相对时间时以该日期为准。
 - Core 新增 `applyModelIntent`，优先使用模型实体更新状态。
 - 保留 `analyzeInput` 作为兜底，不再作为主路径。
 
