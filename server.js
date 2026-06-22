@@ -155,6 +155,7 @@ function buildMessages(input) {
   const project = input.project || {};
   const recentMessages = Array.isArray(input.recentMessages) ? input.recentMessages.slice(-8) : [];
   const dashboard = input.dashboard || {};
+  const localReply = String(input.localReply || "").slice(0, 2000);
   const projectWorkflowInstruction =
     input.intent === "project_workflow"
       ? [
@@ -176,9 +177,10 @@ function buildMessages(input) {
     "不要编造已完成的文件或真实业务结果。没有信息时直接说需要补充什么。",
     "不要编造具体时刻、人员、确认结果、业务效果或文件名；除非用户明确给出。",
     "回复控制在 6-10 行，不使用 emoji，不使用 Markdown 表格。",
+    localReply ? "本地工作台已经先完成状态更新；你只补充更具体的判断、下一步和风险，不要重复声明“已记录/已更新”。" : "",
     formatInstruction,
     projectWorkflowInstruction,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
   const context = [
     `当前项目：${project.name || "未命名项目"}`,
     `项目类型：${project.type || "未知"}`,
@@ -194,6 +196,7 @@ function buildMessages(input) {
   return [
     { role: "system", content: system },
     { role: "user", content: `这是当前工作上下文：\n${context}` },
+    ...(localReply ? [{ role: "user", content: `本地已整理结果：\n${localReply}` }] : []),
     ...recentMessages.map((message) => ({
       role: message.role === "agent" ? "assistant" : "user",
       content: String(message.text || "").slice(0, 1200),

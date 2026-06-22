@@ -2241,6 +2241,16 @@ function freshState() {
 }
 
 {
+  const appSource = fs.readFileSync("app.js", "utf8");
+  const serverSource = fs.readFileSync("server.js", "utf8");
+  assert.ok(appSource.includes("composeModelReply(fallbackReply, payload.reply)"));
+  assert.ok(!appSource.includes("agentMessage.text = payload.reply || fallbackReply"));
+  assert.ok(appSource.includes("localReply: fallbackReply"));
+  assert.ok(serverSource.includes("本地工作台已经先完成状态更新"));
+  assert.ok(serverSource.includes("本地已整理结果"));
+}
+
+{
   const state = freshState();
   const result = Core.applyInput(
     state,

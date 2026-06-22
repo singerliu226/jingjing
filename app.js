@@ -397,7 +397,7 @@
     const agentMessage = state.messages[previousMessageCount + 1];
     if (!agentMessage || agentMessage.role !== "agent") return;
     const fallbackReply = agentMessage.text;
-    agentMessage.text = `${fallbackReply}\n\n正在请千问补充更细的设计建议...`;
+    agentMessage.text = composePendingModelReply(fallbackReply);
     render();
     try {
       const project = Core.getProject(state, state.activeProjectId);
@@ -407,6 +407,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message,
+          localReply: fallbackReply,
           project,
           dashboard: {
             todayCount: dashboard.today.length,
@@ -420,11 +421,25 @@
       });
       const payload = await response.json();
       if (!response.ok || payload.error) throw new Error(payload.error || "千问请求失败");
-      agentMessage.text = payload.reply || fallbackReply;
+      agentMessage.text = composeModelReply(fallbackReply, payload.reply);
     } catch (error) {
-      agentMessage.text = `${fallbackReply}\n\n千问暂时没有连上：${error.message}。本地整理结果已保留。`;
+      agentMessage.text = composeModelErrorReply(fallbackReply, error);
     }
     render();
+  }
+
+  function composePendingModelReply(localReply) {
+    return `已先整理：\n${localReply}\n\n正在请千问生成更贴合上下文的下一步建议...`;
+  }
+
+  function composeModelReply(localReply, modelReply) {
+    const cleanModelReply = normalize(modelReply);
+    if (!cleanModelReply) return localReply;
+    return `已先整理：\n${localReply}\n\n千问建议：\n${cleanModelReply}`;
+  }
+
+  function composeModelErrorReply(localReply, error) {
+    return `已先整理：\n${localReply}\n\n千问暂时没有连上：${error.message}。本地整理结果已保留，可以继续记录下一条。`;
   }
 
   function getApiBase() {
