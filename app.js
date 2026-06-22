@@ -374,6 +374,7 @@
       "adapt_multi_format",
       "check_brand_consistency",
       "balance_visual_density",
+      "strengthen_visual_impact",
       "improve_visual_polish",
       "guide_visual_effect",
       "recommend_layout_structure",

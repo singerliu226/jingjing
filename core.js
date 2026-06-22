@@ -489,6 +489,9 @@
     if (/不行|重做|推翻|被否|否了|毙了|很怪|丑|不好看|完全不对|方向不对/.test(text) && /老板|客户|主管|甲方|说|反馈|觉得/.test(text)) {
       return "handle_negative_feedback";
     }
+    if (isVisualImpactRequest(text)) {
+      return "strengthen_visual_impact";
+    }
     if (
       !analysisBits.createsProject &&
       /临时|突然|又要|新增|加一个|加一张|加一版|加需求|加物料|改需求|需求变|变更|换成|改成|方向变|换方向|重新来|重做/.test(text) &&
@@ -594,6 +597,9 @@
     }
     if (isVisualDensityRequest(text)) {
       return "balance_visual_density";
+    }
+    if (isVisualImpactRequest(text)) {
+      return "strengthen_visual_impact";
     }
     if (isVisualPolishRequest(text, analysisBits)) {
       return "improve_visual_polish";
@@ -715,6 +721,13 @@
     const designContext = /海报|封面|banner|Banner|版面|画面|构图|设计|视觉|排版|留白|元素|主视觉|标题/.test(text);
     const asksAction = /怎么|如何|为什么|哪里|感觉|优化|调整|改|修|处理|诊断|帮我看|应该/.test(text);
     return densityProblem && designContext && asksAction;
+  }
+
+  function isVisualImpactRequest(text) {
+    const impactProblem = /不吸睛|不抓人|抓不住|没有冲击力|没冲击力|不够冲击|太平|平平|平淡|没记忆点|记不住|太普通|没有亮点|亮点不够|第一眼不强|第一眼弱|视觉锚点|传播感不强|不够醒目/.test(text);
+    const designContext = /海报|封面|banner|Banner|版面|画面|构图|设计|视觉|主视觉|标题|KV|kv/.test(text);
+    const asksAction = /怎么|如何|为什么|哪里|感觉|优化|提升|调整|处理|诊断|帮我看|应该/.test(text);
+    return impactProblem && designContext && asksAction;
   }
 
   function isMissingAssetRequest(text) {
@@ -1090,6 +1103,7 @@
       "adapt_multi_format",
       "check_brand_consistency",
       "balance_visual_density",
+      "strengthen_visual_impact",
       "improve_visual_polish",
       "guide_visual_effect",
       "recommend_layout_structure",
@@ -1160,6 +1174,7 @@
     if (analysis.behavior === "adapt_multi_format") return adaptMultiFormat(project, analysis);
     if (analysis.behavior === "check_brand_consistency") return checkBrandConsistency(project, analysis);
     if (analysis.behavior === "balance_visual_density") return balanceVisualDensity(project, analysis);
+    if (analysis.behavior === "strengthen_visual_impact") return strengthenVisualImpact(project, analysis);
     if (analysis.behavior === "improve_visual_polish") return improveVisualPolish(project, analysis);
     if (analysis.behavior === "guide_visual_effect") return guideVisualEffect(project, analysis);
     if (analysis.behavior === "recommend_layout_structure") return recommendLayoutStructure(project, analysis);
@@ -3273,6 +3288,67 @@
     };
   }
 
+  function strengthenVisualImpact(project, analysis) {
+    const plan = buildVisualImpactPlan(project, analysis.text);
+    const lines = [`视觉冲击力诊断：${project.name}`];
+    lines.push(`先判断：${plan.judge}`);
+    lines.push("先选一个视觉锚点：");
+    plan.anchors.forEach((item) => lines.push(`- ${item}`));
+    lines.push("按这个顺序加强：");
+    plan.steps.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("不要这样做：");
+    plan.donts.forEach((item) => lines.push(`- ${item}`));
+    lines.push("提交前验证：");
+    plan.checks.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push(`下一步：${plan.nextStep}`);
+    project.portfolio.process = appendSentence(project.portfolio.process, `视觉冲击力调整：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildVisualImpactPlan(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${project.audience || ""} ${text}`;
+    const anchors = [
+      "主标题处理：用更大的字号、特殊字形、错位或局部强调，让第一眼先读到核心信息。",
+      "主视觉处理：放大产品/人物/图形符号，让它承担记忆点，而不是只做背景装饰。",
+      "构图处理：用夸张裁切、斜向动势、前后景层次或强留白，制造第一眼停顿。",
+    ];
+    const steps = [
+      "先确定第一眼：主标题和主视觉只能有一个当主角，另一个做辅助。",
+      "拉开对比：大小、明暗、虚实、疏密、冷暖里先选 1-2 个对比，不要全部同时加。",
+      "做一个记忆点：让用户看完后能说出“那个大标题/那个图形/那个产品构图”。",
+      "把不服务记忆点的装饰降级或删掉，避免画面热闹但记不住。",
+    ];
+    const donts = [
+      "不要直接加更多颜色、阴影、描边和贴纸；复杂不等于有冲击力。",
+      "不要让每个卖点都很大，全部突出等于没有重点。",
+      "不要为了吸睛牺牲可读性；看不清主信息会被认为不专业。",
+    ];
+    const checks = [
+      "3 秒测试：遮住细节，只看缩略图，能不能说出这张图在讲什么？",
+      "黑白测试：去掉颜色后，第一视觉是否仍然最强？",
+      "一句话测试：这张图的记忆点能不能用一句话说清楚？",
+    ];
+    if (/小红书|朋友圈|社媒|封面|Banner|banner|公众号/.test(combined)) {
+      steps.unshift("先看投放入口：社媒/封面优先强化标题和主体轮廓，别把冲击力藏在小细节里。");
+      checks.unshift("手机缩略图测试：在 25% 缩放下，标题和主视觉是否还成立？");
+    }
+    if (/高级|质感|品牌/.test(combined)) {
+      anchors.push("质感锚点：只强化一个材质、光影或品牌符号，用克制的对比制造高级感。");
+      donts.push("高级项目不要用过度炸裂的效果，冲击力可以来自留白、比例和材质细节。");
+    }
+    if (/促销|活动|报名|抢|优惠|转化/.test(combined)) {
+      steps.push("把行动点靠近第一视觉：优惠、报名、扫码或时间信息要顺着视线路径出现。");
+    }
+    return {
+      judge: "不吸睛通常不是“装饰不够”，而是第一视觉不明确、对比不够大、记忆点不集中。",
+      anchors: Array.from(new Set(anchors)).slice(0, 5),
+      steps: Array.from(new Set(steps)).slice(0, 6),
+      donts: Array.from(new Set(donts)).slice(0, 5),
+      checks: Array.from(new Set(checks)).slice(0, 5),
+      nextStep: "复制当前稿做一版“强第一眼小稿”：只强化一个视觉锚点，并把其他信息降一级，先看缩略图是否更抓人。",
+    };
+  }
+
   function improveVisualPolish(project, analysis) {
     const diagnosis = buildVisualPolishDiagnosis(project, analysis.text);
     const lines = [`廉价感诊断与精修：${project.name}`];
@@ -3665,6 +3741,7 @@
         "adapt_multi_format",
         "check_brand_consistency",
         "balance_visual_density",
+        "strengthen_visual_impact",
         "improve_visual_polish",
         "guide_visual_effect",
         "recommend_layout_structure",
@@ -5871,6 +5948,7 @@
     adaptMultiFormat,
     checkBrandConsistency,
     balanceVisualDensity,
+    strengthenVisualImpact,
     improveVisualPolish,
     guideVisualEffect,
     recommendLayoutStructure,

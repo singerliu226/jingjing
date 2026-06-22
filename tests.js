@@ -908,6 +908,37 @@ function freshState() {
 {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
+  project.name = "新品小红书封面";
+  project.type = "社媒图";
+  project.goal = "让用户一眼记住新品并点击了解";
+  project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "主管说这张封面不吸睛、没记忆点，视觉冲击力不够，怎么改？", fixedNow);
+  assert.equal(result.analysis.behavior, "strengthen_visual_impact");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("视觉冲击力诊断"));
+  assert.ok(result.reply.includes("视觉锚点"));
+  assert.ok(result.reply.includes("按这个顺序加强"));
+  assert.ok(result.reply.includes("不要这样做"));
+  assert.ok(result.reply.includes("强第一眼小稿"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "品牌发布海报";
+  project.type = "海报";
+  project.goal = "传达高级、可信的品牌印象";
+  const result = Core.applyInput(state, "客户觉得主视觉太平、第一眼不强，但又要高级质感，应该怎么优化？", fixedNow);
+  assert.equal(result.analysis.behavior, "strengthen_visual_impact");
+  assert.ok(result.reply.includes("质感锚点"));
+  assert.ok(result.reply.includes("高级项目不要"));
+  assert.ok(result.reply.includes("缩略图"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
   project.name = "会员活动海报";
   project.type = "社媒图";
   project.goal = "让用户快速看到报名入口";
