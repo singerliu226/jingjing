@@ -41,4 +41,5 @@ DASHSCOPE_MODEL="qwen-plus" DASHSCOPE_API_KEY="你的阿里云百炼 API Key" no
 
 ```bash
 node tests.js
+node eval-intents.js
 ```

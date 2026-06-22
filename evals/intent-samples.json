@@ -1,0 +1,356 @@
+{
+  "schemaVersion": "llm-intent-evals-v1",
+  "currentDate": "2026-06-12",
+  "description": "菁菁小画桌结构化意图评估样例。用于验证模型是否能把初级平面设计师的自然表达转成稳定的 LLMIntent。",
+  "samples": [
+    {
+      "id": "feedback-001",
+      "text": "主管说海报颜色太暗，要更年轻一点，明天下午前改。",
+      "expected": {
+        "intent": "record_feedback",
+        "entities": {
+          "source": "主管",
+          "dueDate": "2026-06-13",
+          "feedback": {
+            "rawIncludes": ["颜色太暗", "更年轻"],
+            "actionIncludes": ["明度", "年轻"]
+          }
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "feedback-002",
+      "text": "客户反馈这版不像品牌，但没说具体哪里不像。",
+      "expected": {
+        "intent": "record_feedback",
+        "entities": {
+          "source": "客户",
+          "feedback": {
+            "rawIncludes": ["不像品牌"],
+            "actionIncludes": ["品牌"]
+          }
+        },
+        "missingContains": ["截止时间"]
+      }
+    },
+    {
+      "id": "feedback-003",
+      "text": "老板说字太小，二维码和活动时间都要清楚。",
+      "expected": {
+        "intent": "record_feedback",
+        "entities": {
+          "source": "老板",
+          "feedback": {
+            "rawIncludes": ["字太小", "二维码"],
+            "actionIncludes": ["可读", "二维码"]
+          }
+        },
+        "missingContains": ["截止时间"]
+      }
+    },
+    {
+      "id": "feedback-004",
+      "text": "运营说朋友圈那张主标题不够突出，今天下班前要给她。",
+      "expected": {
+        "intent": "record_feedback",
+        "entities": {
+          "source": "运营",
+          "dueDate": "2026-06-12",
+          "deliverables": ["朋友圈海报"],
+          "feedback": {
+            "rawIncludes": ["主标题不够突出"],
+            "actionIncludes": ["主标题", "突出"]
+          }
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "project-001",
+      "text": "新项目「夏日咖啡节」，要做小红书封面、朋友圈海报和公众号头图，下周一交。",
+      "expected": {
+        "intent": "create_project",
+        "entities": {
+          "projectName": "夏日咖啡节",
+          "projectType": "社媒图",
+          "dueDate": "2026-06-15",
+          "deliverables": ["小红书封面", "朋友圈海报", "公众号头图"]
+        },
+        "missingContains": ["尺寸", "交付格式"]
+      }
+    },
+    {
+      "id": "project-002",
+      "text": "帮我把万圣节主题海报这个活儿建一下，先不确定尺寸。",
+      "expected": {
+        "intent": "create_project",
+        "entities": {
+          "projectName": "万圣节主题海报",
+          "projectType": "海报",
+          "deliverables": ["海报"]
+        },
+        "missingContains": ["尺寸", "截止时间", "交付格式"]
+      }
+    },
+    {
+      "id": "brief-001",
+      "text": "这个项目目标是让会员知道新品上市，受众是年轻女生，主要发小红书。",
+      "expected": {
+        "intent": "update_brief",
+        "entities": {
+          "goal": "让会员知道新品上市",
+          "audience": "年轻女生",
+          "scene": "小红书"
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "brief-002",
+      "text": "最后要交 1080x1440 的小红书封面，jpg 和源文件都要。",
+      "expected": {
+        "intent": "update_project_specs",
+        "entities": {
+          "specs": ["1080x1440"],
+          "formats": ["jpg", "源文件"],
+          "deliverables": ["小红书封面"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "progress-001",
+      "text": "我今天做完了首版海报，但还没给老板看。",
+      "expected": {
+        "intent": "complete_progress",
+        "entities": {
+          "status": "done",
+          "deliverables": ["海报"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "waiting-001",
+      "text": "已经发给客户看了，等她确认尺寸和文案。",
+      "expected": {
+        "intent": "waiting_confirmation",
+        "entities": {
+          "source": "客户",
+          "status": "waiting"
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "deadline-001",
+      "text": "这个项目截止改到 6 月 19 号。",
+      "expected": {
+        "intent": "update_deadline",
+        "entities": {
+          "dueDate": "2026-06-19"
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "deadline-002",
+      "text": "客户说明天上午就要先看一版，时间有点赶。",
+      "expected": {
+        "intent": "record_feedback",
+        "entities": {
+          "source": "客户",
+          "dueDate": "2026-06-13",
+          "feedback": {
+            "rawIncludes": ["明天上午", "先看一版"],
+            "actionIncludes": ["首版", "时间"]
+          }
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-001",
+      "text": "小红书封面字太多，看不清，怎么改？",
+      "expected": {
+        "intent": "optimize_readability",
+        "entities": {
+          "deliverables": ["小红书封面"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-002",
+      "text": "这张海报元素有点飘，边距也不统一，怎么整理？",
+      "expected": {
+        "intent": "optimize_alignment_spacing",
+        "entities": {
+          "deliverables": ["海报"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-003",
+      "text": "品牌色和 Logo 使用要注意什么？",
+      "expected": {
+        "intent": "check_brand_consistency",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-004",
+      "text": "老板给的参考图怎么拆解，怎么借鉴但不要照抄？",
+      "expected": {
+        "intent": "analyze_reference",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-005",
+      "text": "客户让参考图还原得越像越好，但我怕侵权，怎么解释？",
+      "expected": {
+        "intent": "negotiate_reference_similarity",
+        "entities": {
+          "source": "客户"
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-006",
+      "text": "这个 Banner 从横版改竖版，安全区怎么处理？",
+      "expected": {
+        "intent": "adapt_multi_format",
+        "entities": {
+          "deliverables": ["Banner"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-007",
+      "text": "标题字体和正文字体怎么搭配？字号层级怎么做？",
+      "expected": {
+        "intent": "recommend_typography_system",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-008",
+      "text": "颜色有点乱，也不够年轻，怎么优化？",
+      "expected": {
+        "intent": "recommend_color_system",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "delivery-001",
+      "text": "发印厂前出血、CMYK、文字转曲怎么检查？",
+      "expected": {
+        "intent": "guide_print_prepress",
+        "entities": {
+          "formats": ["pdf"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "delivery-002",
+      "text": "PS 导出小红书封面总是模糊，应该怎么设置？",
+      "expected": {
+        "intent": "guide_design_software_operation",
+        "entities": {
+          "deliverables": ["小红书封面"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "delivery-003",
+      "text": "交付检查清单给我看一下。",
+      "expected": {
+        "intent": "ask_checklist",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "communication-001",
+      "text": "老板说要高级，客户说要更活泼，意见不一致我该听谁的？",
+      "expected": {
+        "intent": "align_stakeholder_feedback",
+        "entities": {
+          "source": "老板/客户"
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "communication-002",
+      "text": "帮我整理确认话术，问客户尺寸和交付格式。",
+      "expected": {
+        "intent": "ask_confirmation_message",
+        "entities": {
+          "source": "客户"
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "communication-003",
+      "text": "老板只说这版不够有感觉，我怎么追问才不冒犯？",
+      "expected": {
+        "intent": "clarify_vague_feedback",
+        "entities": {
+          "source": "老板"
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "planning-001",
+      "text": "今天要做什么？",
+      "expected": {
+        "intent": "ask_plan",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "planning-002",
+      "text": "今天来不及了，任务太多怎么办？",
+      "expected": {
+        "intent": "triage_overload",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "portfolio-001",
+      "text": "帮我把这个项目整理成作品集案例。",
+      "expected": {
+        "intent": "ask_portfolio",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "portfolio-002",
+      "text": "这个项目做完了，帮我复盘一下，下次注意什么？",
+      "expected": {
+        "intent": "project_retrospective",
+        "entities": {
+          "status": "done"
+        },
+        "missingContains": []
+      }
+    }
+  ]
+}
