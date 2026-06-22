@@ -33,6 +33,10 @@ DASHSCOPE_MODEL="qwen-plus" DASHSCOPE_API_KEY="你的阿里云百炼 API Key" no
 - 数据保存在浏览器本地 `localStorage`。
 - 通过本地代理接入阿里云千问模型，前端不会保存 API Key。
 
+## 新版本方向
+
+下一阶段不再继续堆规则，而是按 [LLM First 新版本计划](docs/llm-first-product-plan.md) 调整：让大模型优先理解用户意图，本地规则只做状态更新和安全兜底。
+
 ## 验证
 
 ```bash
