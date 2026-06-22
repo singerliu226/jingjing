@@ -2251,6 +2251,9 @@ function freshState() {
   assert.ok(!appSource.match(/shouldShowLocalUpdateWithModelReply[\s\S]*?optimize_readability/));
   assert.ok(serverSource.includes("本地工作台已经先完成状态更新"));
   assert.ok(serverSource.includes("本地已整理结果"));
+  assert.ok(serverSource.includes("普通对话不要套固定栏目"));
+  assert.ok(serverSource.includes("格式固定为：项目判断、今日先做、后续步骤、需要确认、交付风险"));
+  assert.ok(!serverSource.includes("格式固定为：已记录、设计动作、下一步、需要确认、交付风险"));
 }
 
 {
