@@ -120,10 +120,11 @@ function freshState() {
   project.deliverables = ["小红书封面"];
   project.dueDate = "2026-06-13";
   const result = Core.applyInput(state, "小红书封面字太多，看不清，怎么改？", fixedNow);
-  assert.equal(result.analysis.behavior, "solve_design_issue");
+  assert.equal(result.analysis.behavior, "optimize_readability");
+  assert.ok(result.reply.includes("阅读体验诊断"));
   assert.ok(result.reply.includes("手机预览"));
-  assert.ok(result.reply.includes("少字"));
-  assert.ok(result.reply.includes("时间很近"));
+  assert.ok(result.reply.includes("阅读密度问题"));
+  assert.ok(result.reply.includes("可读性修正版"));
 }
 
 {
@@ -1517,6 +1518,35 @@ function freshState() {
 
 {
   const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员活动封面";
+  project.type = "社媒图";
+  project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "这张小红书封面手机上看不清，字太小，对比度也不够，应该怎么优化？", fixedNow);
+  assert.equal(result.analysis.behavior, "optimize_readability");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("阅读体验诊断"));
+  assert.ok(result.reply.includes("字号/层级问题"));
+  assert.ok(result.reply.includes("明度对比"));
+  assert.ok(result.reply.includes("手机预览"));
+  assert.ok(result.reply.includes("可读性修正版"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "线下活动海报";
+  project.type = "印刷海报";
+  const result = Core.applyInput(state, "二维码说明和活动规则读不清，印刷前应该怎么检查？", fixedNow);
+  assert.equal(result.analysis.behavior, "optimize_readability");
+  assert.ok(result.reply.includes("按真实印刷尺寸预览"));
+  assert.ok(result.reply.includes("扫码测试"));
+  assert.ok(result.reply.includes("提交前测试"));
+}
+
+{
+  const state = freshState();
   const result = Core.applyInput(state, "标题文案怎么写得更年轻？", fixedNow);
   assert.equal(result.analysis.behavior, "refine_copywriting");
 }
@@ -1531,6 +1561,12 @@ function freshState() {
   const state = freshState();
   const result = Core.applyInput(state, "主管说信息太多，二维码看不清，明天改。", fixedNow);
   assert.equal(result.analysis.behavior, "record_feedback");
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "标题字体和正文字体怎么搭配？字号层级怎么做？", fixedNow);
+  assert.equal(result.analysis.behavior, "recommend_typography_system");
 }
 
 {

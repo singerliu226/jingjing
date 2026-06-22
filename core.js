@@ -506,6 +506,9 @@
     if (isInformationHierarchyRequest(text, analysisBits)) {
       return "organize_information_hierarchy";
     }
+    if (isReadabilityRequest(text, analysisBits)) {
+      return "optimize_readability";
+    }
     if (isDeadlineNegotiationRequest(text)) {
       return "negotiate_deadline_scope";
     }
@@ -690,6 +693,16 @@
       /怎么|如何|排|取舍|分层|层级|主次|放|删|弱化|整理|处理/.test(text) &&
       !/文案怎么写|文案.*精简|精简.*文案|标题文案|主标题文案|slogan|口号|标语|CTA|按钮文案/.test(text)
     );
+  }
+
+  function isReadabilityRequest(text, analysisBits = {}) {
+    const readabilityProblem = /看不清|读不清|不清楚|字太小|字太细|字糊|文字糊|阅读困难|可读性|识别不出来|小屏.*看不|手机.*看不|缩略图.*看不|对比度不够|文字.*背景.*(融|糊|不清)|背景.*文字.*(融|糊|不清)|信息.*糊成/.test(text);
+    const designContext = /海报|封面|banner|Banner|社媒|小红书|朋友圈|公众号|版面|画面|设计|视觉|文字|字体|标题|主标题|二维码|手机|小屏|缩略图/.test(text);
+    const asksAction = /怎么|如何|为什么|哪里|感觉|优化|调整|处理|诊断|帮我看|应该|提升|改善/.test(text);
+    const plainFeedback = analysisBits.feedback && /老板|客户|主管|甲方|运营|产品/.test(text) && !/怎么|如何|为什么|哪里|诊断|帮我看|优化|调整|处理|应该|改善|提升/.test(text);
+    const typographySystem = /字体搭配|字体怎么搭|字体怎么选|用什么字体|字号层级|字距|行距/.test(text) && !readabilityProblem;
+    const visualEffect = /毛玻璃|玻璃拟态|阴影|投影|光影|金属|渐变|颗粒|噪点|发光|霓虹|立体字|材质|氛围光/.test(text);
+    return readabilityProblem && designContext && asksAction && !plainFeedback && !typographySystem && !visualEffect;
   }
 
   function isStakeholderConflictRequest(text) {
@@ -1110,6 +1123,7 @@
       "refine_copywriting",
       "optimize_action_path",
       "organize_information_hierarchy",
+      "optimize_readability",
       "simulate_design_defense",
       "prepare_design_presentation",
       "handle_negative_feedback",
@@ -1183,6 +1197,7 @@
     if (analysis.behavior === "refine_copywriting") return refineCopywriting(project, analysis);
     if (analysis.behavior === "optimize_action_path") return optimizeActionPath(project, analysis);
     if (analysis.behavior === "organize_information_hierarchy") return organizeInformationHierarchy(project, analysis);
+    if (analysis.behavior === "optimize_readability") return optimizeReadability(project, analysis);
     if (analysis.behavior === "simulate_design_defense") return simulateDesignDefense(state, project, analysis);
     if (analysis.behavior === "prepare_design_presentation") return generatePresentationScript(state, project, analysis);
     if (analysis.behavior === "handle_negative_feedback") return handleNegativeFeedback(state, project, analysis, now);
@@ -3829,6 +3844,7 @@
         "refine_copywriting",
         "optimize_action_path",
         "organize_information_hierarchy",
+        "optimize_readability",
         "simulate_design_defense",
         "prepare_design_presentation",
         "handle_negative_feedback",
@@ -5076,6 +5092,72 @@
     return Array.from(new Set(rules)).slice(0, 6);
   }
 
+  function optimizeReadability(project, analysis) {
+    const plan = buildReadabilityPlan(project, analysis.text);
+    const lines = [`阅读体验诊断：${project.name}`];
+    lines.push(`先判断：${plan.judge}`);
+    lines.push("优先排查：");
+    plan.causes.forEach((item) => lines.push(`- ${item}`));
+    lines.push("按这个顺序改：");
+    plan.steps.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("不要这样做：");
+    plan.donts.forEach((item) => lines.push(`- ${item}`));
+    lines.push("提交前测试：");
+    plan.checks.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push(`下一步：${plan.nextStep}`);
+    project.portfolio.process = appendSentence(project.portfolio.process, `阅读体验优化：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildReadabilityPlan(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${text}`;
+    const smallText = /字太小|字号|小屏.*看不|手机.*看不|缩略图.*看不/.test(combined);
+    const lowContrast = /对比度不够|文字.*背景.*(融|糊|不清)|背景.*文字.*(融|糊|不清)|太暗|太灰|看不清/.test(combined);
+    const crowdedText = /字太多|文字太多|信息.*糊成|阅读困难|读不清|行距|字距/.test(combined);
+    const qrIssue = /二维码|扫码/.test(combined);
+    const causes = [];
+    if (smallText) causes.push("字号/层级问题：主标题、利益点、说明文字没有拉开足够比例，小屏会先糊成一片。");
+    if (lowContrast) causes.push("明度对比问题：文字和背景太接近，颜色好看但阅读成本高。");
+    if (crowdedText) causes.push("阅读密度问题：字数、行距、分组和留白没有给眼睛停顿。");
+    if (qrIssue) causes.push("功能识别问题：二维码和说明文字需要清楚、干净、可测试，不能装饰化。");
+    if (!causes.length) causes.push("阅读顺序问题：用户不知道先读标题、利益点还是说明。");
+    const steps = [
+      "先做黑白稿检查：关掉颜色，只看主标题、二级信息、小说明是否仍然分得开。",
+      "把字号收成 3 档：主标题最大，利益点中等，规则/说明最小；不要出现 5-6 档随机字号。",
+      "提高文字和底色明度差：复杂背景上先加干净承托区或半透明遮罩，再放文字。",
+      "把长句拆成短行或标签组，同组间距小，不同组间距大。",
+    ];
+    if (/小红书|朋友圈|社媒|封面|公众号|Banner|banner/.test(combined)) {
+      steps.unshift("先用手机预览尺寸看，不要只在电脑大屏上判断。");
+    }
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      steps.unshift("按真实印刷尺寸预览，正文、注释、二维码说明不能只在屏幕放大时清楚。");
+    }
+    if (qrIssue) {
+      steps.push("二维码周围留白，不压复杂纹理；下方加短说明，例如“扫码报名/扫码领取”。");
+    }
+    const donts = [
+      "不要只把所有字加粗；加粗太多会让层级一起变吵。",
+      "不要为了高级感把文字做得过小或过灰，读不清会直接显得不专业。",
+      "不要用描边、发光硬救可读性；先换底、加承托区或重排信息。",
+    ];
+    const checks = [
+      "3 秒测试：缩小预览后，能不能先读到主标题，再读到利益点？",
+      "眯眼测试：文字区域是否仍然有清楚的深浅关系？",
+      "距离测试：社媒用手机看，印刷物按实际观看距离看。",
+      "删减测试：删掉一句说明后是否更清楚？如果更清楚，说明信息密度过高。",
+    ];
+    if (qrIssue) checks.push("扫码测试：用真实手机扫一次，确认能打开正确页面。");
+    return {
+      judge: "可读性不是单纯把字放大，而是字号层级、明度对比、行距分组和真实预览一起成立。",
+      causes: Array.from(new Set(causes)).slice(0, 5),
+      steps: Array.from(new Set(steps)).slice(0, 7),
+      donts: Array.from(new Set(donts)).slice(0, 4),
+      checks: Array.from(new Set(checks)).slice(0, 5),
+      nextStep: "复制当前稿做一版“可读性修正版”：只调整字号层级、底色承托和分组间距，先别换风格。",
+    };
+  }
+
   function refineCopywriting(project, analysis) {
     const goal = project.goal && !/待补充/.test(project.goal) ? project.goal : inferCopyGoal(analysis.text);
     const audience = project.audience && !/待补充/.test(project.audience) ? project.audience : "目标用户";
@@ -6120,6 +6202,7 @@
     refineCopywriting,
     optimizeActionPath,
     organizeInformationHierarchy,
+    optimizeReadability,
     simulateDesignDefense,
     generatePresentationScript,
     handleNegativeFeedback,

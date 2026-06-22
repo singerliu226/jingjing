@@ -358,6 +358,7 @@
       "refine_copywriting",
       "optimize_action_path",
       "organize_information_hierarchy",
+      "optimize_readability",
       "simulate_design_defense",
       "prepare_design_presentation",
       "handle_negative_feedback",
