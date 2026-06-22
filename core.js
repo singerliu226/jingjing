@@ -592,6 +592,9 @@
     if (/品牌规范|视觉规范|VI|vi|品牌色|品牌字体|logo.*使用|Logo.*使用|不符合品牌|不像品牌|品牌一致|调性统一|品牌调性/.test(text)) {
       return "check_brand_consistency";
     }
+    if (isVisualDensityRequest(text)) {
+      return "balance_visual_density";
+    }
     if (isVisualPolishRequest(text, analysisBits)) {
       return "improve_visual_polish";
     }
@@ -705,6 +708,13 @@
     const asksAction = /怎么|如何|为什么|哪里|看起来|感觉|优化|提升|改|修|调整|处理|诊断|帮我看/.test(text);
     const plainFeedback = analysisBits.feedback && /老板|客户|主管|甲方|运营|产品/.test(text) && !/怎么|如何|为什么|哪里|诊断|帮我看|改|优化|提升/.test(text);
     return polishProblem && asksAction && !plainFeedback;
+  }
+
+  function isVisualDensityRequest(text) {
+    const densityProblem = /画面.*(太空|很空|空了|空荡|太满|很满|太挤|拥挤|挤|太散|很散|散了|不平衡|失衡|重心|压不住|头重脚轻|左重右轻)|版面.*(太空|很空|太满|很满|太挤|拥挤|太散|很散|不平衡|失衡)|留白.*(怪|多|少|不舒服)|元素.*(散|挤|太多|太少)/.test(text);
+    const designContext = /海报|封面|banner|Banner|版面|画面|构图|设计|视觉|排版|留白|元素|主视觉|标题/.test(text);
+    const asksAction = /怎么|如何|为什么|哪里|感觉|优化|调整|改|修|处理|诊断|帮我看|应该/.test(text);
+    return densityProblem && designContext && asksAction;
   }
 
   function isMissingAssetRequest(text) {
@@ -1079,6 +1089,7 @@
       "recommend_platform_specs",
       "adapt_multi_format",
       "check_brand_consistency",
+      "balance_visual_density",
       "improve_visual_polish",
       "guide_visual_effect",
       "recommend_layout_structure",
@@ -1148,6 +1159,7 @@
     if (analysis.behavior === "recommend_platform_specs") return recommendPlatformSpecs(project, analysis);
     if (analysis.behavior === "adapt_multi_format") return adaptMultiFormat(project, analysis);
     if (analysis.behavior === "check_brand_consistency") return checkBrandConsistency(project, analysis);
+    if (analysis.behavior === "balance_visual_density") return balanceVisualDensity(project, analysis);
     if (analysis.behavior === "improve_visual_polish") return improveVisualPolish(project, analysis);
     if (analysis.behavior === "guide_visual_effect") return guideVisualEffect(project, analysis);
     if (analysis.behavior === "recommend_layout_structure") return recommendLayoutStructure(project, analysis);
@@ -3190,6 +3202,77 @@
     return Array.from(new Set(checks)).slice(0, 7);
   }
 
+  function balanceVisualDensity(project, analysis) {
+    const diagnosis = buildVisualDensityDiagnosis(project, analysis.text);
+    const lines = [`画面密度与平衡诊断：${project.name}`];
+    lines.push(`先判断：${diagnosis.judge}`);
+    lines.push("优先改这几处：");
+    diagnosis.actions.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("不要这样补：");
+    diagnosis.donts.forEach((item) => lines.push(`- ${item}`));
+    lines.push("提交前检查：");
+    diagnosis.checks.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push(`下一步：${diagnosis.nextStep}`);
+    project.portfolio.process = appendSentence(project.portfolio.process, `画面密度与平衡调整：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildVisualDensityDiagnosis(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${text}`;
+    const isEmpty = /太空|很空|空了|空荡|太少|留白.*多/.test(combined);
+    const isCrowded = /太满|很满|太挤|拥挤|挤|元素.*太多|留白.*少/.test(combined);
+    const isUnbalanced = /不平衡|失衡|重心|压不住|头重脚轻|左重右重|左重右轻|右重左轻|散/.test(combined);
+    const actions = [];
+    const donts = [
+      "不要用无意义小装饰硬填空，填完通常更碎。",
+      "不要同时放大标题、主体、卖点和装饰；只允许一个第一视觉变强。",
+      "不要为了平衡把元素摆成平均分布，平均会变平、变无聊。",
+    ];
+    const checks = [
+      "眯眼看黑白密度：第一眼是否能看到一个明确重心，而不是到处一样重？",
+      "缩到手机预览或实际观看距离：主标题、主体和行动点是否仍然清楚？",
+      "看四边留白：上、下、左、右不是必须一样，但要有能解释的节奏。",
+      "删掉一个装饰后画面是否更稳？如果更稳，说明原本是在用装饰掩盖结构问题。",
+    ];
+    if (isEmpty) {
+      actions.push("先确认空的是“信息不足”还是“重心太弱”：如果主标题/主体太小，先放大第一视觉，不急着加装饰。");
+      actions.push("把相关信息合成一个组块，例如标题 + 副标题 + 行动点，避免每个字都孤零零漂着。");
+      actions.push("用大色块、浅纹理或背景层次补画面气氛，但透明度要低，只服务主信息。");
+    }
+    if (isCrowded) {
+      actions.push("先删重复信息：同一句卖点、同类标签、过多装饰只保留最能帮助理解的一项。");
+      actions.push("把信息分成 3 层：第一眼主题、第二眼卖点、第三眼细节；第三层可以缩小或移到角落。");
+      actions.push("统一边距和行距，让密度来自秩序，不是靠把元素挤在一起。");
+    }
+    if (isUnbalanced) {
+      actions.push("先找视觉重心：把画面转成黑白或缩小预览，看最重的黑块/亮块落在哪里。");
+      actions.push("用对角或边缘的小信息组做平衡，而不是在空处随便加图案。");
+      actions.push("如果主体偏一侧，另一侧只补轻量信息或留白，不要放另一个同等重量的主体。");
+    }
+    if (!actions.length) {
+      actions.push("先做黑白密度稿：只看大块面、标题和主体，不看颜色和细节。");
+      actions.push("确定一个第一视觉，再把其他元素按重要性降级。");
+      actions.push("用统一边距和信息组块重新排一次，先让画面站稳。");
+    }
+    if (/小红书|朋友圈|社媒|封面|Banner|banner|公众号/.test(combined)) {
+      checks.unshift("手机端 3 秒检查：缩略图里是否还能看出主题和主视觉？");
+    }
+    if (/包装|画册|折页|印刷/.test(combined)) {
+      checks.unshift("真实尺寸检查：站在实际观看距离看，留白和密度是否还舒服？");
+    }
+    const labels = [];
+    if (isEmpty) labels.push("太空");
+    if (isCrowded) labels.push("太满");
+    if (isUnbalanced) labels.push("重心不稳");
+    return {
+      judge: labels.length ? `${labels.join(" + ")}，先处理视觉重心，再处理装饰和细节。` : "先判断视觉重心是否明确，再看留白和元素密度。",
+      actions: Array.from(new Set(actions)).slice(0, 6),
+      donts: Array.from(new Set(donts)).slice(0, 4),
+      checks: Array.from(new Set(checks)).slice(0, 5),
+      nextStep: "复制当前稿，做一版 10 分钟黑白密度小稿：只保留标题、主体、必要信息和大块面，先把重心调稳再回到颜色细节。",
+    };
+  }
+
   function improveVisualPolish(project, analysis) {
     const diagnosis = buildVisualPolishDiagnosis(project, analysis.text);
     const lines = [`廉价感诊断与精修：${project.name}`];
@@ -3581,6 +3664,7 @@
         "recommend_platform_specs",
         "adapt_multi_format",
         "check_brand_consistency",
+        "balance_visual_density",
         "improve_visual_polish",
         "guide_visual_effect",
         "recommend_layout_structure",
@@ -5786,6 +5870,7 @@
     recommendPlatformSpecs,
     adaptMultiFormat,
     checkBrandConsistency,
+    balanceVisualDensity,
     improveVisualPolish,
     guideVisualEffect,
     recommendLayoutStructure,

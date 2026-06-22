@@ -882,6 +882,36 @@ function freshState() {
   project.type = "社媒图";
   project.goal = "让用户快速看到报名入口";
   project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "主管说海报画面太空、重心有点不平衡，我应该怎么调整？", fixedNow);
+  assert.equal(result.analysis.behavior, "balance_visual_density");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("画面密度与平衡诊断"));
+  assert.ok(result.reply.includes("太空"));
+  assert.ok(result.reply.includes("重心"));
+  assert.ok(result.reply.includes("不要这样补"));
+  assert.ok(result.reply.includes("黑白密度小稿"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "促销海报";
+  project.type = "海报";
+  const result = Core.applyInput(state, "这个版面太满太挤了，元素很多但又不知道怎么删，应该怎么处理？", fixedNow);
+  assert.equal(result.analysis.behavior, "balance_visual_density");
+  assert.ok(result.reply.includes("太满"));
+  assert.ok(result.reply.includes("先删重复信息"));
+  assert.ok(result.reply.includes("提交前检查"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员活动海报";
+  project.type = "社媒图";
+  project.goal = "让用户快速看到报名入口";
+  project.deliverables = ["小红书封面"];
   const result = Core.applyInput(state, "这张封面看起来很廉价、像模板，怎么改得更精致？", fixedNow);
   assert.equal(result.analysis.behavior, "improve_visual_polish");
   assert.ok(result.reply.includes("廉价感诊断与精修"));
