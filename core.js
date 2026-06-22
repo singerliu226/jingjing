@@ -601,7 +601,7 @@
     ) {
       return "adapt_multi_format";
     }
-    if (/品牌规范|视觉规范|VI|vi|品牌色|品牌字体|logo.*使用|Logo.*使用|不符合品牌|不像品牌|品牌一致|调性统一|品牌调性/.test(text)) {
+    if (isBrandConsistencyRequest(text, analysisBits)) {
       return "check_brand_consistency";
     }
     if (isLogoExposureRequest(text, analysisBits)) {
@@ -722,6 +722,15 @@
     const pureBrandSystem = /品牌规范|视觉规范|VI|vi|品牌手册|标准色|品牌字体|禁用规则|一致性检查/.test(text);
     const plainFeedback = analysisBits.feedback && /老板|客户|主管|甲方|运营|产品/.test(text) && !asksAction;
     return logoMention && exposureIntent && designContext && asksAction && !pureBrandSystem && !plainFeedback;
+  }
+
+  function isBrandConsistencyRequest(text, analysisBits = {}) {
+    const brandMention = /品牌规范|视觉规范|VI|vi|品牌色|品牌字体|logo.*使用|Logo.*使用|不符合品牌|不像品牌|不像我们|品牌一致|调性统一|品牌调性|风格跑偏|品牌感/.test(text);
+    const asksAction = /怎么|如何|为什么|哪里|检查|规范|要注意|建议|帮我看|诊断|统一|调整|优化|处理|修/.test(text);
+    const pureKnowledge = /品牌规范|视觉规范|VI|vi|品牌色|品牌字体|logo.*使用|Logo.*使用|要注意|检查|规范/.test(text);
+    const stakeholderSaid = /老板|客户|主管|甲方|运营|产品/.test(text) && /说|反馈|觉得|希望|要求|建议/.test(text);
+    const plainFeedback = (analysisBits.feedback || stakeholderSaid) && !/怎么|如何|为什么|哪里|检查|诊断|帮我看|优化|调整|处理|应该|修/.test(text);
+    return brandMention && (asksAction || pureKnowledge) && !plainFeedback;
   }
 
   function isCompositeIntegrationRequest(text, analysisBits = {}) {
@@ -3327,11 +3336,17 @@
 
   function checkBrandConsistency(project, analysis) {
     const text = analysis.text;
+    const drift = buildBrandDriftRepair(project, text);
     const lines = [`品牌一致性检查：${project.name}`];
     lines.push("先别只看单张图好不好看，先看它有没有像同一个品牌。按这个顺序检查：");
     buildBrandChecks(project, text).forEach((item, index) => {
       lines.push(`${index + 1}. ${item}`);
     });
+    if (drift.isDrift) {
+      lines.push("如果对方说“不像品牌”：");
+      drift.repairs.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+      lines.push(`沟通话术：${drift.talkTrack}`);
+    }
     lines.push("修正顺序：");
     lines.push("- 先固定 Logo 使用方式和安全距离，再调版式。");
     lines.push("- 再收敛品牌色和辅助色，不要随手加新颜色。");
@@ -3340,6 +3355,29 @@
     lines.push("判断标准：遮住 Logo 后，用户仍然能从色彩、字体、图形语言感到这是同一个品牌。");
     project.portfolio.process = appendSentence(project.portfolio.process, `品牌一致性检查：${analysis.text}`);
     return lines.join("\n");
+  }
+
+  function buildBrandDriftRepair(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${text}`;
+    const isDrift = /不像品牌|不像我们|不符合品牌|风格跑偏|品牌感不够|品牌感弱/.test(combined);
+    const repairs = [
+      "先找品牌锚点：从历史物料或品牌手册里截 3 张最像品牌的图，提取固定颜色、字体、图形和版式节奏。",
+      "只改 3 个高影响项：主色回到品牌色、标题字体回到品牌气质、Logo/页边距回到固定规则。",
+      "保留这版有效信息：不要整张重做，先把跑偏的颜色、字体、装饰语言收回来。",
+      "做前后对比：把原稿和修正版并排，说明“我收回了哪些品牌规则”。",
+    ];
+    if (/年轻|活泼|节日|活动|促销/.test(combined)) {
+      repairs.splice(2, 0, "如果这次要更活泼，只让辅助图形或强调色活泼，品牌主色、Logo 和标题规则不要一起变。");
+    }
+    if (/高端|高级|质感|轻奢/.test(combined)) {
+      repairs.splice(2, 0, "如果这次要更高级，先减少杂色和装饰，不要脱离品牌色去追流行质感。");
+    }
+    const talkTrack = "我先不大改方向，会先对照品牌手册/历史物料，把颜色、字体、Logo 安全距离和版式节奏收回到品牌规则里，再保留这次活动需要的新鲜感。";
+    return {
+      isDrift,
+      repairs: Array.from(new Set(repairs)).slice(0, 5),
+      talkTrack,
+    };
   }
 
   function buildBrandChecks(project, text) {

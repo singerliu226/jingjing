@@ -872,6 +872,8 @@ function freshState() {
   assert.ok(result.reply.includes("品牌一致性检查"));
   assert.ok(result.reply.includes("Logo"));
   assert.ok(result.reply.includes("品牌色"));
+  assert.ok(result.reply.includes("如果对方说“不像品牌”"));
+  assert.ok(result.reply.includes("先找品牌锚点"));
   assert.ok(result.reply.includes("判断标准"));
 }
 
@@ -882,6 +884,12 @@ function freshState() {
   assert.ok(result.reply.includes("色值"));
   assert.ok(result.reply.includes("不要拉伸"));
   assert.ok(result.reply.includes("品牌手册"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "主管说这版不像品牌，明天改。", fixedNow);
+  assert.equal(result.analysis.behavior, "record_feedback");
 }
 
 {
