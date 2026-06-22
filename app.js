@@ -375,6 +375,7 @@
       "adapt_multi_format",
       "check_brand_consistency",
       "balance_visual_density",
+      "separate_subject_background",
       "strengthen_visual_impact",
       "improve_visual_polish",
       "guide_visual_effect",

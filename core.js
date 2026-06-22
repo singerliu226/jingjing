@@ -601,6 +601,9 @@
     if (isVisualDensityRequest(text)) {
       return "balance_visual_density";
     }
+    if (isSubjectBackgroundSeparationRequest(text, analysisBits)) {
+      return "separate_subject_background";
+    }
     if (isVisualImpactRequest(text)) {
       return "strengthen_visual_impact";
     }
@@ -724,6 +727,14 @@
     const designContext = /海报|封面|banner|Banner|版面|画面|构图|设计|视觉|排版|留白|元素|主视觉|标题/.test(text);
     const asksAction = /怎么|如何|为什么|哪里|感觉|优化|调整|改|修|处理|诊断|帮我看|应该/.test(text);
     return densityProblem && designContext && asksAction;
+  }
+
+  function isSubjectBackgroundSeparationRequest(text, analysisBits = {}) {
+    const separationProblem = /主体不突出|主视觉不突出|产品不突出|人物不突出|主体.*(融进|混进|被背景吃掉|看不出来)|主视觉.*(融进|混进|被背景吃掉|看不出来)|背景太抢|背景抢|背景太花|背景太乱|背景压住|主体和背景.*(分不开|太近|混在一起)|没有层次感|层次感不够|层次不够|前后关系不清|前景.*背景.*分不开|画面太扁|空间感不够/.test(text);
+    const designContext = /海报|封面|banner|Banner|版面|画面|构图|设计|视觉|主视觉|主体|产品|人物|背景|层次|空间/.test(text);
+    const asksAction = /怎么|如何|为什么|哪里|感觉|优化|调整|改|修|处理|诊断|帮我看|应该/.test(text);
+    const plainFeedback = analysisBits.feedback && /老板|客户|主管|甲方|运营|产品/.test(text) && !/怎么|如何|为什么|哪里|诊断|帮我看|优化|调整|处理/.test(text);
+    return separationProblem && designContext && asksAction && !plainFeedback;
   }
 
   function isVisualImpactRequest(text) {
@@ -1115,6 +1126,7 @@
       "adapt_multi_format",
       "check_brand_consistency",
       "balance_visual_density",
+      "separate_subject_background",
       "strengthen_visual_impact",
       "improve_visual_polish",
       "guide_visual_effect",
@@ -1187,6 +1199,7 @@
     if (analysis.behavior === "adapt_multi_format") return adaptMultiFormat(project, analysis);
     if (analysis.behavior === "check_brand_consistency") return checkBrandConsistency(project, analysis);
     if (analysis.behavior === "balance_visual_density") return balanceVisualDensity(project, analysis);
+    if (analysis.behavior === "separate_subject_background") return separateSubjectBackground(project, analysis);
     if (analysis.behavior === "strengthen_visual_impact") return strengthenVisualImpact(project, analysis);
     if (analysis.behavior === "improve_visual_polish") return improveVisualPolish(project, analysis);
     if (analysis.behavior === "guide_visual_effect") return guideVisualEffect(project, analysis);
@@ -3301,6 +3314,83 @@
     };
   }
 
+  function separateSubjectBackground(project, analysis) {
+    const plan = buildSubjectBackgroundPlan(project, analysis.text);
+    const lines = [`主体与背景层次诊断：${project.name}`];
+    lines.push(`先判断：${plan.judge}`);
+    lines.push("先分清角色：");
+    plan.roles.forEach((item) => lines.push(`- ${item}`));
+    lines.push("按这个顺序改：");
+    plan.steps.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("不要这样做：");
+    plan.donts.forEach((item) => lines.push(`- ${item}`));
+    lines.push("检查标准：");
+    plan.checks.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push(`下一步：${plan.nextStep}`);
+    project.portfolio.process = appendSentence(project.portfolio.process, `主体与背景层次调整：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildSubjectBackgroundPlan(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${text}`;
+    const backgroundBusy = /背景太抢|背景抢|背景太花|背景太乱|背景压住/.test(combined);
+    const subjectWeak = /主体不突出|主视觉不突出|产品不突出|人物不突出|被背景吃掉|看不出来|分不开/.test(combined);
+    const flat = /没有层次感|层次感不够|层次不够|前后关系不清|画面太扁|空间感不够/.test(combined);
+    const roles = [
+      "主体：只负责第一眼被看到，例如产品、人物、主标题或核心图形。",
+      "背景：只负责气氛和承托，不能和主体抢同样的明度、饱和度和细节。",
+      "辅助元素：只负责引导视线或补充信息，面积和对比都要低于主体。",
+    ];
+    const steps = [];
+    if (subjectWeak) {
+      steps.push("先做黑白剪影测试：去掉颜色后，如果主体轮廓不清，就先放大、裁切或换更干净的主体图。");
+      steps.push("拉开主体和背景的明度差：主体亮时背景压暗，主体暗时背景提亮或加浅色承托区。");
+    }
+    if (backgroundBusy) {
+      steps.push("先降背景存在感：降低饱和度、对比和细节，必要时加一层 10%-25% 的色罩。");
+      steps.push("把背景最花的区域避开标题和主体，不要让纹理正好压在信息中心后面。");
+    }
+    if (flat) {
+      steps.push("建立前中后三层：前景可用少量遮挡/装饰，中景放主体，背景只做氛围。");
+      steps.push("用虚实关系拉层次：背景轻微模糊或降细节，主体保持清晰锐利。");
+    }
+    if (!steps.length) {
+      steps.push("先确定谁是主体，再把背景、装饰、信息都降一级。");
+      steps.push("用明度、虚实、大小、遮挡四个方法里选两个拉开前后关系。");
+    }
+    steps.push("给主体加轻量承托：色块、投影、描边、背光或留白只选一种，不要全加。");
+    steps.push("最后回到信息层级：主体突出后，标题和行动点仍然要读得清。");
+    const donts = [
+      "不要一上来加很重的投影，影子太重会显脏，也不一定解决主体弱。",
+      "不要把背景直接模糊到没有品质；先降细节，再少量模糊。",
+      "不要让主体、标题、背景都高饱和，全部抢眼等于没有主体。",
+    ];
+    const checks = [
+      "黑白检查：去掉颜色后，主体和背景是否还能分开？",
+      "眯眼检查：第一眼是不是先看到主体，而不是背景纹理？",
+      "缩略图检查：缩到手机预览后，主体轮廓是否仍然清楚？",
+      "边缘检查：主体边缘有没有被同色背景、复杂纹理或过重阴影吃掉？",
+    ];
+    if (/小红书|朋友圈|社媒|封面|Banner|banner|公众号/.test(combined)) {
+      checks.unshift("小屏检查：在 25% 缩放下，主体、标题和行动点是否还能各司其职？");
+    }
+    if (/包装|印刷|画册|折页/.test(combined)) {
+      checks.unshift("印刷检查：按真实尺寸看主体边缘和背景纹理，避免印出来糊成一团。");
+    }
+    const labels = [];
+    if (subjectWeak) labels.push("主体弱");
+    if (backgroundBusy) labels.push("背景抢");
+    if (flat) labels.push("层次平");
+    return {
+      judge: labels.length ? `${labels.join(" + ")}，先拉开主体和背景，再补氛围细节。` : "先确认主体、背景、辅助元素各自承担什么角色。",
+      roles,
+      steps: Array.from(new Set(steps)).slice(0, 7),
+      donts: Array.from(new Set(donts)).slice(0, 4),
+      checks: Array.from(new Set(checks)).slice(0, 5),
+      nextStep: "复制当前稿做一版“主体分离小稿”：只调整主体大小、背景明度和一层承托关系，先别加新装饰。",
+    };
+  }
+
   function strengthenVisualImpact(project, analysis) {
     const plan = buildVisualImpactPlan(project, analysis.text);
     const lines = [`视觉冲击力诊断：${project.name}`];
@@ -3755,6 +3845,7 @@
         "adapt_multi_format",
         "check_brand_consistency",
         "balance_visual_density",
+        "separate_subject_background",
         "strengthen_visual_impact",
         "improve_visual_polish",
         "guide_visual_effect",
@@ -6046,6 +6137,7 @@
     adaptMultiFormat,
     checkBrandConsistency,
     balanceVisualDensity,
+    separateSubjectBackground,
     strengthenVisualImpact,
     improveVisualPolish,
     guideVisualEffect,

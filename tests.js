@@ -908,6 +908,41 @@ function freshState() {
 {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
+  project.name = "咖啡新品封面";
+  project.type = "社媒图";
+  project.deliverables = ["小红书封面"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "产品主体融进背景里了，主视觉不突出，怎么调整层次感？", fixedNow);
+  assert.equal(result.analysis.behavior, "separate_subject_background");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("主体与背景层次诊断"));
+  assert.ok(result.reply.includes("先分清角色"));
+  assert.ok(result.reply.includes("黑白剪影测试"));
+  assert.ok(result.reply.includes("主体分离小稿"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "新品活动海报";
+  project.type = "海报";
+  const result = Core.applyInput(state, "背景太抢、画面没有层次感，应该怎么处理？", fixedNow);
+  assert.equal(result.analysis.behavior, "separate_subject_background");
+  assert.ok(result.reply.includes("背景抢"));
+  assert.ok(result.reply.includes("层次平"));
+  assert.ok(result.reply.includes("色罩"));
+  assert.ok(result.reply.includes("检查标准"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "主管说主体不突出，明天改。", fixedNow);
+  assert.equal(result.analysis.behavior, "record_feedback");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
   project.name = "新品小红书封面";
   project.type = "社媒图";
   project.goal = "让用户一眼记住新品并点击了解";
