@@ -2115,6 +2115,81 @@ function freshState() {
 
 {
   const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "万圣节海报";
+  const result = Core.applyInput(
+    state,
+    "主管刚说这一版太暗，不够年轻，明天下午前要改。",
+    fixedNow,
+    {
+      intent: {
+        intent: "record_feedback",
+        confidence: 0.9,
+        summary: "主管反馈海报太暗，需要更年轻，明天前修改。",
+        entities: {
+          source: "主管",
+          dueDate: "2026-06-13",
+          deliverables: ["海报"],
+          feedback: {
+            raw: "太暗，不够年轻",
+            action: "提高画面明度，加入更年轻的配色和图形节奏。",
+            reason: "当前视觉情绪偏沉，和年轻传播目标不匹配。",
+            conflict: false,
+          },
+        },
+        missing: ["尺寸"],
+        nextAction: "先确认海报尺寸，再做一版更明亮的配色调整。",
+        reason: "用户在转述主管反馈并给出截止时间。",
+      },
+    }
+  );
+  assert.equal(result.analysis.behavior, "record_feedback");
+  assert.equal(result.analysis.modelIntent.source, "model");
+  assert.equal(result.analysis.from, "主管");
+  assert.equal(result.analysis.dueDate, "2026-06-13");
+  assert.ok(result.analysis.deliverables.includes("海报"));
+  assert.ok(state.feedback.at(-1).action.includes("提高画面明度"));
+  assert.equal(state.tasks.at(-1).nextAction, "先确认海报尺寸，再做一版更明亮的配色调整。");
+  assert.ok(result.reply.includes("尺寸"));
+}
+
+{
+  const state = freshState();
+  const before = state.projects.length;
+  const result = Core.applyInput(
+    state,
+    "新项目，咖啡新品要做小红书封面和朋友圈海报，下周一交。",
+    fixedNow,
+    {
+      intent: {
+        intent: "create_project",
+        confidence: 0.88,
+        summary: "创建咖啡新品设计项目。",
+        entities: {
+          projectName: "咖啡新品",
+          projectType: "社媒图",
+          dueDate: "2026-06-15",
+          deliverables: ["小红书封面", "朋友圈海报"],
+          goal: "让用户知道新品上市并想进店",
+          audience: "年轻咖啡消费者",
+          scene: "小红书和朋友圈",
+        },
+        missing: ["尺寸", "交付格式"],
+        nextAction: "先确认两个平台尺寸和导出格式。",
+      },
+    }
+  );
+  assert.equal(result.analysis.behavior, "create_project");
+  assert.equal(state.projects.length, before + 1);
+  assert.equal(state.projects[0].name, "咖啡新品");
+  assert.equal(state.projects[0].type, "社媒图");
+  assert.equal(state.projects[0].goal, "让用户知道新品上市并想进店");
+  assert.ok(state.projects[0].deliverables.includes("小红书封面"));
+  assert.ok(result.reply.includes("尺寸"));
+}
+
+{
+  const state = freshState();
   const result = Core.applyInput(
     state,
     "今天要做什么？",

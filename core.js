@@ -322,19 +322,63 @@
     return String(text || "").trim();
   }
 
+  function compactStrings(values, limit = 10) {
+    if (!Array.isArray(values)) return [];
+    return Array.from(new Set(values.map((item) => normalize(item)).filter(Boolean))).slice(0, limit);
+  }
+
+  function normalizeModelFeedback(feedback) {
+    if (!feedback || typeof feedback !== "object") return null;
+    const raw = normalize(feedback.raw);
+    const action = normalize(feedback.action);
+    const reason = normalize(feedback.reason);
+    if (!raw && !action && !reason) return null;
+    return {
+      raw: raw || action || reason,
+      action: action || "把反馈拆成可执行项：确认目标、优先级和具体修改范围后再动手。",
+      reason: reason || "模型识别为反馈，需要转成具体设计动作。",
+      conflict: Boolean(feedback.conflict),
+    };
+  }
+
+  function normalizeModelEntities(entities) {
+    if (!entities || typeof entities !== "object") return {};
+    const brief = entities.brief && typeof entities.brief === "object" ? entities.brief : {};
+    const dueDate = normalize(entities.dueDate);
+    const status = normalize(entities.status);
+    return {
+      projectName: normalize(entities.projectName),
+      projectType: normalize(entities.projectType || entities.type),
+      source: normalize(entities.source || entities.from),
+      dueDate: /^20\d{2}-\d{2}-\d{2}$/.test(dueDate) ? dueDate : "",
+      deliverables: compactStrings(entities.deliverables),
+      goal: normalize(entities.goal || brief.goal),
+      audience: normalize(entities.audience || brief.audience),
+      scene: normalize(entities.scene || brief.scene),
+      specs: compactStrings(entities.specs),
+      formats: compactStrings(entities.formats),
+      status: ["todo", "designing", "waiting", "done"].includes(status) ? status : "",
+      feedback: normalizeModelFeedback(entities.feedback),
+    };
+  }
+
   function isKnownBehavior(behavior) {
     return Boolean(behavior && (isCommandBehavior(behavior) || stateBehaviors.includes(behavior)));
   }
 
   function normalizeModelIntent(intent) {
     if (!intent || typeof intent !== "object") return null;
-    const behavior = normalize(intent.behavior);
+    const behavior = normalize(intent.intent || intent.behavior);
     const confidence = Number(intent.confidence ?? 0);
     if (!isKnownBehavior(behavior)) return null;
     if (Number.isFinite(confidence) && confidence > 0 && confidence < 0.45) return null;
     return {
       behavior,
       confidence: Number.isFinite(confidence) ? confidence : 0,
+      summary: normalize(intent.summary).slice(0, 180),
+      entities: normalizeModelEntities(intent.entities),
+      missing: compactStrings(intent.missing, 8),
+      nextAction: normalize(intent.nextAction).slice(0, 180),
       reason: normalize(intent.reason).slice(0, 160),
       source: "model",
     };
@@ -995,30 +1039,45 @@
     const clean = normalize(text);
     const activeProject = getProject(state, state.activeProjectId);
     const modelIntent = normalizeModelIntent(options.intent);
+    const modelEntities = modelIntent?.entities || {};
     const type = detectProjectType(clean);
-    const dueDate = detectDueDate(clean, now);
-    const status = detectStatus(clean);
-    const from = detectPeople(clean);
-    const feedback = detectFeedback(clean);
+    const dueDate = modelEntities.dueDate || detectDueDate(clean, now);
+    const status = modelEntities.status || detectStatus(clean);
+    const from = modelEntities.source || detectPeople(clean);
+    const feedback = modelEntities.feedback || detectFeedback(clean);
     const designIssue = detectDesignIssue(clean);
     const designerQuestion = detectDesignerQuestion(clean);
-    const deliverables = extractDeliverables(clean);
-    const createsProject = /新项目|创建项目|项目|客户要|需要.*(海报|头图|封面|包装|banner|PPT)/i.test(clean) && deliverables.length > 1;
-    const brief = extractBriefFields(clean);
-    const meta = extractProjectMeta(clean);
+    const localDeliverables = extractDeliverables(clean);
+    const modelDeliverables = modelEntities.deliverables || [];
+    const deliverables = modelDeliverables.length ? modelDeliverables : localDeliverables;
+    const createsProject = modelIntent?.behavior === "create_project" || (/新项目|创建项目|项目|客户要|需要.*(海报|头图|封面|包装|banner|PPT)/i.test(clean) && deliverables.length > 1);
+    const brief = {
+      ...extractBriefFields(clean),
+    };
+    if (modelEntities.goal) brief.goal = modelEntities.goal;
+    if (modelEntities.audience) brief.audience = modelEntities.audience;
+    if (modelEntities.scene) brief.scene = modelEntities.scene;
+    const meta = {
+      ...extractProjectMeta(clean),
+    };
+    if (modelEntities.projectName) meta.name = modelEntities.projectName;
+    if (modelEntities.projectType) meta.type = modelEntities.projectType;
+    if ((modelEntities.specs || []).length) meta.specs = modelEntities.specs;
+    if ((modelEntities.formats || []).length) meta.formats = modelEntities.formats;
     const behavior = modelIntent?.behavior || detectBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion });
-    const projectName = createsProject ? guessProjectName(clean, activeProject) : activeProject.name;
+    const projectName = modelEntities.projectName || (createsProject ? guessProjectName(clean, activeProject) : activeProject.name);
     const missing = [];
     if ((createsProject || type.deliverables.length) && !/尺寸|规格|px|mm|cm|出血/.test(clean)) missing.push("尺寸 / 平台规格");
     if ((createsProject || feedback) && !dueDate && !(activeProject && activeProject.dueDate)) missing.push("截止时间");
     if ((createsProject || deliverables.length) && !/jpg|png|pdf|源文件|ai|psd|figma/i.test(clean)) missing.push("交付格式");
     if (feedback && !from) missing.push("反馈人");
+    const mergedMissing = Array.from(new Set((modelIntent?.missing || []).concat(missing)));
 
     return {
       text: clean,
       createsProject,
       projectName,
-      typeLabel: type.label,
+      typeLabel: modelEntities.projectType || type.label,
       deliverables,
       dueDate,
       status,
@@ -1029,7 +1088,9 @@
       designerQuestion,
       brief,
       meta,
-      missing,
+      missing: mergedMissing,
+      nextAction: modelIntent?.nextAction || "",
+      summary: modelIntent?.summary || "",
       modelIntent,
     };
   }
@@ -4283,6 +4344,7 @@
   }
 
   function buildNextAction(analysis) {
+    if (analysis.nextAction) return analysis.nextAction;
     if (analysis.missing.length) return `先补齐：${analysis.missing.join("、")}`;
     if (analysis.feedback) return "按反馈拆出 1-2 个视觉修改方向，并保留修改前后对比。";
     if (analysis.deliverables.length) return "确认尺寸后按平台导出对应文件。";
