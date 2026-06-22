@@ -8,6 +8,17 @@
   "use strict";
 
   const STORAGE_KEY = "jingjing-workbench-state-v2";
+  const stateBehaviors = [
+    "record_feedback",
+    "create_project",
+    "record_note",
+    "record_version",
+    "update_deadline",
+    "update_brief",
+    "update_deliverables",
+    "complete_progress",
+    "waiting_confirmation",
+  ];
 
   const projectTypes = [
     { key: "poster", label: "海报", words: ["海报", "主视觉", "kv", "key visual"] },
@@ -309,6 +320,24 @@
 
   function normalize(text) {
     return String(text || "").trim();
+  }
+
+  function isKnownBehavior(behavior) {
+    return Boolean(behavior && (isCommandBehavior(behavior) || stateBehaviors.includes(behavior)));
+  }
+
+  function normalizeModelIntent(intent) {
+    if (!intent || typeof intent !== "object") return null;
+    const behavior = normalize(intent.behavior);
+    const confidence = Number(intent.confidence ?? 0);
+    if (!isKnownBehavior(behavior)) return null;
+    if (Number.isFinite(confidence) && confidence > 0 && confidence < 0.45) return null;
+    return {
+      behavior,
+      confidence: Number.isFinite(confidence) ? confidence : 0,
+      reason: normalize(intent.reason).slice(0, 160),
+      source: "model",
+    };
   }
 
   function detectProjectType(text) {
@@ -962,9 +991,10 @@
     return state.projects.find((project) => project.id === id) || state.projects[0];
   }
 
-  function analyzeInput(text, state, now = new Date()) {
+  function analyzeInput(text, state, now = new Date(), options = {}) {
     const clean = normalize(text);
     const activeProject = getProject(state, state.activeProjectId);
+    const modelIntent = normalizeModelIntent(options.intent);
     const type = detectProjectType(clean);
     const dueDate = detectDueDate(clean, now);
     const status = detectStatus(clean);
@@ -976,7 +1006,7 @@
     const createsProject = /新项目|创建项目|项目|客户要|需要.*(海报|头图|封面|包装|banner|PPT)/i.test(clean) && deliverables.length > 1;
     const brief = extractBriefFields(clean);
     const meta = extractProjectMeta(clean);
-    const behavior = detectBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion });
+    const behavior = modelIntent?.behavior || detectBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion });
     const projectName = createsProject ? guessProjectName(clean, activeProject) : activeProject.name;
     const missing = [];
     if ((createsProject || type.deliverables.length) && !/尺寸|规格|px|mm|cm|出血/.test(clean)) missing.push("尺寸 / 平台规格");
@@ -1000,11 +1030,12 @@
       brief,
       meta,
       missing,
+      modelIntent,
     };
   }
 
-  function applyInput(state, text, now = new Date()) {
-    const analysis = analyzeInput(text, state, now);
+  function applyInput(state, text, now = new Date(), options = {}) {
+    const analysis = analyzeInput(text, state, now, options);
     if (!analysis.text) return { state, reply: "先告诉我一条需求、反馈或完成进度，我会帮你整理。" };
 
     const userMessage = {

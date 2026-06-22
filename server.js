@@ -7,6 +7,86 @@ const PORT = Number(process.env.PORT || 4174);
 const API_KEY = process.env.DASHSCOPE_API_KEY || "";
 const MODEL = process.env.DASHSCOPE_MODEL || "qwen-plus";
 const ROOT = __dirname;
+const INTENT_BEHAVIORS = [
+  "ask_plan",
+  "ask_summary",
+  "organize_meeting_notes",
+  "decompose_brief",
+  "plan_design_concepts",
+  "plan_reference_research",
+  "generate_image_prompt_brief",
+  "ask_review",
+  "ask_checklist",
+  "ask_portfolio",
+  "project_retrospective",
+  "record_project_outcome",
+  "generate_growth_profile",
+  "ask_confirmation_message",
+  "request_missing_assets",
+  "clarify_vague_feedback",
+  "align_stakeholder_feedback",
+  "synthesize_feedback_batch",
+  "handle_scope_change",
+  "answer_design_question",
+  "audit_asset_license",
+  "ask_design_directions",
+  "compare_design_options",
+  "triage_overload",
+  "negotiate_deadline_scope",
+  "report_progress_status",
+  "estimate_design_workload",
+  "prepare_feedback_request",
+  "refine_copywriting",
+  "optimize_action_path",
+  "organize_information_hierarchy",
+  "optimize_readability",
+  "simulate_design_defense",
+  "prepare_design_presentation",
+  "handle_negative_feedback",
+  "diagnose_ambiguous_issue",
+  "integrate_composite_assets",
+  "fix_asset_quality",
+  "guide_design_software_operation",
+  "negotiate_reference_similarity",
+  "analyze_reference",
+  "unify_series_visual_system",
+  "organize_delivery_files",
+  "prepare_design_handoff",
+  "guide_print_prepress",
+  "recommend_platform_specs",
+  "adapt_multi_format",
+  "check_brand_consistency",
+  "optimize_logo_exposure",
+  "optimize_alignment_spacing",
+  "balance_visual_density",
+  "separate_subject_background",
+  "strengthen_visual_impact",
+  "improve_visual_polish",
+  "guide_visual_effect",
+  "recommend_layout_structure",
+  "recommend_typography_system",
+  "recommend_color_system",
+  "translate_style_keyword",
+  "solve_design_issue",
+  "cancel_task",
+  "complete_checklist",
+  "snooze_task",
+  "summarize_version_changes",
+  "clear_waiting",
+  "mark_feedback_handled",
+  "update_project_name",
+  "update_project_type",
+  "update_project_specs",
+  "record_feedback",
+  "create_project",
+  "record_note",
+  "record_version",
+  "update_deadline",
+  "update_brief",
+  "update_deliverables",
+  "complete_progress",
+  "waiting_confirmation",
+];
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -122,6 +202,37 @@ function buildMessages(input) {
   ];
 }
 
+function buildIntentMessages(input) {
+  const project = input.project || {};
+  const recentMessages = Array.isArray(input.recentMessages) ? input.recentMessages.slice(-6) : [];
+  const system = [
+    "你是菁菁小画桌的意图识别器，只负责判断用户这句话的行为类型。",
+    "只返回 JSON，不要 Markdown，不要解释，不要自然语言前后缀。",
+    "JSON 结构：{\"behavior\":\"行为名\",\"confidence\":0.0到1.0,\"reason\":\"一句中文理由\"}",
+    `behavior 必须从这个列表选择：${INTENT_BEHAVIORS.join(", ")}`,
+    "判断原则：如果用户只是转述老板/客户/主管的要求且没有问怎么做，优先 record_feedback。",
+    "如果用户在问怎么改、怎么检查、怎么讲、怎么安排，选择最具体的设计辅助行为。",
+    "如果用户记录完成/等待/截止/交付物/项目信息，选择对应的工作记录行为。",
+    "不确定时选择 record_note，confidence 不要超过 0.55。",
+  ].join("\n");
+  const context = [
+    `当前项目：${project.name || "未命名项目"}`,
+    `项目类型：${project.type || "未知"}`,
+    `目标：${project.goal || "待补充"}`,
+    `交付物：${(project.deliverables || []).join("、") || "待补充"}`,
+    `截止时间：${project.dueDate || "待补充"}`,
+  ].join("\n");
+  return [
+    { role: "system", content: system },
+    { role: "user", content: `当前工作上下文：\n${context}` },
+    ...recentMessages.map((message) => ({
+      role: message.role === "agent" ? "assistant" : "user",
+      content: String(message.text || "").slice(0, 800),
+    })),
+    { role: "user", content: `请识别这句话的行为：${String(input.message || "").slice(0, 1600)}` },
+  ];
+}
+
 function callQwen(payload) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
@@ -168,6 +279,80 @@ function callQwen(payload) {
   });
 }
 
+function callQwenIntent(payload) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      model: MODEL,
+      messages: buildIntentMessages(payload),
+      temperature: 0.05,
+      max_tokens: 180,
+    });
+    const req = https.request(
+      {
+        hostname: "dashscope.aliyuncs.com",
+        path: "/compatible-mode/v1/chat/completions",
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => {
+          data += chunk;
+        });
+        res.on("end", () => {
+          let parsed;
+          try {
+            parsed = JSON.parse(data);
+          } catch (error) {
+            reject(new Error(`Qwen returned non-JSON response: ${data.slice(0, 200)}`));
+            return;
+          }
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            reject(new Error(parsed.error?.message || parsed.message || `Qwen request failed with ${res.statusCode}`));
+            return;
+          }
+          try {
+            resolve(normalizeIntent(parseJsonObject(parsed.choices?.[0]?.message?.content || "")));
+          } catch (error) {
+            reject(error);
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+function parseJsonObject(text) {
+  const clean = String(text || "").trim();
+  try {
+    return JSON.parse(clean);
+  } catch (error) {
+    const match = clean.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("Qwen intent response did not include JSON.");
+    return JSON.parse(match[0]);
+  }
+}
+
+function normalizeIntent(intent) {
+  const behavior = String(intent.behavior || "").trim();
+  if (!INTENT_BEHAVIORS.includes(behavior)) {
+    return { behavior: "record_note", confidence: 0.4, reason: "模型返回了未知行为，已降级为普通记录。" };
+  }
+  const confidence = Number(intent.confidence);
+  return {
+    behavior,
+    confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.65,
+    reason: String(intent.reason || "").slice(0, 160),
+  };
+}
+
 function sanitizeReply(reply, originalMessage) {
   const hasExplicitClock = /\d{1,2}[:：]\d{2}|\d{1,2}\s*[点时]/.test(originalMessage);
   if (hasExplicitClock) return reply;
@@ -198,6 +383,23 @@ async function handleChat(req, res) {
   }
 }
 
+async function handleIntent(req, res) {
+  if (!API_KEY) {
+    sendJson(res, 500, {
+      error: "DASHSCOPE_API_KEY is not set. Start the server with DASHSCOPE_API_KEY before using Qwen intent recognition.",
+    });
+    return;
+  }
+  try {
+    const body = await readBody(req);
+    const payload = JSON.parse(body || "{}");
+    const intent = await callQwenIntent(payload);
+    sendJson(res, 200, { intent, model: MODEL });
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Qwen intent request failed." });
+  }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === "OPTIONS") {
     send(res, 204, "");
@@ -205,6 +407,10 @@ const server = http.createServer((req, res) => {
   }
   if (req.url.startsWith("/api/chat") && req.method === "POST") {
     handleChat(req, res);
+    return;
+  }
+  if (req.url.startsWith("/api/intent") && req.method === "POST") {
+    handleIntent(req, res);
     return;
   }
   if (req.url.startsWith("/api/health")) {

@@ -318,12 +318,45 @@
   async function submitMessage(text) {
     const clean = normalize(text);
     if (!clean) return;
+    const modelIntent = await askQwenIntent(clean);
     const previousMessageCount = state.messages.length;
-    const result = Core.applyInput(state, clean, new Date());
+    const result = Core.applyInput(state, clean, new Date(), { intent: modelIntent });
     nodes.messageInput.value = "";
     render();
     if (result && shouldKeepLocalReply(result.analysis)) return;
     await askQwen(clean, previousMessageCount);
+  }
+
+  async function askQwenIntent(message) {
+    try {
+      const project = Core.getProject(state, state.activeProjectId);
+      const dashboard = Core.getDashboard(state);
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 2500);
+      const response = await fetch(`${getApiBase()}/api/intent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          message,
+          project,
+          dashboard: {
+            todayCount: dashboard.today.length,
+            waitingCount: dashboard.waiting.length,
+            riskCount: dashboard.risks.length,
+          },
+          recentMessages: state.messages
+            .filter((item) => item.projectId === state.activeProjectId)
+            .slice(Math.max(0, state.messages.length - 8)),
+        }),
+      });
+      window.clearTimeout(timer);
+      const payload = await response.json();
+      if (!response.ok || payload.error) return null;
+      return payload.intent || null;
+    } catch (error) {
+      return null;
+    }
   }
 
   function shouldKeepLocalReply(analysis) {

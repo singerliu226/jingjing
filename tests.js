@@ -2098,4 +2098,41 @@ function freshState() {
   assert.equal(result.analysis.behavior, "synthesize_feedback_batch");
 }
 
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "品牌活动海报";
+  const result = Core.applyInput(
+    state,
+    "这版不太像她们家的风格，帮我判断怎么收回来。",
+    fixedNow,
+    { intent: { behavior: "check_brand_consistency", confidence: 0.82, reason: "用户在请求品牌一致性诊断。" } }
+  );
+  assert.equal(result.analysis.behavior, "check_brand_consistency");
+  assert.equal(result.analysis.modelIntent.source, "model");
+  assert.ok(result.reply.includes("品牌一致性检查"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(
+    state,
+    "今天要做什么？",
+    fixedNow,
+    { intent: { behavior: "unknown_behavior", confidence: 0.95, reason: "坏结果。" } }
+  );
+  assert.equal(result.analysis.behavior, "ask_plan");
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(
+    state,
+    "今天要做什么？",
+    fixedNow,
+    { intent: { behavior: "record_note", confidence: 0.2, reason: "模型不确定。" } }
+  );
+  assert.equal(result.analysis.behavior, "ask_plan");
+}
+
 console.log("All Design Desk Agent tests passed.");
