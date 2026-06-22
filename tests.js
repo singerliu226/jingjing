@@ -918,6 +918,27 @@ function freshState() {
 {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
+  project.name = "活动海报";
+  project.type = "海报";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "这张海报元素有点飘，边距不一致，怎么整理对齐和间距？", fixedNow);
+  assert.equal(result.analysis.behavior, "optimize_alignment_spacing");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("对齐与间距诊断"));
+  assert.ok(result.reply.includes("先定网格"));
+  assert.ok(result.reply.includes("主轴线"));
+  assert.ok(result.reply.includes("网格整理稿"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "主管说文字和卡片间距不统一，明天改。", fixedNow);
+  assert.equal(result.analysis.behavior, "record_feedback");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
   const beforeChecklist = state.checklist.length;
   const result = Core.applyInput(state, "项目类型改成品牌。", fixedNow);
   assert.equal(result.analysis.behavior, "update_project_type");

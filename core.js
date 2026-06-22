@@ -607,6 +607,9 @@
     if (isLogoExposureRequest(text, analysisBits)) {
       return "optimize_logo_exposure";
     }
+    if (isAlignmentSpacingRequest(text, analysisBits)) {
+      return "optimize_alignment_spacing";
+    }
     if (isVisualDensityRequest(text)) {
       return "balance_visual_density";
     }
@@ -727,6 +730,16 @@
     const asksAction = /怎么|如何|为什么|哪里|感觉|优化|调整|处理|诊断|帮我看|应该|修|自然|统一/.test(text);
     const plainFeedback = analysisBits.feedback && /老板|客户|主管|甲方|运营|产品/.test(text) && !/怎么|如何|为什么|哪里|诊断|帮我看|优化|调整|处理|应该|修/.test(text);
     return compositeProblem && designContext && asksAction && !plainFeedback;
+  }
+
+  function isAlignmentSpacingRequest(text, analysisBits = {}) {
+    const spacingProblem = /对不齐|没对齐|不对齐|对齐.*乱|间距不统一|间距不一致|边距不统一|边距不一致|边距怪|元素.*飘|像飘着|不整齐|不齐|参差|贴边|太贴边|网格.*乱|没有网格|秩序感不够/.test(text);
+    const designContext = /海报|封面|banner|Banner|版面|画面|排版|设计|视觉|元素|文字|标题|卡片|信息|网格|边距|间距|对齐/.test(text);
+    const asksAction = /怎么|如何|为什么|哪里|感觉|优化|调整|处理|诊断|帮我看|应该|统一|整理/.test(text);
+    const typographyOnly = /字距|行距|文字间距|字体太挤|字太挤/.test(text);
+    const stakeholderSaid = /老板|客户|主管|甲方|运营|产品/.test(text) && /说|反馈|觉得|希望|要求|建议/.test(text);
+    const plainFeedback = (analysisBits.feedback || stakeholderSaid) && !/怎么|如何|为什么|哪里|诊断|帮我看|优化|调整|处理|应该/.test(text);
+    return spacingProblem && designContext && asksAction && !typographyOnly && !plainFeedback;
   }
 
   function isStakeholderConflictRequest(text) {
@@ -1165,6 +1178,7 @@
       "adapt_multi_format",
       "check_brand_consistency",
       "optimize_logo_exposure",
+      "optimize_alignment_spacing",
       "balance_visual_density",
       "separate_subject_background",
       "strengthen_visual_impact",
@@ -1241,6 +1255,7 @@
     if (analysis.behavior === "adapt_multi_format") return adaptMultiFormat(project, analysis);
     if (analysis.behavior === "check_brand_consistency") return checkBrandConsistency(project, analysis);
     if (analysis.behavior === "optimize_logo_exposure") return optimizeLogoExposure(project, analysis);
+    if (analysis.behavior === "optimize_alignment_spacing") return optimizeAlignmentSpacing(project, analysis);
     if (analysis.behavior === "balance_visual_density") return balanceVisualDensity(project, analysis);
     if (analysis.behavior === "separate_subject_background") return separateSubjectBackground(project, analysis);
     if (analysis.behavior === "strengthen_visual_impact") return strengthenVisualImpact(project, analysis);
@@ -3416,6 +3431,82 @@
     return `我会先保证 Logo 清楚、比例正确、安全距离足够，再看它和主标题/主视觉的顺序。品牌露出要稳定，不一定要抢第一眼。`;
   }
 
+  function optimizeAlignmentSpacing(project, analysis) {
+    const plan = buildAlignmentSpacingPlan(project, analysis.text);
+    const lines = [`对齐与间距诊断：${project.name}`];
+    lines.push(`先判断：${plan.judge}`);
+    lines.push("先定网格：");
+    plan.grid.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("按这个顺序整理：");
+    plan.steps.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("不要这样做：");
+    plan.donts.forEach((item) => lines.push(`- ${item}`));
+    lines.push("检查标准：");
+    plan.checks.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push(`下一步：${plan.nextStep}`);
+    project.portfolio.process = appendSentence(project.portfolio.process, `对齐与间距整理：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildAlignmentSpacingPlan(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${text}`;
+    const alignmentIssue = /对不齐|没对齐|不对齐|对齐.*乱|不整齐|不齐|参差|元素.*飘|像飘着/.test(combined);
+    const spacingIssue = /间距不统一|间距不一致|边距不统一|边距不一致|边距怪|贴边|太贴边/.test(combined);
+    const gridIssue = /网格.*乱|没有网格|秩序感不够/.test(combined);
+    const grid = [
+      "先定外边距：所有重要信息离画面边缘使用同一套安全距离。",
+      "再定主轴线：标题、主体、信息组至少共享一条左对齐/中轴/右对齐基准线。",
+      "最后定间距刻度：只用 2-3 档间距，例如小组内近、组间远、区块间更远。",
+    ];
+    const steps = [];
+    if (alignmentIssue) {
+      steps.push("打开参考线或网格，先让同一信息组共享一条对齐线，不要凭眼睛一点点挪。");
+      steps.push("处理视觉对齐：图标、圆形、斜体字可以略微超出数学对齐线，让视觉上更稳。");
+    }
+    if (spacingIssue) {
+      steps.push("统一同类元素间距：同一组卡片/标签/文字块之间的距离必须相同。");
+      steps.push("拉开不同组之间的距离：组间距要明显大于组内距，让关系一眼可读。");
+    }
+    if (gridIssue) {
+      steps.push("先用 2 栏或 3 栏网格重排一次，把标题区、主视觉区、信息区固定下来。");
+      steps.push("删掉无法贴合网格的零散装饰，避免画面看起来像临时拼贴。");
+    }
+    if (!steps.length) {
+      steps.push("先统一外边距、主轴线和组间距，再看是否还需要调整细节。");
+      steps.push("把同类信息做成组块，别让每个元素单独漂在画面上。");
+    }
+    steps.push("缩小预览后检查：如果元素位置还像随机摆放，说明网格没有真正建立。");
+    const donts = [
+      "不要每个元素都单独微调；先定规则，再让元素服从规则。",
+      "不要为了填空破坏外边距，贴边会显得廉价且不安全。",
+      "不要把所有间距做成一样；同组近、不同组远，才有阅读关系。",
+    ];
+    const checks = [
+      "遮住内容只看外框：各信息组是否沿着同一套边距和轴线？",
+      "看同类元素：卡片、标签、图标、文字块的间距是否一致？",
+      "看组间关系：标题组、主体区、说明区之间是否有明确距离差？",
+      "退后一步或缩小预览：画面是否比原来更稳、更有秩序？",
+    ];
+    if (/小红书|朋友圈|社媒|封面|公众号|Banner|banner/.test(combined)) {
+      checks.unshift("手机预览检查：标题区、主体区、行动区是否仍然清楚分组？");
+    }
+    if (/印刷|包装|画册|折页/.test(combined)) {
+      checks.unshift("印刷检查：外边距、页边距和裁切安全区是否统一且足够？");
+    }
+    const labels = [];
+    if (alignmentIssue) labels.push("对齐不稳");
+    if (spacingIssue) labels.push("间距不统一");
+    if (gridIssue) labels.push("网格缺失");
+    return {
+      judge: labels.length ? `${labels.join(" + ")}，先建立规则，再做视觉微调。` : "先确认外边距、主轴线和间距刻度有没有统一。",
+      grid: Array.from(new Set(grid)).slice(0, 4),
+      steps: Array.from(new Set(steps)).slice(0, 7),
+      donts: Array.from(new Set(donts)).slice(0, 4),
+      checks: Array.from(new Set(checks)).slice(0, 5),
+      nextStep: "复制当前稿做一版“网格整理稿”：只统一外边距、对齐线和 3 档间距，先别改颜色字体。",
+    };
+  }
+
   function balanceVisualDensity(project, analysis) {
     const diagnosis = buildVisualDensityDiagnosis(project, analysis.text);
     const lines = [`画面密度与平衡诊断：${project.name}`];
@@ -4020,6 +4111,7 @@
         "adapt_multi_format",
         "check_brand_consistency",
         "optimize_logo_exposure",
+        "optimize_alignment_spacing",
         "balance_visual_density",
         "separate_subject_background",
         "strengthen_visual_impact",
@@ -6381,6 +6473,7 @@
     adaptMultiFormat,
     checkBrandConsistency,
     optimizeLogoExposure,
+    optimizeAlignmentSpacing,
     balanceVisualDensity,
     separateSubjectBackground,
     strengthenVisualImpact,
