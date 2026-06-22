@@ -375,6 +375,7 @@
       "recommend_platform_specs",
       "adapt_multi_format",
       "check_brand_consistency",
+      "optimize_logo_exposure",
       "balance_visual_density",
       "separate_subject_background",
       "strengthen_visual_impact",

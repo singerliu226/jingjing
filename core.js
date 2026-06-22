@@ -601,6 +601,9 @@
     if (/品牌规范|视觉规范|VI|vi|品牌色|品牌字体|logo.*使用|Logo.*使用|不符合品牌|不像品牌|品牌一致|调性统一|品牌调性/.test(text)) {
       return "check_brand_consistency";
     }
+    if (isLogoExposureRequest(text, analysisBits)) {
+      return "optimize_logo_exposure";
+    }
     if (isVisualDensityRequest(text)) {
       return "balance_visual_density";
     }
@@ -703,6 +706,16 @@
     const typographySystem = /字体搭配|字体怎么搭|字体怎么选|用什么字体|字号层级|字距|行距/.test(text) && !readabilityProblem;
     const visualEffect = /毛玻璃|玻璃拟态|阴影|投影|光影|金属|渐变|颗粒|噪点|发光|霓虹|立体字|材质|氛围光/.test(text);
     return readabilityProblem && designContext && asksAction && !plainFeedback && !typographySystem && !visualEffect;
+  }
+
+  function isLogoExposureRequest(text, analysisBits = {}) {
+    const logoMention = /Logo|logo|标志|品牌露出|品牌标识|品牌名|品牌名称|品牌存在感|品牌更明显|品牌不明显/.test(text);
+    const exposureIntent = /放哪|放哪里|怎么放|摆哪|位置|多大|大小|尺寸|放大|再大|更大|太小|不明显|更明显|突出|露出|存在感|不抢|不要抢|压住|安全距离|留白/.test(text);
+    const designContext = /海报|封面|banner|Banner|社媒|小红书|朋友圈|公众号|画面|版面|设计|视觉|主视觉|品牌|Logo|logo/.test(text);
+    const asksAction = /怎么|如何|为什么|哪里|感觉|优化|调整|处理|诊断|帮我看|应该|建议/.test(text);
+    const pureBrandSystem = /品牌规范|视觉规范|VI|vi|品牌手册|标准色|品牌字体|禁用规则|一致性检查/.test(text);
+    const plainFeedback = analysisBits.feedback && /老板|客户|主管|甲方|运营|产品/.test(text) && !asksAction;
+    return logoMention && exposureIntent && designContext && asksAction && !pureBrandSystem && !plainFeedback;
   }
 
   function isStakeholderConflictRequest(text) {
@@ -1139,6 +1152,7 @@
       "recommend_platform_specs",
       "adapt_multi_format",
       "check_brand_consistency",
+      "optimize_logo_exposure",
       "balance_visual_density",
       "separate_subject_background",
       "strengthen_visual_impact",
@@ -1213,6 +1227,7 @@
     if (analysis.behavior === "recommend_platform_specs") return recommendPlatformSpecs(project, analysis);
     if (analysis.behavior === "adapt_multi_format") return adaptMultiFormat(project, analysis);
     if (analysis.behavior === "check_brand_consistency") return checkBrandConsistency(project, analysis);
+    if (analysis.behavior === "optimize_logo_exposure") return optimizeLogoExposure(project, analysis);
     if (analysis.behavior === "balance_visual_density") return balanceVisualDensity(project, analysis);
     if (analysis.behavior === "separate_subject_background") return separateSubjectBackground(project, analysis);
     if (analysis.behavior === "strengthen_visual_impact") return strengthenVisualImpact(project, analysis);
@@ -3258,6 +3273,75 @@
     return Array.from(new Set(checks)).slice(0, 7);
   }
 
+  function optimizeLogoExposure(project, analysis) {
+    const plan = buildLogoExposurePlan(project, analysis.text);
+    const lines = [`Logo 露出与品牌存在感：${project.name}`];
+    lines.push(`先判断：${plan.judge}`);
+    lines.push("推荐放法：");
+    plan.placements.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("大小与安全距离：");
+    plan.sizeRules.forEach((item) => lines.push(`- ${item}`));
+    lines.push("如果对方要求再大一点：");
+    lines.push(plan.reply);
+    lines.push("不要这样做：");
+    plan.donts.forEach((item) => lines.push(`- ${item}`));
+    lines.push("提交前检查：");
+    plan.checks.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push(`下一步：${plan.nextStep}`);
+    project.portfolio.process = appendSentence(project.portfolio.process, `Logo 露出优化：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildLogoExposurePlan(project, text) {
+    const combined = `${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${text}`;
+    const wantsBigger = /放大|再大|更大|太小|不明显|更明显|突出|存在感/.test(combined);
+    const wantsPlacement = /放哪|放哪里|怎么放|摆哪|位置/.test(combined);
+    const social = /小红书|朋友圈|社媒|封面|公众号|Banner|banner/.test(combined);
+    const print = /印刷|包装|画册|折页|海报/.test(combined);
+    const placements = [
+      "常规品牌露出：放在左上或右上，保持固定边距，让用户先读主题，再注意品牌。",
+      "活动/促销画面：Logo 靠近主标题或活动主视觉，但不要插进标题字组里。",
+      "品牌主导画面：可以把 Logo 放进品牌色块或页眉区域，用稳定位置强化识别。",
+    ];
+    if (social) placements.unshift("社媒封面：Logo 不要贴边，先避开头像/昵称/平台遮挡区，缩略图里能看见即可。");
+    if (print) placements.push("印刷物：Logo 离裁切线和折线留足安全距离，不要靠出血边缘。");
+    if (wantsPlacement) placements.push("如果画面有强主视觉，Logo 放在视觉动线末端，避免和主体争第一眼。");
+    const sizeRules = [
+      "先按画面宽度的约 5%-10% 试 Logo 宽度，再根据品牌等级和使用场景微调。",
+      "Logo 周围至少保留一个 Logo 高度的安全距离，不要被文字、贴纸、纹理挤住。",
+      "Logo 要清楚，但不一定最大；主标题/主视觉负责传播，Logo 负责识别。",
+    ];
+    if (wantsBigger) sizeRules.unshift("不要只无限放大 Logo：先提升对比、留白和位置稳定性，通常比单纯变大更高级。");
+    const donts = [
+      "不要拉伸、压扁、描边、随意换色或加复杂阴影。",
+      "不要把 Logo 放在复杂图片上硬靠发光救可读性；先换干净底或加承托色块。",
+      "不要让 Logo 抢走主标题和行动入口，否则画面会像内部汇报而不是面向用户。",
+    ];
+    const checks = [
+      "遮住 Logo 后，画面是否仍然像这个品牌？如果不像，说明品牌只靠 Logo，系统感不够。",
+      "缩小预览后，Logo 是否清楚但不过分抢眼？",
+      "Logo 安全距离、比例、颜色是否符合品牌手册或历史物料？",
+      "主标题、主视觉、Logo 三者是否有明确顺序，而不是同时抢第一眼？",
+    ];
+    return {
+      judge: "品牌存在感不只靠 Logo 变大，而是位置稳定、对比清楚、留白安全，并和品牌色/字体一起形成识别。",
+      placements: Array.from(new Set(placements)).slice(0, 6),
+      sizeRules: Array.from(new Set(sizeRules)).slice(0, 5),
+      reply: buildLogoExposureReply(project, wantsBigger),
+      donts: Array.from(new Set(donts)).slice(0, 4),
+      checks: Array.from(new Set(checks)).slice(0, 5),
+      nextStep: "复制当前稿做 3 个 Logo 小方案：常规角落版、靠近标题版、品牌色块承托版，缩小预览后选最稳的一版。",
+    };
+  }
+
+  function buildLogoExposureReply(project, wantsBigger) {
+    const goal = project.goal && !/待补充|待从/.test(project.goal) ? `，同时不影响「${project.goal}」` : "";
+    if (wantsBigger) {
+      return `可以，我先做一版 Logo 更明显的方案。但我会优先通过位置、留白和底色承托提升识别，而不是只把 Logo 拉很大，这样品牌更清楚${goal}，画面也不会显得生硬。`;
+    }
+    return `我会先保证 Logo 清楚、比例正确、安全距离足够，再看它和主标题/主视觉的顺序。品牌露出要稳定，不一定要抢第一眼。`;
+  }
+
   function balanceVisualDensity(project, analysis) {
     const diagnosis = buildVisualDensityDiagnosis(project, analysis.text);
     const lines = [`画面密度与平衡诊断：${project.name}`];
@@ -3860,6 +3944,7 @@
         "recommend_platform_specs",
         "adapt_multi_format",
         "check_brand_consistency",
+        "optimize_logo_exposure",
         "balance_visual_density",
         "separate_subject_background",
         "strengthen_visual_impact",
@@ -6219,6 +6304,7 @@
     recommendPlatformSpecs,
     adaptMultiFormat,
     checkBrandConsistency,
+    optimizeLogoExposure,
     balanceVisualDensity,
     separateSubjectBackground,
     strengthenVisualImpact,

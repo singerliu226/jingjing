@@ -853,6 +853,37 @@ function freshState() {
 {
   const state = freshState();
   const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员活动海报";
+  project.type = "社媒图";
+  project.goal = "让用户先看懂活动并记住品牌";
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "客户觉得 Logo 太小，品牌不明显，怎么放大才不抢主视觉？", fixedNow);
+  assert.equal(result.analysis.behavior, "optimize_logo_exposure");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("Logo 露出与品牌存在感"));
+  assert.ok(result.reply.includes("大小与安全距离"));
+  assert.ok(result.reply.includes("如果对方要求再大一点"));
+  assert.ok(result.reply.includes("不要拉伸"));
+  assert.ok(result.reply.includes("3 个 Logo 小方案"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "Logo 放哪里比较稳？品牌露出要明显一点。", fixedNow);
+  assert.equal(result.analysis.behavior, "optimize_logo_exposure");
+  assert.ok(result.reply.includes("推荐放法"));
+  assert.ok(result.reply.includes("常规角落版"));
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "主管说 Logo 太小，明天改。", fixedNow);
+  assert.equal(result.analysis.behavior, "record_feedback");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
   const beforeChecklist = state.checklist.length;
   const result = Core.applyInput(state, "项目类型改成品牌。", fixedNow);
   assert.equal(result.analysis.behavior, "update_project_type");
