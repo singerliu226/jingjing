@@ -1451,6 +1451,37 @@ function freshState() {
 
 {
   const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "会员报名海报";
+  project.type = "社媒图";
+  project.goal = "让用户扫码报名活动";
+  project.deliverables = ["朋友圈海报"];
+  const beforeTasks = state.tasks.length;
+  const result = Core.applyInput(state, "二维码放哪里才不突兀，又能引导用户扫码报名？", fixedNow);
+  assert.equal(result.analysis.behavior, "optimize_action_path");
+  assert.equal(state.tasks.length, beforeTasks);
+  assert.ok(result.reply.includes("行动入口设计"));
+  assert.ok(result.reply.includes("看见利益 -> 找到入口 -> 完成动作"));
+  assert.ok(result.reply.includes("扫码报名"));
+  assert.ok(result.reply.includes("交付前检查"));
+  assert.ok(result.reply.includes("行动路径小稿"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "新品 Banner";
+  project.type = "Banner";
+  project.goal = "让用户点击了解新品";
+  const result = Core.applyInput(state, "Banner 上按钮和购买入口怎么突出，但不要抢主视觉？", fixedNow);
+  assert.equal(result.analysis.behavior, "optimize_action_path");
+  assert.ok(result.reply.includes("横版 Banner"));
+  assert.ok(result.reply.includes("立即购买"));
+  assert.ok(result.reply.includes("不要让二维码抢第一眼"));
+}
+
+{
+  const state = freshState();
   const result = Core.applyInput(state, "标题文案怎么写得更年轻？", fixedNow);
   assert.equal(result.analysis.behavior, "refine_copywriting");
 }

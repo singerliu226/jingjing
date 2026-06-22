@@ -356,6 +356,7 @@
       "estimate_design_workload",
       "prepare_feedback_request",
       "refine_copywriting",
+      "optimize_action_path",
       "organize_information_hierarchy",
       "simulate_design_defense",
       "prepare_design_presentation",

@@ -500,6 +500,9 @@
     ) {
       return "handle_scope_change";
     }
+    if (isActionPathRequest(text)) {
+      return "optimize_action_path";
+    }
     if (isInformationHierarchyRequest(text, analysisBits)) {
       return "organize_information_hierarchy";
     }
@@ -728,6 +731,14 @@
     const designContext = /海报|封面|banner|Banner|版面|画面|构图|设计|视觉|主视觉|标题|KV|kv/.test(text);
     const asksAction = /怎么|如何|为什么|哪里|感觉|优化|提升|调整|处理|诊断|帮我看|应该/.test(text);
     return impactProblem && designContext && asksAction;
+  }
+
+  function isActionPathRequest(text) {
+    const actionElement = /二维码|扫码|按钮|CTA|行动入口|报名入口|购买入口|领取入口|预约入口|转化|点击|下单|报名|预约|领取|购买/.test(text);
+    const designContext = /海报|封面|banner|Banner|社媒|小红书|朋友圈|公众号|活动页|页面|画面|版面|设计|视觉|二维码|按钮|CTA|入口/.test(text);
+    const actionIntent = /放哪|放哪里|怎么放|摆哪|突出|引导|让.*(扫码|点击|报名|预约|领取|购买|下单)|怎么.*(扫码|点击|报名|预约|领取|购买|下单|转化)|不突兀|不抢|清楚|看得见|路径|动线/.test(text);
+    const hierarchyOnly = /排主次|信息层级|信息太多|卖点.*时间.*二维码/.test(text);
+    return actionElement && designContext && actionIntent && !hierarchyOnly;
   }
 
   function isMissingAssetRequest(text) {
@@ -1086,6 +1097,7 @@
       "estimate_design_workload",
       "prepare_feedback_request",
       "refine_copywriting",
+      "optimize_action_path",
       "organize_information_hierarchy",
       "simulate_design_defense",
       "prepare_design_presentation",
@@ -1157,6 +1169,7 @@
     if (analysis.behavior === "estimate_design_workload") return estimateDesignWorkload(state, project, analysis, now);
     if (analysis.behavior === "prepare_feedback_request") return prepareFeedbackRequest(state, project, analysis, now);
     if (analysis.behavior === "refine_copywriting") return refineCopywriting(project, analysis);
+    if (analysis.behavior === "optimize_action_path") return optimizeActionPath(project, analysis);
     if (analysis.behavior === "organize_information_hierarchy") return organizeInformationHierarchy(project, analysis);
     if (analysis.behavior === "simulate_design_defense") return simulateDesignDefense(state, project, analysis);
     if (analysis.behavior === "prepare_design_presentation") return generatePresentationScript(state, project, analysis);
@@ -3724,6 +3737,7 @@
         "estimate_design_workload",
         "prepare_feedback_request",
         "refine_copywriting",
+        "optimize_action_path",
         "organize_information_hierarchy",
         "simulate_design_defense",
         "prepare_design_presentation",
@@ -4814,6 +4828,89 @@
     if (social) return "手机预览里主标题、利益点、主体图必须清楚，细碎说明先删或弱化。";
     if (urgent) return "主信息清楚、尺寸正确、可导出，比多做一个风格更重要。";
     return "先保证目标、主信息、尺寸和格式正确，再优化风格细节。";
+  }
+
+  function optimizeActionPath(project, analysis) {
+    const plan = buildActionPathPlan(project, analysis.text);
+    const lines = [`行动入口设计：${project.name}`];
+    lines.push(`先判断：${plan.judge}`);
+    lines.push("用户路径：");
+    plan.path.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("版面处理：");
+    plan.layout.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push("CTA 写法：");
+    plan.ctas.forEach((item) => lines.push(`- ${item}`));
+    lines.push("不要这样做：");
+    plan.donts.forEach((item) => lines.push(`- ${item}`));
+    lines.push("交付前检查：");
+    plan.checks.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
+    lines.push(`下一步：${plan.nextStep}`);
+    project.portfolio.process = appendSentence(project.portfolio.process, `行动入口设计：${analysis.text}`);
+    return lines.join("\n");
+  }
+
+  function buildActionPathPlan(project, text) {
+    const combined = `${project.name} ${project.type} ${(project.deliverables || []).join("、")} ${project.goal || ""} ${project.scene || ""} ${text}`;
+    const hasQr = /二维码|扫码/.test(combined);
+    const hasButton = /按钮|CTA|点击/.test(combined);
+    const wantsSignup = /报名|预约/.test(combined);
+    const wantsOffer = /领取|优惠|福利|券/.test(combined);
+    const wantsPurchase = /购买|下单/.test(combined);
+    const path = [
+      "先看到利益：用户为什么要扫/点/报名，必须在入口附近有一句理由。",
+      "再看到入口：二维码、按钮或报名方式要靠近利益点，不能孤零零放角落。",
+      "最后知道动作：用动词告诉用户下一步，而不是只写一个二维码或链接。",
+    ];
+    const layout = [
+      "把行动入口放在视线路径末端：主标题/主视觉之后、规则说明之前。",
+      "入口周围留干净底色和安全距离，别压在复杂图片、纹理或花字上。",
+      "入口尺寸宁可稳一点，不要为了画面精致把二维码/按钮缩到需要找。",
+    ];
+    if (/小红书|朋友圈|社媒|封面|公众号/.test(combined)) {
+      layout.unshift("手机预览优先：入口要在小屏上能被一眼找到，细规则可以放正文或评论区。");
+    }
+    if (/Banner|banner|横幅/.test(combined)) {
+      layout.unshift("横版 Banner 只保留一个行动入口，按钮/利益点靠近主视觉中心，不要贴边。");
+    }
+    if (hasQr) {
+      layout.push("二维码下方加 4-8 个字说明，例如“扫码报名”“扫码领取”，避免用户不知道扫完做什么。");
+    }
+    if (hasButton) {
+      layout.push("按钮文案用动词 + 结果，例如“立即报名”“领取优惠”，不要只写“点击这里”。");
+    }
+    const ctas = buildActionPathCtas({ wantsSignup, wantsOffer, wantsPurchase, hasQr, hasButton });
+    const donts = [
+      "不要让二维码抢第一眼；第一眼应该是主题/利益，二维码是行动收口。",
+      "不要把入口放在视觉最边缘或复杂背景上，用户会漏看或扫不出来。",
+      "不要同时放多个同等级入口；有多个入口时，主入口最大，次入口弱化。",
+    ];
+    const checks = [
+      "3 秒测试：用户能不能先看懂利益，再找到入口？",
+      "真实设备测试：二维码能否扫码，按钮/链接是否跳到正确页面？",
+      "遮挡测试：入口周围有没有被贴纸、阴影、裁切、安全区遮住？",
+      "文案测试：CTA 是否包含明确动作，而不是只有名词？",
+    ];
+    if (/印刷|线下|门店|展架|包装|画册|折页/.test(combined)) {
+      checks.unshift("印刷前测试：用实际尺寸打印或预览二维码，确认远一点也能扫。");
+      layout.push("线下物料的二维码要留足白边，附近不要放太细的小字或低对比底纹。");
+    }
+    return {
+      judge: "行动入口不是最后随手塞二维码/按钮，而是让用户按“看见利益 -> 找到入口 -> 完成动作”的路径走完。",
+      path: Array.from(new Set(path)).slice(0, 4),
+      layout: Array.from(new Set(layout)).slice(0, 6),
+      ctas,
+      donts: Array.from(new Set(donts)).slice(0, 4),
+      checks: Array.from(new Set(checks)).slice(0, 5),
+      nextStep: "复制当前稿做一版“行动路径小稿”：只检查主题、利益点、入口三件事，先确认用户能不能顺着视线完成扫码/点击/报名。",
+    };
+  }
+
+  function buildActionPathCtas(flags) {
+    if (flags.wantsSignup) return flags.hasQr ? ["扫码报名", "立即预约", "查看活动名额"] : ["立即报名", "预约体验", "查看报名方式"];
+    if (flags.wantsOffer) return flags.hasQr ? ["扫码领取", "领取优惠", "查看福利"] : ["领取优惠", "立即参与", "查看专属福利"];
+    if (flags.wantsPurchase) return ["立即购买", "查看新品", "现在下单"];
+    if (flags.hasQr) return ["扫码了解", "扫码参与", "查看详情"];
+    return ["立即了解", "查看详情", "马上参与"];
   }
 
   function organizeInformationHierarchy(project, analysis) {
@@ -5930,6 +6027,7 @@
     estimateDesignWorkload,
     prepareFeedbackRequest,
     refineCopywriting,
+    optimizeActionPath,
     organizeInformationHierarchy,
     simulateDesignDefense,
     generatePresentationScript,
