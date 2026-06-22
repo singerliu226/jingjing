@@ -2229,6 +2229,18 @@ function freshState() {
 }
 
 {
+  const appSource = fs.readFileSync("app.js", "utf8");
+  const keepReplyBlock = appSource.match(/const localOnlyBehaviors = \[([\s\S]*?)\];/);
+  assert.ok(keepReplyBlock, "localOnlyBehaviors should exist");
+  ["optimize_readability", "recommend_color_system", "guide_design_software_operation", "solve_design_issue"].forEach((behavior) => {
+    assert.ok(!keepReplyBlock[1].includes(behavior), `${behavior} should use model reply instead of local-only template`);
+  });
+  ["complete_checklist", "snooze_task", "update_deadline", "update_project_name"].forEach((behavior) => {
+    assert.ok(keepReplyBlock[1].includes(behavior), `${behavior} should keep local deterministic reply`);
+  });
+}
+
+{
   const state = freshState();
   const result = Core.applyInput(
     state,
