@@ -424,7 +424,7 @@
       if (!response.ok || payload.error) throw new Error(payload.error || "千问请求失败");
       agentMessage.text = composeModelReply(visibleLocalReply, payload.reply);
     } catch (error) {
-      agentMessage.text = composeModelErrorReply(visibleLocalReply, error);
+      agentMessage.text = composeModelErrorReply(visibleLocalReply || fallbackReply, error);
     }
     render();
   }

@@ -215,6 +215,19 @@
       nextStep: "打开交付检查清单，先补尺寸和格式，再做导出。",
     },
     {
+      key: "state_owned_branding",
+      label: "政企宣传包装",
+      words: ["国企", "央企", "政企", "政府", "宣传包装", "宣传物料", "党建", "事业单位"],
+      judge: "国企/政企类宣传先追求可信、规范和清晰，不要一上来做得太潮或太商业促销。",
+      steps: [
+        "先确定主基调：稳重、可信、规范、服务感；色彩优先用品牌色、红金/蓝白等低风险体系。",
+        "信息层级要克制：主标题一句话讲清主题，政策/品牌背书放第二层，时间地点和行动信息放第三层。",
+        "图形语言避免花哨：用秩序网格、留白、几何底纹、建筑/团队/服务场景照片来建立正式感。",
+        "包装或印刷物要提前确认材质、出血、CMYK、字体授权和图片版权，避免后期交付返工。",
+      ],
+      nextStep: "先做一版“稳重规范”的黑白层级稿，再加品牌色和主视觉，不要先堆装饰。",
+    },
+    {
       key: "feedback_handling",
       label: "反馈处理",
       words: ["改来改去", "反馈很多", "意见很多", "客户一直改", "老板一直改", "怎么沟通", "怎么确认"],
@@ -795,12 +808,12 @@
     if (analysisBits.feedback) return "record_feedback";
     if (/改到|延期|延后|提前|截止|什么时候交|交期|ddl|deadline/i.test(text) && analysisBits.dueDate) return "update_deadline";
     if (/目标|受众|人群|场景|投放|用途|解决|给.*看|出现在哪里/.test(text)) return "update_brief";
-    if (analysisBits.deliverables && analysisBits.deliverables.length) return "update_deliverables";
 
     if (analysisBits.designIssue) return "solve_design_issue";
-    if (analysisBits.designerQuestion || /怎么|如何|为什么|哪里|建议|帮我看|优化|调整|处理|诊断|应该/.test(text)) {
+    if (analysisBits.designerQuestion || /怎么|如何|怎么样|为什么|哪里|建议|帮我看|优化|调整|处理|诊断|应该|要注意什么/.test(text)) {
       return "answer_design_question";
     }
+    if (analysisBits.deliverables && analysisBits.deliverables.length) return "update_deliverables";
     return "record_note";
   }
 
