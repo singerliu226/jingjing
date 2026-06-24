@@ -1133,10 +1133,11 @@
     const createsProject = /新项目|创建项目|项目|客户要|需要.*(海报|头图|封面|包装|banner|PPT)/i.test(clean) && deliverables.length > 1;
     const brief = extractBriefFields(clean);
     const meta = extractProjectMeta(clean);
+    const localMode = options.localMode === "legacy" ? "legacy" : "guardrail";
     const behavior =
-      options.localMode === "guardrail"
-        ? detectGuardrailBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion })
-        : detectBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion });
+      localMode === "legacy"
+        ? detectBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion })
+        : detectGuardrailBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion });
     const projectName = createsProject ? guessProjectName(clean, activeProject) : activeProject.name;
     const localAnalysis = {
       text: clean,
