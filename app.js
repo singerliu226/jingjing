@@ -459,8 +459,20 @@
   }
 
   function composeModelErrorReply(localReply, error) {
-    if (!localReply) return `千问暂时没有连上：${error.message}。可以先继续记录下一条，我会保留本地兜底。`;
-    return `已先整理：\n${localReply}\n\n千问暂时没有连上：${error.message}。本地整理结果已保留，可以继续记录下一条。`;
+    const hint = buildModelErrorHint(error);
+    if (!localReply) return `${hint} 可以先继续记录下一条；我不会把设计咨询误写进项目。`;
+    return `已先整理：\n${localReply}\n\n${hint} 本地整理结果已保留，可以继续记录下一条。`;
+  }
+
+  function buildModelErrorHint(error) {
+    const message = normalize(error && error.message);
+    if (/Load failed|Failed to fetch|NetworkError|abort/i.test(message)) {
+      return "本地千问服务没有连上：请确认 localhost:4174 服务正在运行，并且页面是从 http://localhost:4174 打开的。";
+    }
+    if (/DASHSCOPE_API_KEY|API Key|401|403|Unauthorized|Forbidden/i.test(message)) {
+      return "千问 API Key 没有配置好：请用 DASHSCOPE_API_KEY 启动本地服务。";
+    }
+    return `千问暂时没有连上：${message || "请求失败"}。`;
   }
 
   function getApiBase() {

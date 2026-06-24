@@ -2267,6 +2267,8 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(appSource.includes("const visibleLocalReply = getVisibleLocalReply(fallbackReply, analysis)"));
   assert.ok(appSource.includes("composeModelReply(visibleLocalReply, payload.reply)"));
   assert.ok(appSource.includes("composeModelErrorReply(visibleLocalReply, error)"));
+  assert.ok(appSource.includes("本地千问服务没有连上"));
+  assert.ok(appSource.includes("DASHSCOPE_API_KEY"));
   assert.ok(!appSource.includes("composeModelErrorReply(visibleLocalReply || fallbackReply, error)"));
   assert.ok(!appSource.includes("agentMessage.text = payload.reply || fallbackReply"));
   assert.ok(appSource.includes("localReply: fallbackReply"));
