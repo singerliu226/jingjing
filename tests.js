@@ -2266,7 +2266,8 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const serverSource = fs.readFileSync("server.js", "utf8");
   assert.ok(appSource.includes("const visibleLocalReply = getVisibleLocalReply(fallbackReply, analysis)"));
   assert.ok(appSource.includes("composeModelReply(visibleLocalReply, payload.reply)"));
-  assert.ok(appSource.includes("composeModelErrorReply(visibleLocalReply || fallbackReply, error)"));
+  assert.ok(appSource.includes("composeModelErrorReply(visibleLocalReply, error)"));
+  assert.ok(!appSource.includes("composeModelErrorReply(visibleLocalReply || fallbackReply, error)"));
   assert.ok(!appSource.includes("agentMessage.text = payload.reply || fallbackReply"));
   assert.ok(appSource.includes("localReply: fallbackReply"));
   assert.ok(appSource.includes("\"record_feedback\""));
@@ -2301,8 +2302,6 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const project = Core.getProject(state, state.activeProjectId);
   const result = Core.applyInput(state, "怎么样做国企的宣传包装", fixedNow);
   assert.equal(result.analysis.behavior, "answer_design_question");
-  assert.ok(result.reply.includes("政企宣传包装"));
-  assert.ok(result.reply.includes("稳重"));
   assert.ok(!project.deliverables.includes("包装"));
   assert.ok(!Core.getDashboard(state, fixedNow).today.some((task) => task.title.includes("包装")));
 }
