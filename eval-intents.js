@@ -61,9 +61,25 @@ function assertEntities(id, analysis, expectedEntities = {}) {
   }
 }
 
+function assertEffects(id, state, expectedEffects = {}) {
+  const project = Core.getProject(state, state.activeProjectId);
+  if (expectedEffects.activeProjectName) assert.equal(project.name, expectedEffects.activeProjectName, `${id}: activeProjectName`);
+  if (expectedEffects.projectStatus) assert.equal(project.status, expectedEffects.projectStatus, `${id}: projectStatus`);
+  if (expectedEffects.projectDueDate) assert.equal(project.dueDate, expectedEffects.projectDueDate, `${id}: projectDueDate`);
+  if (expectedEffects.feedbackRecorded) {
+    assert.ok(state.feedback.some((item) => item.projectId === project.id), `${id}: expected feedback to be recorded`);
+  }
+  if (expectedEffects.taskCreated) {
+    assert.ok(state.tasks.some((task) => task.projectId === project.id && task.id !== "t-first"), `${id}: expected task to be created`);
+  }
+  if (expectedEffects.checklistCreated) {
+    assert.ok(state.checklist.some((item) => item.projectId === project.id), `${id}: expected checklist to be created`);
+  }
+}
+
 assert.equal(suite.schemaVersion, "llm-intent-evals-v1");
 assert.ok(Array.isArray(suite.samples), "samples must be an array");
-assert.ok(suite.samples.length >= 30, "intent eval seed set should contain at least 30 samples");
+assert.ok(suite.samples.length >= 50, "intent eval seed set should contain at least 50 samples");
 
 const seen = new Set();
 suite.samples.forEach((sample) => {
@@ -80,6 +96,7 @@ suite.samples.forEach((sample) => {
   assert.equal(result.analysis.modelIntent.source, "model", `${sample.id}: model source`);
   assertEntities(sample.id, result.analysis, sample.expected.entities || {});
   includesAll(result.analysis.missing || [], asArray(sample.expected.missingContains), "missing", sample.id);
+  assertEffects(sample.id, state, sample.expected.effects || {});
 });
 
 console.log(`Intent eval samples passed: ${suite.samples.length}`);

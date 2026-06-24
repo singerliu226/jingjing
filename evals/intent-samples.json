@@ -351,6 +351,245 @@
         },
         "missingContains": []
       }
+    },
+    {
+      "id": "feedback-005",
+      "text": "群里运营说主视觉太素，下周三前改一版，朋友圈海报先出。",
+      "expected": {
+        "intent": "record_feedback",
+        "entities": {
+          "source": "运营",
+          "dueDate": "2026-06-17",
+          "deliverables": ["朋友圈海报"],
+          "feedback": {
+            "rawIncludes": ["主视觉太素"],
+            "actionIncludes": ["主视觉", "强化"]
+          }
+        },
+        "missingContains": [],
+        "effects": {
+          "feedbackRecorded": true,
+          "taskCreated": true
+        }
+      }
+    },
+    {
+      "id": "project-003",
+      "text": "新活儿：618 返场促销，要公众号头图和店内立牌，6 月 20 号交，主打会员复购。",
+      "expected": {
+        "intent": "create_project",
+        "entities": {
+          "projectName": "618 返场促销",
+          "projectType": "活动物料",
+          "dueDate": "2026-06-20",
+          "goal": "主打会员复购",
+          "deliverables": ["公众号头图", "店内立牌"]
+        },
+        "missingContains": ["尺寸", "交付格式"],
+        "effects": {
+          "activeProjectName": "618 返场促销",
+          "checklistCreated": true
+        }
+      }
+    },
+    {
+      "id": "brief-003",
+      "text": "这次主要给老会员看，投放在门店屏幕和朋友圈，目标是让他们回来买第二杯。",
+      "expected": {
+        "intent": "update_brief",
+        "entities": {
+          "goal": "让老会员回来买第二杯",
+          "audience": "老会员",
+          "scene": "门店屏幕和朋友圈"
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "specs-001",
+      "text": "尺寸先按 A4 竖版做，印刷要 pdf 和源文件。",
+      "expected": {
+        "intent": "update_project_specs",
+        "entities": {
+          "specs": ["A4 竖版"],
+          "formats": ["pdf", "源文件"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "progress-002",
+      "text": "首版已经发给老板了，现在等反馈。",
+      "expected": {
+        "intent": "waiting_confirmation",
+        "entities": {
+          "source": "老板",
+          "status": "waiting"
+        },
+        "missingContains": [],
+        "effects": {
+          "projectStatus": "waiting",
+          "taskCreated": true
+        }
+      }
+    },
+    {
+      "id": "version-001",
+      "text": "V2 改了主标题层级和产品图，客户确认了。",
+      "expected": {
+        "intent": "record_version",
+        "entities": {
+          "source": "客户"
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "deadline-003",
+      "text": "DDL 提前到今天下班前。",
+      "expected": {
+        "intent": "update_deadline",
+        "entities": {
+          "dueDate": "2026-06-12"
+        },
+        "missingContains": [],
+        "effects": {
+          "projectDueDate": "2026-06-12"
+        }
+      }
+    },
+    {
+      "id": "question-009",
+      "text": "主标题、活动时间、二维码都很重要，信息层级怎么排？",
+      "expected": {
+        "intent": "organize_information_hierarchy",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-010",
+      "text": "二维码放哪里才不抢画面，但用户能一眼扫到？",
+      "expected": {
+        "intent": "optimize_action_path",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-011",
+      "text": "画面太空，但加东西又容易乱，留白怎么控制？",
+      "expected": {
+        "intent": "balance_visual_density",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-012",
+      "text": "产品图和背景像贴上去的，怎么融合得自然一点？",
+      "expected": {
+        "intent": "integrate_composite_assets",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "question-013",
+      "text": "这张网上找的图片有水印，而且有点糊，客户项目能不能用？",
+      "expected": {
+        "intent": "audit_asset_license",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "communication-004",
+      "text": "客户临时又加一张小红书封面，明天也要，怎么跟主管说时间不够？",
+      "expected": {
+        "intent": "handle_scope_change",
+        "entities": {
+          "source": "客户",
+          "dueDate": "2026-06-13",
+          "deliverables": ["小红书封面"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "communication-005",
+      "text": "客户一直催进度，我现在还在改主视觉，怎么回复比较稳？",
+      "expected": {
+        "intent": "report_progress_status",
+        "entities": {
+          "source": "客户"
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "communication-006",
+      "text": "现在来不及了，能不能先交海报，其他物料后补，怎么跟客户说？",
+      "expected": {
+        "intent": "negotiate_deadline_scope",
+        "entities": {
+          "source": "客户",
+          "deliverables": ["海报"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "planning-003",
+      "text": "帮我估一下这个海报从初稿到交付大概要多久。",
+      "expected": {
+        "intent": "estimate_design_workload",
+        "entities": {
+          "deliverables": ["海报"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "delivery-004",
+      "text": "源文件命名和打包怎么整理给客户？",
+      "expected": {
+        "intent": "organize_delivery_files",
+        "entities": {
+          "source": "客户",
+          "formats": ["源文件"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "delivery-005",
+      "text": "Figma 交接给前端，要标哪些尺寸和状态？",
+      "expected": {
+        "intent": "prepare_design_handoff",
+        "entities": {
+          "formats": ["Figma"]
+        },
+        "missingContains": []
+      }
+    },
+    {
+      "id": "portfolio-003",
+      "text": "这个项目结果还不错，转化比之前高，帮我记录成果。",
+      "expected": {
+        "intent": "record_project_outcome",
+        "entities": {},
+        "missingContains": []
+      }
+    },
+    {
+      "id": "growth-001",
+      "text": "我最近总卡在字体和版式，作品集还缺哪些能力？",
+      "expected": {
+        "intent": "generate_growth_profile",
+        "entities": {},
+        "missingContains": []
+      }
     }
   ]
 }
