@@ -42,17 +42,13 @@
 
         <section class="sidebar-section sidebar-bottom">
           <div class="section-title">
-            <h2>更多</h2>
+            <h2>沉淀</h2>
           </div>
-          <button class="view-link is-active" data-panel="workbench" type="button">
-            <svg viewBox="0 0 24 24"><path d="M4 5h16v6H4zM4 15h7v4H4zM15 15h5v4h-5z"/></svg>
-            工作台
-          </button>
-          <button class="view-link" data-panel="portfolio" type="button">
+          <button class="view-link secondary-view-link" data-panel="portfolio" type="button">
             <svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V5h8v2"/></svg>
             项目归档
           </button>
-          <button class="view-link" data-panel="library" type="button">
+          <button class="view-link secondary-view-link" data-panel="library" type="button">
             <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM16 4v4h4M8 12h8M8 16h6"/></svg>
             设计词典
           </button>
@@ -71,8 +67,8 @@
           <section class="chat-panel conversation-panel" aria-label="和小画桌对话">
             <div class="conversation-head">
               <div>
-                <h3>和小画桌说</h3>
-                <p>需求、反馈、进度、截止时间都可以直接丢进来。</p>
+                <h3>先把今天的事说给小画桌</h3>
+                <p>需求、反馈、进度和截止时间都可以直接说，菁菁不用先想格式。</p>
               </div>
               <div class="activity-tools" aria-label="常用整理">
                 <button class="mini-action" id="daily-summary-btn" type="button">日报</button>
@@ -125,13 +121,13 @@
                   <button class="text-button" id="save-project-btn" type="button">已自动保存</button>
                 </div>
                 <form class="project-form" id="project-form">
-                  <label>这是什么项目<input id="project-name-input" type="text" /></label>
-                  <label>大概是哪类设计<input id="project-type-input" type="text" placeholder="海报 / 品牌 / 社媒图" /></label>
-                  <label>什么时候交<input id="project-due-input" type="date" /></label>
-                  <label>这次要解决什么<textarea id="project-goal-input" rows="2"></textarea></label>
+                  <label>项目<input id="project-name-input" type="text" /></label>
+                  <label>类型<input id="project-type-input" type="text" placeholder="海报 / 品牌 / 社媒图" /></label>
+                  <label>截止<input id="project-due-input" type="date" /></label>
+                  <label>目标<textarea id="project-goal-input" rows="2" placeholder="这次要让谁看懂什么、做什么"></textarea></label>
                   <label>主要给谁看<textarea id="project-audience-input" rows="2"></textarea></label>
                   <label>会出现在哪里<textarea id="project-scene-input" rows="2"></textarea></label>
-                  <label>最后要交哪些图<input id="project-deliverables-input" type="text" placeholder="例如：海报、公众号头图、小红书封面" /></label>
+                  <label>交付物<input id="project-deliverables-input" type="text" placeholder="例如：海报、公众号头图、小红书封面" /></label>
                 </form>
               </section>
 

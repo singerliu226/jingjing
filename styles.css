@@ -149,6 +149,7 @@ svg {
 .sidebar-bottom {
   margin-top: auto;
   flex: 0 0 auto;
+  gap: 8px;
 }
 
 .section-title,
@@ -309,6 +310,12 @@ svg {
   color: var(--teal-dark);
 }
 
+.secondary-view-link {
+  min-height: 32px;
+  border: 1px solid #e5ebe6;
+  background: #fbfcfa;
+}
+
 .workspace {
   display: flex;
   flex-direction: column;
@@ -444,7 +451,7 @@ kbd {
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(520px, 1fr) minmax(340px, 380px);
+  grid-template-columns: minmax(620px, 1fr) minmax(320px, 360px);
   gap: 16px;
   min-height: 0;
   flex: 1;
@@ -484,8 +491,8 @@ kbd {
 }
 
 .conversation-panel {
-  gap: 14px;
-  padding: 18px;
+  gap: 12px;
+  padding: 16px;
 }
 
 .conversation-head,
@@ -505,7 +512,7 @@ kbd {
 }
 
 .conversation-head h3 {
-  font-size: 26px;
+  font-size: 24px;
   line-height: 1.18;
 }
 
@@ -535,7 +542,7 @@ kbd {
 
 .task-card {
   display: flex;
-  flex: 0 0 360px;
+  flex: 0 0 260px;
   flex-direction: column;
   overflow: hidden;
   padding: 14px;
@@ -568,8 +575,8 @@ kbd {
 }
 
 .task-card .plan-list {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid #e6ebe7;
 }
 
@@ -993,13 +1000,13 @@ kbd {
 
 .note-card .project-form {
   flex: 0 0 auto;
-  gap: 7px;
+  gap: 8px;
   overflow: visible;
 }
 
 .note-card .project-form label:nth-child(5),
 .note-card .project-form label:nth-child(6) {
-  display: flex;
+  display: none;
 }
 
 .project-form label {
@@ -1024,7 +1031,7 @@ kbd {
 
 .note-card.assistant-panel .project-form label:nth-child(5),
 .note-card.assistant-panel .project-form label:nth-child(6) {
-  display: flex;
+  display: none;
 }
 
 .project-form input,
@@ -1043,8 +1050,8 @@ kbd {
 
 .project-form textarea {
   resize: vertical;
-  min-height: 42px;
-  max-height: 82px;
+  min-height: 52px;
+  max-height: 92px;
 }
 
 .project-form input:focus,
@@ -1442,7 +1449,7 @@ kbd {
   }
 
   .task-card {
-    flex-basis: 330px;
+    flex-basis: 280px;
   }
 
   .insight-card {

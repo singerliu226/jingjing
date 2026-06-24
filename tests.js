@@ -2229,6 +2229,18 @@ function freshState() {
 }
 
 {
+  const indexSource = fs.readFileSync("index.html", "utf8");
+  const stylesSource = fs.readFileSync("styles.css", "utf8");
+  assert.ok(indexSource.includes("先把今天的事说给小画桌"));
+  assert.ok(indexSource.includes("<h2>沉淀</h2>"));
+  assert.ok(!indexSource.includes("<h2>更多</h2>"));
+  assert.ok(!indexSource.includes("data-panel=\"workbench\""));
+  assert.ok(indexSource.includes("secondary-view-link"));
+  assert.ok(stylesSource.includes(".secondary-view-link"));
+  assert.ok(stylesSource.includes("minmax(620px, 1fr) minmax(320px, 360px)"));
+}
+
+{
   const appSource = fs.readFileSync("app.js", "utf8");
   const keepReplyBlock = appSource.match(/const localOnlyBehaviors = \[([\s\S]*?)\];/);
   assert.ok(keepReplyBlock, "localOnlyBehaviors should exist");
