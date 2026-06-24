@@ -6,6 +6,8 @@ const path = require("node:path");
 const PORT = Number(process.env.PORT || 4174);
 const API_KEY = process.env.DASHSCOPE_API_KEY || "";
 const MODEL = process.env.DASHSCOPE_MODEL || "qwen-plus";
+const VISION_MODEL = process.env.DASHSCOPE_VISION_MODEL || "qwen-vl-plus";
+const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 12_000_000);
 const ROOT = __dirname;
 const INTENT_BEHAVIORS = [
   "ask_plan",
@@ -120,7 +122,7 @@ function readBody(req) {
     let body = "";
     req.on("data", (chunk) => {
       body += chunk;
-      if (body.length > 1_000_000) {
+      if (body.length > MAX_BODY_BYTES) {
         reject(new Error("Request body is too large."));
         req.destroy();
       }
@@ -151,11 +153,13 @@ function serveStatic(req, res) {
   });
 }
 
-function buildMessages(input) {
+function buildMessages(input, attachments = []) {
   const project = input.project || {};
   const recentMessages = Array.isArray(input.recentMessages) ? input.recentMessages.slice(-8) : [];
   const dashboard = input.dashboard || {};
   const localReply = String(input.localReply || "").slice(0, 2000);
+  const imageAttachments = attachments.filter((attachment) => attachment.kind === "image");
+  const textAttachments = attachments.filter((attachment) => attachment.kind === "text");
   const projectWorkflowInstruction =
     input.intent === "project_workflow"
       ? [
@@ -181,6 +185,7 @@ function buildMessages(input) {
     "如果用户输入的是反馈，先翻译成设计动作；如果是需求，先整理 brief；如果是进度，帮她更新复盘口径。",
     "不要编造已完成的文件或真实业务结果。没有信息时直接说需要补充什么。",
     "不要编造具体时刻、人员、确认结果、业务效果或文件名；除非用户明确给出。",
+    imageAttachments.length ? "用户可能上传设计图、参考图或截图。你要像资深平面设计师一样看图：从信息层级、构图、字体、色彩、留白、视觉锚点、品牌一致性、可读性和交付风险给出具体判断，不要只描述图片内容。" : "",
     input.intent === "project_workflow" ? "回复控制在 6-10 行，不使用 emoji，不使用 Markdown 表格。" : "回复短一点，像一位靠谱设计前辈在旁边提醒，不使用 emoji，不使用 Markdown 表格。",
     localReply ? "本地工作台已经先完成状态更新；你只补充更具体的判断、下一步和风险，不要重复声明“已记录/已更新”。" : "",
     formatInstruction,
@@ -199,6 +204,10 @@ function buildMessages(input) {
     `今日任务数：${dashboard.todayCount || 0}`,
     `等待确认数：${dashboard.waitingCount || 0}`,
   ].join("\n");
+  const attachmentText = textAttachments.length
+    ? `\n\n用户上传的文本文件：\n${textAttachments.map((item) => `【${item.name}】\n${item.text}`).join("\n\n")}`
+    : "";
+  const finalUserContent = buildUserContent(String(input.message || "").slice(0, 4000) + attachmentText, imageAttachments);
   return [
     { role: "system", content: system },
     { role: "user", content: `这是当前工作上下文：\n${context}` },
@@ -207,8 +216,40 @@ function buildMessages(input) {
       role: message.role === "agent" ? "assistant" : "user",
       content: String(message.text || "").slice(0, 1200),
     })),
-    { role: "user", content: String(input.message || "").slice(0, 4000) },
+    { role: "user", content: finalUserContent },
   ];
+}
+
+function buildUserContent(text, imageAttachments) {
+  if (!imageAttachments.length) return text;
+  return [
+    { type: "text", text },
+    ...imageAttachments.map((attachment) => ({
+      type: "image_url",
+      image_url: { url: attachment.dataUrl },
+    })),
+  ];
+}
+
+function normalizeAttachments(attachments) {
+  if (!Array.isArray(attachments)) return [];
+  return attachments
+    .map((attachment) => {
+      const kind = attachment.kind === "text" ? "text" : attachment.kind === "image" ? "image" : "";
+      const name = String(attachment.name || "未命名附件").slice(0, 80);
+      const mimeType = String(attachment.mimeType || "").slice(0, 80);
+      if (kind === "image") {
+        const dataUrl = String(attachment.dataUrl || "");
+        if (!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(dataUrl)) return null;
+        return { kind, name, mimeType, dataUrl };
+      }
+      if (kind === "text") {
+        return { kind, name, mimeType, text: String(attachment.text || "").slice(0, 12000) };
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .slice(0, 4);
 }
 
 function formatProjectTasks(tasks) {
@@ -264,11 +305,13 @@ function buildIntentMessages(input) {
 
 function callQwen(payload) {
   return new Promise((resolve, reject) => {
+    const attachments = normalizeAttachments(payload.attachments);
+    const hasImage = attachments.some((attachment) => attachment.kind === "image");
     const body = JSON.stringify({
-      model: MODEL,
-      messages: buildMessages(payload),
+      model: hasImage ? VISION_MODEL : MODEL,
+      messages: buildMessages(payload, attachments),
       temperature: 0.25,
-      max_tokens: 520,
+      max_tokens: hasImage ? 900 : 520,
     });
     const req = https.request(
       {
@@ -428,7 +471,9 @@ async function handleChat(req, res) {
     const body = await readBody(req);
     const payload = JSON.parse(body || "{}");
     const reply = await callQwen(payload);
-    sendJson(res, 200, { reply, model: MODEL });
+    const attachments = normalizeAttachments(payload.attachments);
+    const hasImage = attachments.some((attachment) => attachment.kind === "image");
+    sendJson(res, 200, { reply, model: hasImage ? VISION_MODEL : MODEL });
   } catch (error) {
     sendJson(res, 500, { error: error.message || "Qwen request failed." });
   }
@@ -465,7 +510,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (req.url.startsWith("/api/health")) {
-    sendJson(res, 200, { ok: true, model: MODEL, hasKey: Boolean(API_KEY) });
+    sendJson(res, 200, { ok: true, model: MODEL, visionModel: VISION_MODEL, hasKey: Boolean(API_KEY) });
     return;
   }
   serveStatic(req, res);
@@ -474,4 +519,5 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`菁菁小画桌 running at http://localhost:${PORT}`);
   console.log(`Qwen model: ${MODEL}${API_KEY ? "" : " (missing DASHSCOPE_API_KEY)"}`);
+  console.log(`Qwen vision model: ${VISION_MODEL}`);
 });

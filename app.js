@@ -8,6 +8,8 @@
   let currentView = "workbench";
   let projectAnalysisTimer = 0;
   let projectAnalysisRun = 0;
+  let pendingAttachments = [];
+  const transientAttachmentPreviews = new Map();
 
   const nodes = {
     workbenchView: document.querySelector("#workbench-view"),
@@ -15,6 +17,9 @@
     chatStream: document.querySelector("#chat-stream"),
     composer: document.querySelector("#composer"),
     messageInput: document.querySelector("#message-input"),
+    attachmentInput: document.querySelector("#attachment-input"),
+    attachButton: document.querySelector("#attach-button"),
+    attachmentDock: document.querySelector("#attachment-dock"),
     activeProjectName: document.querySelector("#active-project-name"),
     activeProjectType: document.querySelector("#active-project-type"),
     projectTaskList: document.querySelector("#project-task-list"),
@@ -111,6 +116,7 @@
               textContent: `${message.role === "agent" ? "小画桌" : "菁菁"} · ${formatTime(message.createdAt)}`,
             }),
             el("div", { className: "bubble", innerHTML: formatBubble(message.text) }),
+            renderMessageAttachments(message),
           ])
         );
         return wrapper;
@@ -264,6 +270,54 @@
     return [el("div", { className: "empty-state", textContent: text })];
   }
 
+  function renderMessageAttachments(message) {
+    const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+    if (!attachments.length) return el("div", { className: "message-attachments is-empty" });
+    const previews = transientAttachmentPreviews.get(message.id) || [];
+    return el(
+      "div",
+      { className: "message-attachments" },
+      attachments.map((attachment) => {
+        const preview = previews.find((item) => item.id === attachment.id);
+        if (attachment.kind === "image" && preview && preview.dataUrl) {
+          return el("figure", { className: "message-attachment image-attachment" }, [
+            el("img", { src: preview.dataUrl, alt: attachment.name }),
+            el("figcaption", { textContent: attachment.name }),
+          ]);
+        }
+        return el("span", { className: "message-attachment file-attachment", textContent: attachment.name });
+      })
+    );
+  }
+
+  function renderAttachmentDock() {
+    if (!pendingAttachments.length) {
+      nodes.attachmentDock.replaceChildren();
+      nodes.attachmentDock.classList.remove("is-active");
+      return;
+    }
+    nodes.attachmentDock.classList.add("is-active");
+    nodes.attachmentDock.replaceChildren(
+      ...pendingAttachments.map((attachment) => {
+        const item = el("div", { className: `draft-attachment ${attachment.kind}` });
+        if (attachment.kind === "image") item.append(el("img", { src: attachment.dataUrl, alt: attachment.name }));
+        item.append(
+          el("span", { textContent: attachment.name }),
+          el("button", {
+            type: "button",
+            title: "移除附件",
+            textContent: "×",
+            onclick: () => {
+              pendingAttachments = pendingAttachments.filter((itemAttachment) => itemAttachment.id !== attachment.id);
+              renderAttachmentDock();
+            },
+          })
+        );
+        return item;
+      })
+    );
+  }
+
   function uniqueTasks(tasks) {
     const seen = new Set();
     return tasks.filter((task) => {
@@ -406,16 +460,40 @@
   }
 
   async function submitMessage(text) {
-    const clean = normalize(text);
+    const attachmentsToSend = pendingAttachments.slice();
+    const clean = normalize(text) || (attachmentsToSend.length ? "请帮我分析这张设计图，指出主要问题和下一步怎么改。" : "");
     if (!clean) return;
     const modelIntent = await askQwenIntent(clean);
     const previousMessageCount = state.messages.length;
     const result = Core.applyInput(state, clean, new Date(), { intent: modelIntent, localMode: "guardrail" });
+    attachFilesToUserMessage(previousMessageCount, attachmentsToSend);
     applyProjectAutofill(clean, modelIntent, result ? result.analysis : null);
     nodes.messageInput.value = "";
+    pendingAttachments = [];
+    renderAttachmentDock();
     render();
     if (result && shouldKeepLocalReply(result.analysis)) return;
-    await askQwen(clean, previousMessageCount, result ? result.analysis : null);
+    await askQwen(clean, previousMessageCount, result ? result.analysis : null, attachmentsToSend);
+  }
+
+  function attachFilesToUserMessage(messageIndex, attachments) {
+    if (!attachments.length) return;
+    const message = state.messages[messageIndex];
+    if (!message) return;
+    message.attachments = attachments.map(({ id, kind, name, mimeType, size, text }) => ({
+      id,
+      kind,
+      name,
+      mimeType,
+      size,
+      text: kind === "text" ? text : "",
+    }));
+    transientAttachmentPreviews.set(
+      message.id,
+      attachments
+        .filter((attachment) => attachment.kind === "image")
+        .map((attachment) => ({ id: attachment.id, dataUrl: attachment.dataUrl }))
+    );
   }
 
   function applyProjectAutofill(message, modelIntent, analysis) {
@@ -635,7 +713,7 @@
     return localOnlyBehaviors.includes(analysis.behavior);
   }
 
-  async function askQwen(message, previousMessageCount, analysis) {
+  async function askQwen(message, previousMessageCount, analysis, attachments = []) {
     const agentMessage = state.messages[previousMessageCount + 1];
     if (!agentMessage || agentMessage.role !== "agent") return;
     const fallbackReply = agentMessage.text;
@@ -651,6 +729,14 @@
         body: JSON.stringify({
           message,
           localReply: fallbackReply,
+          attachments: attachments.map((attachment) => ({
+            kind: attachment.kind,
+            name: attachment.name,
+            mimeType: attachment.mimeType,
+            size: attachment.size,
+            dataUrl: attachment.kind === "image" ? attachment.dataUrl : "",
+            text: attachment.kind === "text" ? attachment.text : "",
+          })),
           project,
           dashboard: {
             todayCount: dashboard.today.length,
@@ -720,6 +806,47 @@
   function getApiBase() {
     if (window.location.protocol === "http:" || window.location.protocol === "https:") return "";
     return window.localStorage.getItem("design-desk-api-base") || "http://localhost:4174";
+  }
+
+  function handleAttachmentFiles(files) {
+    const nextFiles = Array.from(files || []).slice(0, Math.max(0, 4 - pendingAttachments.length));
+    if (!nextFiles.length) return;
+    Promise.all(nextFiles.map(readAttachmentFile))
+      .then((attachments) => {
+        pendingAttachments = pendingAttachments.concat(attachments.filter(Boolean)).slice(0, 4);
+        renderAttachmentDock();
+      })
+      .catch((error) => {
+        addAgentMessage(`这个文件暂时没读进去：${error.message || "请换成 PNG、JPG、TXT 或 MD 再试。"}`);
+      })
+      .finally(() => {
+        nodes.attachmentInput.value = "";
+      });
+  }
+
+  function readAttachmentFile(file) {
+    const isImage = file.type.startsWith("image/");
+    const isText = /^text\/|json|csv|markdown/.test(file.type) || /\.(txt|md|csv|json)$/i.test(file.name);
+    const maxSize = isImage ? 6 * 1024 * 1024 : 300 * 1024;
+    if (!isImage && !isText) return Promise.reject(new Error("这一版先支持图片、TXT、MD、CSV、JSON。"));
+    if (file.size > maxSize) return Promise.reject(new Error(isImage ? "图片不要超过 6MB。" : "文本文件不要超过 300KB。"));
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("文件读取失败。"));
+      reader.onload = () => {
+        const base = {
+          id: `att-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          kind: isImage ? "image" : "text",
+          name: file.name,
+          mimeType: file.type || (isImage ? "image/png" : "text/plain"),
+          size: file.size,
+        };
+        if (isImage) resolve({ ...base, dataUrl: String(reader.result || "") });
+        else resolve({ ...base, text: String(reader.result || "").slice(0, 12000) });
+      };
+      if (isImage) reader.readAsDataURL(file);
+      else reader.readAsText(file);
+    });
   }
 
   function fillQuickTemplate(template) {
@@ -1146,6 +1273,9 @@
   nodes.addTaskBtn.addEventListener("click", addProjectTask);
   nodes.deleteProjectBtn.addEventListener("click", deleteActiveProject);
   nodes.projectForm.addEventListener("input", updateActiveProjectFromForm);
+  nodes.attachButton.addEventListener("click", () => nodes.attachmentInput.click());
+  nodes.attachmentInput.addEventListener("change", (event) => handleAttachmentFiles(event.target.files));
 
   render();
+  renderAttachmentDock();
 })();

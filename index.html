@@ -68,8 +68,13 @@
               <button class="prompt-chip" data-template="交付前我需要确认哪些尺寸和格式？" type="button">交付前确认什么？</button>
             </div>
 
+            <div class="attachment-dock" id="attachment-dock" aria-live="polite"></div>
             <form class="composer" id="composer">
-              <textarea id="message-input" rows="2" placeholder="输入你想聊的问题，或记录需求 / 反馈 / 进度。例如：主管说画面太暗，要更年轻一点，明天下午前改。"></textarea>
+              <input id="attachment-input" type="file" accept="image/*,.txt,.md,.csv,.json" multiple hidden />
+              <button class="attach-button" id="attach-button" type="button" title="上传图片或文件">
+                <svg viewBox="0 0 24 24"><path d="M21.4 11.6 12 21a6 6 0 0 1-8.5-8.5l10-10a4 4 0 0 1 5.7 5.7L9.1 18.3a2 2 0 1 1-2.8-2.8l9.3-9.3"/></svg>
+              </button>
+              <textarea id="message-input" rows="2" placeholder="输入问题，或上传设计图让我看。比如：这张海报哪里不够高级？"></textarea>
               <button class="send-button" type="submit" title="发送">
                 <svg viewBox="0 0 24 24"><path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/></svg>
               </button>
