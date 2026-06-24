@@ -39,6 +39,34 @@ function applyInput(state, text, now = fixedNow, options = {}) {
 
 {
   const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  applyInput(
+    state,
+    "怎么做酒吧海报",
+    fixedNow,
+    {
+      intent: {
+        schemaVersion: "llm-intent-v1",
+        intent: "record_note",
+        confidence: 0.88,
+        summary: "用户想做酒吧海报。",
+        entities: {
+          projectName: "酒吧海报",
+          projectType: "海报",
+          deliverables: ["海报"],
+          requirements: "需要先确认酒吧名称、投放位置、主信息和视觉调性。",
+        },
+        missing: ["酒吧名称", "投放位置", "主信息"],
+        nextAction: "先补齐酒吧海报的基础信息。",
+        reason: "用户提到了明确设计对象。",
+      },
+    }
+  );
+  assert.equal(project.requirements, "需要先确认酒吧名称、投放位置、主信息和视觉调性。");
+}
+
+{
+  const state = freshState();
   applyInput(state, "老板希望画面更高级也更活泼，今天下班前改。", fixedNow);
   const active = Core.getProject(state, state.activeProjectId);
   assert.ok(active.risks.includes("反馈调性可能冲突，需要确认优先级"));
@@ -2242,6 +2270,9 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const stylesSource = fs.readFileSync("styles.css", "utf8");
   assert.ok(indexSource.includes("菁菁，和小画桌慢慢说"));
   assert.ok(indexSource.includes("<h3>项目详情</h3>"));
+  assert.ok(indexSource.includes("从聊天里自动补齐"));
+  assert.ok(indexSource.includes("更多项目信息"));
+  assert.ok(indexSource.includes("删除这个项目"));
   assert.ok(indexSource.includes("id=\"project-task-list\""));
   assert.ok(indexSource.includes("prompt-chip"));
   assert.ok(!indexSource.includes("id=\"daily-summary-btn\""));
@@ -2254,6 +2285,8 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(!indexSource.includes("data-panel=\"workbench\""));
   assert.ok(stylesSource.includes(".project-detail-card"));
   assert.ok(stylesSource.includes(".prompt-chip"));
+  assert.ok(stylesSource.includes(".context-status"));
+  assert.ok(stylesSource.includes(".detail-more"));
   assert.ok(stylesSource.includes("minmax(620px, 1fr) minmax(360px, 420px)"));
 }
 
@@ -2280,6 +2313,9 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(!appSource.includes("composeModelErrorReply(visibleLocalReply || fallbackReply, error)"));
   assert.ok(!appSource.includes("agentMessage.text = payload.reply || fallbackReply"));
   assert.ok(appSource.includes("localReply: fallbackReply"));
+  assert.ok(appSource.includes("applyProjectAutofill(clean, modelIntent"));
+  assert.ok(appSource.includes("buildProjectAutofill(message, modelIntent, analysis)"));
+  assert.ok(appSource.includes("已从对话补齐"));
   assert.ok(appSource.includes("function getProjectContext(projectId)"));
   assert.ok(appSource.includes("project.requirements"));
   assert.ok(appSource.includes("project.progressNote"));
@@ -2292,6 +2328,8 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(serverSource.includes("需求细节："));
   assert.ok(serverSource.includes("当前进度："));
   assert.ok(serverSource.includes("项目任务："));
+  assert.ok(serverSource.includes("requirements、progressNote"));
+  assert.ok(serverSource.includes("tasks 结构"));
   assert.ok(serverSource.includes("格式固定为：项目判断、今日先做、后续步骤、需要确认、交付风险"));
   assert.ok(!serverSource.includes("格式固定为：已记录、设计动作、下一步、需要确认、交付风险"));
 }

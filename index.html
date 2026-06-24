@@ -81,13 +81,12 @@
               <div class="rail-card-head project-detail-head">
                 <div>
                   <h3>项目详情</h3>
-                  <p>这里会作为小画桌回答时的项目上下文。</p>
+                  <p>从聊天里自动补齐，菁菁只改不准的地方。</p>
                 </div>
-                <button class="text-button danger-text-button" id="delete-project-btn" type="button">删除项目</button>
+                <button class="context-status" id="save-project-btn" type="button">等待识别</button>
               </div>
               <form class="project-form detail-form" id="project-form">
-                <label>项目名称<input id="project-name-input" type="text" /></label>
-                <label>设计类型<input id="project-type-input" type="text" placeholder="海报 / 品牌 / 社媒图 / 包装" /></label>
+                <label class="primary-field">项目<input id="project-name-input" type="text" /></label>
                 <div class="form-row">
                   <label>DDL<input id="project-due-input" type="date" /></label>
                   <label>进度
@@ -99,23 +98,27 @@
                     </select>
                   </label>
                 </div>
-                <label>核心要求<textarea id="project-goal-input" rows="3" placeholder="这次要解决什么？谁看？希望对方做什么？"></textarea></label>
-                <label>需求细节<textarea id="project-requirements-input" rows="4" placeholder="品牌调性、必须出现的信息、客户偏好、禁用元素、参考方向..."></textarea></label>
-                <label>交付物<input id="project-deliverables-input" type="text" placeholder="例如：海报、公众号头图、小红书封面" /></label>
-                <label>进度备注<textarea id="project-progress-input" rows="3" placeholder="做到哪一步了？等谁确认？下一步卡在哪里？"></textarea></label>
+                <label>交付物<input id="project-deliverables-input" type="text" placeholder="例如：海报、包装、公众号头图" /></label>
+                <label>设计要求<textarea id="project-requirements-input" rows="4" placeholder="小画桌会从对话里提取：使用场景、必须出现的信息、风格偏好、禁用元素..."></textarea></label>
+                <label>当前进度<textarea id="project-progress-input" rows="3" placeholder="做到哪一步了？等谁确认？下一步卡在哪里？"></textarea></label>
+                <details class="detail-more">
+                  <summary>更多项目信息</summary>
+                  <label>设计类型<input id="project-type-input" type="text" placeholder="海报 / 品牌 / 社媒图 / 包装" /></label>
+                  <label>核心目标<textarea id="project-goal-input" rows="3" placeholder="这次要解决什么？谁看？希望对方做什么？"></textarea></label>
+                </details>
               </form>
               <div class="detail-section">
                 <div class="panel-heading">
-                  <h3>任务细节 <span id="today-count">0</span></h3>
-                  <button class="text-button" id="add-task-btn" type="button">新增任务</button>
+                  <h3>下一步 <span id="today-count">0</span></h3>
+                  <button class="text-button" id="add-task-btn" type="button">添加</button>
                 </div>
                 <div class="project-task-list" id="project-task-list"></div>
               </div>
+              <button class="danger-line-button" id="delete-project-btn" type="button">删除这个项目</button>
               <span class="hidden-flow" id="waiting-count">0</span>
               <div class="hidden-flow" id="waiting-list"></div>
               <div class="hidden-flow" id="next-list"></div>
               <div class="hidden-flow" id="risk-list"></div>
-              <button class="hidden-flow" id="save-project-btn" type="button">已自动保存</button>
             </section>
           </aside>
         </div>

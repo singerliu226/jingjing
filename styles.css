@@ -1027,11 +1027,6 @@ kbd {
   font-weight: 800;
 }
 
-.project-form label:nth-child(5),
-.project-form label:nth-child(6) {
-  display: none;
-}
-
 .note-card.assistant-panel .project-form {
   flex: 0 0 auto;
   min-height: auto;
@@ -1472,12 +1467,28 @@ kbd {
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  padding: 14px;
+  padding: 16px;
 }
 
 .project-detail-head {
+  align-items: flex-start;
   padding-bottom: 10px;
   border-bottom: 1px solid #e6ebe7;
+}
+
+.project-detail-head p {
+  max-width: 260px;
+}
+
+.context-status {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #edf7f4;
+  color: var(--teal);
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .danger-text-button {
@@ -1486,14 +1497,17 @@ kbd {
 
 .detail-form {
   flex: 0 0 auto;
-  max-height: 58%;
+  max-height: 52%;
   overflow: auto;
-  padding-right: 4px;
+  gap: 10px;
+  margin-top: 12px;
+  padding-right: 3px;
 }
 
-.detail-form label:nth-child(5),
-.detail-form label:nth-child(6) {
-  display: flex;
+.detail-form .primary-field input {
+  min-height: 42px;
+  font-size: 15px;
+  font-weight: 850;
 }
 
 .form-row {
@@ -1516,6 +1530,29 @@ kbd {
   line-height: 1.35;
 }
 
+.detail-more {
+  border-top: 1px dashed #dfe7e2;
+  padding-top: 8px;
+}
+
+.detail-more summary {
+  cursor: pointer;
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 900;
+  list-style: none;
+}
+
+.detail-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.detail-more[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .detail-section {
   display: flex;
   min-height: 0;
@@ -1531,7 +1568,7 @@ kbd {
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   overflow: auto;
   margin-top: 10px;
   padding-right: 4px;
@@ -1541,9 +1578,9 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px;
+  padding: 9px;
   border: 1px solid #e7ebe7;
-  border-radius: var(--radius);
+  border-radius: 8px;
   background: #fbfcfa;
 }
 
@@ -1586,6 +1623,22 @@ kbd {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.danger-line-button {
+  flex: 0 0 auto;
+  width: 100%;
+  border: 1px solid #efd1ca;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #fffaf8;
+  color: #a64233;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.danger-line-button:hover {
+  background: #fff2ee;
 }
 
 @media (max-width: 900px) {

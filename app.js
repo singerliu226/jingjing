@@ -411,10 +411,162 @@
     const modelIntent = await askQwenIntent(clean);
     const previousMessageCount = state.messages.length;
     const result = Core.applyInput(state, clean, new Date(), { intent: modelIntent, localMode: "guardrail" });
+    applyProjectAutofill(clean, modelIntent, result ? result.analysis : null);
     nodes.messageInput.value = "";
     render();
     if (result && shouldKeepLocalReply(result.analysis)) return;
     await askQwen(clean, previousMessageCount, result ? result.analysis : null);
+  }
+
+  function applyProjectAutofill(message, modelIntent, analysis) {
+    const project = Core.getProject(state, state.activeProjectId);
+    if (!project) return false;
+    const fill = buildProjectAutofill(message, modelIntent, analysis);
+    let changed = false;
+    const isStarterName = !project.name || ["未命名设计项目", "第一个设计项目"].includes(project.name);
+    if (fill.name && isStarterName) {
+      project.name = fill.name;
+      changed = true;
+    }
+    if (fill.type && (!project.type || project.type === "设计项目")) {
+      project.type = fill.type;
+      changed = true;
+    }
+    if (fill.dueDate && project.dueDate !== fill.dueDate) {
+      project.dueDate = fill.dueDate;
+      state.tasks
+        .filter((task) => task.projectId === project.id && !task.dueDate)
+        .forEach((task) => {
+          task.dueDate = fill.dueDate;
+        });
+      changed = true;
+    }
+    if (fill.status && project.status !== fill.status && fill.status !== "todo") {
+      project.status = fill.status;
+      changed = true;
+    }
+    if (fill.deliverables.length) {
+      const merged = Array.from(new Set((project.deliverables || []).concat(fill.deliverables)));
+      if (merged.length !== (project.deliverables || []).length) {
+        project.deliverables = merged;
+        changed = true;
+      }
+    }
+    if (fill.goal && shouldReplaceField(project.goal)) {
+      project.goal = fill.goal;
+      changed = true;
+    }
+    if (fill.requirements && appendUniqueField(project, "requirements", fill.requirements)) changed = true;
+    if (fill.progressNote && appendUniqueField(project, "progressNote", fill.progressNote)) changed = true;
+    fill.tasks.forEach((task) => {
+      if (hasSimilarTask(project.id, task.title)) return;
+      state.tasks.push({
+        id: `t-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        projectId: project.id,
+        title: task.title,
+        priority: task.priority || "normal",
+        dueDate: task.dueDate || project.dueDate || "",
+        status: task.status || "todo",
+        nextAction: task.nextAction || "继续补齐这一步的具体要求",
+        feedbackIds: [],
+      });
+      changed = true;
+    });
+    if (!changed) return false;
+    project.risks = Array.from(new Set(buildProjectRisks(project).concat(project.risks.filter((risk) => !risk.startsWith("缺少")))));
+    syncProjectWork(project);
+    persist();
+    scheduleProjectAnalysis(project.id);
+    nodes.saveProjectBtn.textContent = "已从对话补齐";
+    return true;
+  }
+
+  function buildProjectAutofill(message, modelIntent, analysis) {
+    const entities = (modelIntent && modelIntent.entities) || {};
+    const deliverables = compactStrings(entities.deliverables || analysis?.deliverables || inferDeliverables(message));
+    const name = cleanProjectName(entities.projectName || inferProjectName(message, deliverables));
+    const type = normalize(entities.projectType || entities.type || inferProjectType(message, deliverables));
+    const dueDate = normalize(entities.dueDate || analysis?.dueDate || "");
+    const status = normalize(entities.status || analysis?.status || "");
+    const goal = normalize(entities.goal || entities.brief?.goal || "");
+    const requirements = normalize(
+      entities.requirements ||
+        entities.brief?.requirements ||
+        buildFallbackRequirement(message, { name, type, deliverables, goal })
+    );
+    const progressNote = normalize(entities.progressNote || entities.progress || "");
+    const tasks = normalizeAutofillTasks(entities.tasks);
+    return { name, type, dueDate, status, goal, requirements, progressNote, deliverables, tasks };
+  }
+
+  function inferDeliverables(text) {
+    const patterns = ["公众号头图", "朋友圈海报", "小红书封面", "社群长图", "海报", "包装", "Banner", "banner", "PPT", "画册", "折页"];
+    return patterns.filter((item) => text.includes(item));
+  }
+
+  function inferProjectType(text, deliverables) {
+    const combined = `${text} ${deliverables.join(" ")}`;
+    if (/包装/.test(combined)) return "包装";
+    if (/海报|封面|头图|社群长图/.test(combined)) return "海报";
+    if (/Banner|banner/.test(combined)) return "Banner";
+    if (/PPT/.test(combined)) return "PPT";
+    if (/画册|折页/.test(combined)) return "印刷物";
+    return "";
+  }
+
+  function inferProjectName(text, deliverables) {
+    const quoted = text.match(/[「《](.+?)[」》]/);
+    if (quoted) return quoted[1];
+    const direct = text.match(/([\u4e00-\u9fa5A-Za-z0-9·]{1,14}(?:海报|包装|Banner|banner|封面|头图|PPT|画册|折页))/);
+    if (direct) return direct[1];
+    if (deliverables.length === 1) return `${deliverables[0]}项目`;
+    return "";
+  }
+
+  function cleanProjectName(value) {
+    return normalize(value)
+      .replace(/^(怎么做|如何做|怎么设计|如何设计|做|设计|帮我|我想做|想做|要做|给我做)/, "")
+      .replace(/[？?。,.，；;：:]$/g, "")
+      .slice(0, 22);
+  }
+
+  function buildFallbackRequirement(message, fill) {
+    if (!fill.name && !fill.type && !fill.deliverables.length && !fill.goal) return "";
+    return `从对话提取：${message}`;
+  }
+
+  function normalizeAutofillTasks(tasks) {
+    if (!Array.isArray(tasks)) return [];
+    return tasks
+      .map((task) => ({
+        title: normalize(task.title).slice(0, 40),
+        dueDate: normalize(task.dueDate),
+        status: ["todo", "designing", "waiting", "done"].includes(task.status) ? task.status : "todo",
+        priority: task.priority === "high" ? "high" : "normal",
+        nextAction: normalize(task.nextAction).slice(0, 120),
+      }))
+      .filter((task) => task.title)
+      .slice(0, 4);
+  }
+
+  function appendUniqueField(project, field, value) {
+    const current = normalize(project[field]);
+    if (!value || current.includes(value)) return false;
+    project[field] = current ? `${current}\n${value}` : value;
+    return true;
+  }
+
+  function shouldReplaceField(value) {
+    const clean = normalize(value);
+    return !clean || clean === "待从需求里补充目标。";
+  }
+
+  function hasSimilarTask(projectId, title) {
+    return state.tasks.some((task) => task.projectId === projectId && normalize(task.title) === normalize(title));
+  }
+
+  function compactStrings(items) {
+    return (Array.isArray(items) ? items : [items]).map(normalize).filter(Boolean);
   }
 
   async function askQwenIntent(message) {

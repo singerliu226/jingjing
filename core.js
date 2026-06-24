@@ -353,12 +353,15 @@
       dueDate: /^20\d{2}-\d{2}-\d{2}$/.test(dueDate) ? dueDate : "",
       deliverables: compactStrings(entities.deliverables),
       goal: normalize(entities.goal || brief.goal),
+      requirements: normalize(entities.requirements || brief.requirements),
+      progressNote: normalize(entities.progressNote || entities.progress),
       audience: normalize(entities.audience || brief.audience),
       scene: normalize(entities.scene || brief.scene),
       specs: compactStrings(entities.specs),
       formats: compactStrings(entities.formats),
       status: ["todo", "designing", "waiting", "done"].includes(status) ? status : "",
       feedback: normalizeModelFeedback(entities.feedback),
+      tasks: Array.isArray(entities.tasks) ? entities.tasks.slice(0, 4) : [],
     };
   }
 
@@ -1088,6 +1091,7 @@
     const deliverables = (entities.deliverables || []).length ? entities.deliverables : localAnalysis.deliverables;
     const brief = { ...localAnalysis.brief };
     if (entities.goal) brief.goal = entities.goal;
+    if (entities.requirements) brief.requirements = entities.requirements;
     if (entities.audience) brief.audience = entities.audience;
     if (entities.scene) brief.scene = entities.scene;
     const meta = { ...localAnalysis.meta };
@@ -1106,6 +1110,9 @@
       behavior: modelIntent.behavior,
       from: entities.source || localAnalysis.from,
       feedback: entities.feedback || localAnalysis.feedback,
+      requirements: entities.requirements || "",
+      progressNote: entities.progressNote || "",
+      tasks: entities.tasks || [],
       brief,
       meta,
       nextAction: modelIntent.nextAction || "",
@@ -1196,6 +1203,8 @@
         type: analysis.typeLabel,
         source: analysis.from || "待补充",
         goal: analysis.brief.goal || "待从需求里补充目标。",
+        requirements: analysis.requirements || analysis.brief.requirements || "",
+        progressNote: analysis.progressNote || "",
         audience: analysis.brief.audience || "待补充",
         scene: analysis.brief.scene || "待补充",
         specs: analysis.meta.specs || [],
@@ -1223,6 +1232,8 @@
         applyDeadlineToOpenTasks(state, project, analysis.dueDate);
       }
       applyBriefFields(project, analysis.brief);
+      if (analysis.requirements) project.requirements = appendSentence(project.requirements || "", analysis.requirements);
+      if (analysis.progressNote) project.progressNote = appendSentence(project.progressNote || "", analysis.progressNote);
       if (analysis.status === "done") {
         markRelatedTaskDone(state, project, analysis);
         project.status = isWholeProjectCompletion(analysis.text) ? "done" : "designing";

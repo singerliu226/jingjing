@@ -227,12 +227,15 @@ function buildIntentMessages(input) {
     "你是菁菁小画桌的意图识别器，只负责判断用户这句话的行为类型。",
     "只返回 JSON，不要 Markdown，不要解释，不要自然语言前后缀。",
     "JSON 结构：{\"schemaVersion\":\"llm-intent-v1\",\"intent\":\"行为名\",\"confidence\":0.0到1.0,\"summary\":\"一句话总结\",\"entities\":{},\"missing\":[],\"nextAction\":\"下一步\",\"reason\":\"一句中文理由\"}",
-    "entities 可包含：projectName、projectType、source、dueDate(YYYY-MM-DD)、deliverables、goal、audience、scene、specs、formats、status、feedback。",
+    "entities 可包含：projectName、projectType、source、dueDate(YYYY-MM-DD)、deliverables、goal、requirements、progressNote、audience、scene、specs、formats、status、feedback、tasks。",
     "feedback 结构：{\"raw\":\"原始反馈\",\"action\":\"可执行修改动作\",\"reason\":\"为什么要这样改\",\"conflict\":false}",
+    "tasks 结构：[{\"title\":\"任务名\",\"dueDate\":\"YYYY-MM-DD或空\",\"status\":\"todo/designing/waiting/done\",\"priority\":\"high/normal\",\"nextAction\":\"下一步\"}]，最多 4 条。",
     `intent 必须从这个列表选择：${INTENT_BEHAVIORS.join(", ")}`,
     "判断原则：如果用户只是转述老板/客户/主管的要求且没有问怎么做，优先 record_feedback。",
     "如果用户在问怎么改、怎么检查、怎么讲、怎么安排，选择最具体的设计辅助行为。",
     "如果用户记录完成/等待/截止/交付物/项目信息，选择对应的工作记录行为。",
+    "即使用户是在问“怎么做某个设计物料”，只要句子里出现了明确项目对象，也必须抽取 projectName、projectType、deliverables 和 requirements，方便前端回填项目详情。",
+    "示例：用户说“怎么做酒吧海报”，intent 可为 ask_design_directions，但 entities 必须包含 {\"projectName\":\"酒吧海报\",\"projectType\":\"海报\",\"deliverables\":[\"海报\"],\"requirements\":\"用户想做酒吧海报；还需确认酒吧名称、投放位置、主信息和视觉调性。\"}。",
     `解析相对日期时，以 ${currentDate || "用户当前日期"} 为今天；例如“明天”是今天后一天，“下周一”按这个日期往后推到最近的下周一。`,
     "尽量抽取用户明确给出的实体；不要编造未给出的项目名、日期、交付物或反馈人。",
     "不确定时选择 record_note，confidence 不要超过 0.55。",
@@ -311,7 +314,7 @@ function callQwenIntent(payload) {
       model: MODEL,
       messages: buildIntentMessages(payload),
       temperature: 0.05,
-      max_tokens: 180,
+      max_tokens: 360,
     });
     const req = https.request(
       {
