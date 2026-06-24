@@ -2224,6 +2224,7 @@ function freshState() {
   const appSource = fs.readFileSync("app.js", "utf8");
   const serverSource = fs.readFileSync("server.js", "utf8");
   assert.ok(appSource.includes("currentDate: getLocalDateString()"));
+  assert.ok(appSource.includes("localMode: \"guardrail\""));
   assert.ok(serverSource.includes("解析相对日期时"));
   assert.ok(serverSource.includes("schemaVersion: \"llm-intent-v1\""));
 }
@@ -2277,6 +2278,36 @@ function freshState() {
     { intent: { behavior: "unknown_behavior", confidence: 0.95, reason: "坏结果。" } }
   );
   assert.equal(result.analysis.behavior, "ask_plan");
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "标题字体怎么配比较好？", fixedNow, { localMode: "guardrail" });
+  assert.equal(result.analysis.behavior, "answer_design_question");
+  assert.equal(result.analysis.modelIntent, null);
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(
+    state,
+    "标题字体怎么配比较好？",
+    fixedNow,
+    {
+      localMode: "guardrail",
+      intent: {
+        schemaVersion: "llm-intent-v1",
+        intent: "recommend_typography_system",
+        confidence: 0.88,
+        summary: "用户在请求字体系统建议。",
+        entities: {},
+        missing: [],
+        nextAction: "先确定标题、正文和辅助信息的字号层级。",
+      },
+    }
+  );
+  assert.equal(result.analysis.behavior, "recommend_typography_system");
+  assert.equal(result.analysis.modelIntent.source, "model");
 }
 
 {

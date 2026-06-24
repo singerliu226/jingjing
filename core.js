@@ -767,6 +767,43 @@
     return "record_note";
   }
 
+  function detectGuardrailBehavior(text, analysisBits = {}) {
+    if (!text) return "empty";
+
+    if (/今天.*(做什么|安排)|今日.*安排|先做什么|排一下|计划一下/.test(text)) return "ask_plan";
+    if (/日报|今天总结|工作总结|周报/.test(text)) return "ask_summary";
+    if (/任务.*(延后|延期|推迟|改到)|延后到|延期到|推迟到/.test(text) && analysisBits.dueDate) return "snooze_task";
+    if (/取消|删除|不用做|不用了|先不做|撤掉/.test(text)) return "cancel_task";
+    if (/交付检查.*(完成|勾完|都好了)|检查项.*(完成|勾完|都好了)/.test(text)) return "complete_checklist";
+    if (/交付检查|导出检查|检查.*(出血|转曲|源文件|打包)|清单/.test(text)) return "ask_checklist";
+    if (/作品集|归档|面试|案例/.test(text)) return "ask_portfolio";
+    if (/话术|怎么问|怎么说|帮我问|帮我整理.*确认|催一下|催.*(反馈|确认|回复)|没回.*怎么|没回复.*怎么/.test(text)) {
+      return "ask_confirmation_message";
+    }
+
+    if (/(v|V)\s*\d+|第[一二三四五六七八九十\d]+版|版本/.test(text)) return "record_version";
+    if (/项目名|项目名称|名字.*(改成|改为|叫)|名称.*(改成|改为)/.test(text)) return "update_project_name";
+    if (/项目类型|设计类型|类型.*(改成|改为|是)|类别.*(改成|改为|是)/.test(text)) return "update_project_type";
+    if (analysisBits.meta && (analysisBits.meta.name || analysisBits.meta.type)) return analysisBits.meta.name ? "update_project_name" : "update_project_type";
+    if (analysisBits.meta && (analysisBits.meta.specs || analysisBits.meta.formats)) return "update_project_specs";
+    if (analysisBits.createsProject) return "create_project";
+
+    if (/客户|老板|主管|甲方|运营|产品/.test(text) && /确认了|通过了|回复了|同意了|ok了|OK了/.test(text)) return "clear_waiting";
+    if (/反馈.*(处理好了|改完了|已处理|完成)|修改.*(完成|改完)/.test(text)) return "mark_feedback_handled";
+    if (/完成了|已完成|已经完成|做完了|已经做完|已提交|已发给|已交付|过稿|定稿/.test(text)) return "complete_progress";
+    if (/等|等待|待确认|待反馈|还没回|没回复|没确认|已发给.*看|已经发给.*看|发给.*看了/.test(text)) return "waiting_confirmation";
+    if (analysisBits.feedback) return "record_feedback";
+    if (/改到|延期|延后|提前|截止|什么时候交|交期|ddl|deadline/i.test(text) && analysisBits.dueDate) return "update_deadline";
+    if (/目标|受众|人群|场景|投放|用途|解决|给.*看|出现在哪里/.test(text)) return "update_brief";
+    if (analysisBits.deliverables && analysisBits.deliverables.length) return "update_deliverables";
+
+    if (analysisBits.designIssue) return "solve_design_issue";
+    if (analysisBits.designerQuestion || /怎么|如何|为什么|哪里|建议|帮我看|优化|调整|处理|诊断|应该/.test(text)) {
+      return "answer_design_question";
+    }
+    return "record_note";
+  }
+
   function isInformationHierarchyRequest(text, analysisBits = {}) {
     const hasHierarchyIntent = /主次|取舍|分层|信息层级|怎么排|如何排|文字.*怎么排|内容.*怎么排|卖点.*怎么排|都想放|全部放/.test(text);
     return (
@@ -1096,7 +1133,10 @@
     const createsProject = /新项目|创建项目|项目|客户要|需要.*(海报|头图|封面|包装|banner|PPT)/i.test(clean) && deliverables.length > 1;
     const brief = extractBriefFields(clean);
     const meta = extractProjectMeta(clean);
-    const behavior = detectBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion });
+    const behavior =
+      options.localMode === "guardrail"
+        ? detectGuardrailBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion })
+        : detectBehavior(clean, { createsProject, feedback, deliverables, dueDate, meta, designIssue, designerQuestion });
     const projectName = createsProject ? guessProjectName(clean, activeProject) : activeProject.name;
     const localAnalysis = {
       text: clean,

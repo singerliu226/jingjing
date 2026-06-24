@@ -320,7 +320,7 @@
     if (!clean) return;
     const modelIntent = await askQwenIntent(clean);
     const previousMessageCount = state.messages.length;
-    const result = Core.applyInput(state, clean, new Date(), { intent: modelIntent });
+    const result = Core.applyInput(state, clean, new Date(), { intent: modelIntent, localMode: "guardrail" });
     nodes.messageInput.value = "";
     render();
     if (result && shouldKeepLocalReply(result.analysis)) return;
