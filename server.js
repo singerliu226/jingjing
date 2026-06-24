@@ -159,8 +159,8 @@ function buildMessages(input) {
   const projectWorkflowInstruction =
     input.intent === "project_workflow"
       ? [
-          "这次输入来自「项目小纸条」表单，不是普通闲聊。",
-          "你必须根据项目名称、类型、目标、交付物、截止时间来分析项目，并安排设计工作流。",
+          "这次输入来自「项目详情」表单，不是普通闲聊。",
+          "你必须根据项目名称、类型、核心要求、需求细节、交付物、截止时间和任务明细来分析项目，并安排设计工作流。",
           "回复结构使用：项目判断、今日先做、后续步骤、需要确认、交付风险。",
           "不要要求用户重复已经在上下文里提供的信息；只追问仍然缺失的信息，例如尺寸、平台规格、确认人、交付格式。",
         ].join("\n")
@@ -176,7 +176,7 @@ function buildMessages(input) {
         ].join("\n");
   const system = [
     "你是「菁菁小画桌」，简称「小画桌」，一位资深创意总监、平面设计导师和工作记录助理。",
-    "使用者叫菁菁，是初级平面设计师。你的目标不是替她空泛评价，而是把需求、反馈、待办、风险、交付检查和作品集沉淀讲清楚。",
+    "使用者叫菁菁，是初级平面设计师。你的目标不是替她空泛评价，而是把需求、反馈、待办、风险和交付检查讲清楚。",
     "回答必须具体、温和、可执行。优先指出下一步动作、缺失信息、反馈转译和交付风险。",
     "如果用户输入的是反馈，先翻译成设计动作；如果是需求，先整理 brief；如果是进度，帮她更新复盘口径。",
     "不要编造已完成的文件或真实业务结果。没有信息时直接说需要补充什么。",
@@ -189,11 +189,12 @@ function buildMessages(input) {
   const context = [
     `当前项目：${project.name || "未命名项目"}`,
     `项目类型：${project.type || "未知"}`,
-    `目标：${project.goal || "待补充"}`,
-    `受众：${project.audience || "待补充"}`,
-    `场景：${project.scene || "待补充"}`,
+    `核心要求：${project.goal || "待补充"}`,
+    `需求细节：${project.requirements || "待补充"}`,
     `交付物：${(project.deliverables || []).join("、") || "待补充"}`,
     `截止时间：${project.dueDate || "待补充"}`,
+    `当前进度：${project.progressNote || "待补充"}`,
+    `项目任务：${formatProjectTasks(project.tasks)}`,
     `风险：${(project.risks || []).join("；") || "暂无"}`,
     `今日任务数：${dashboard.todayCount || 0}`,
     `等待确认数：${dashboard.waitingCount || 0}`,
@@ -208,6 +209,14 @@ function buildMessages(input) {
     })),
     { role: "user", content: String(input.message || "").slice(0, 4000) },
   ];
+}
+
+function formatProjectTasks(tasks) {
+  if (!Array.isArray(tasks) || !tasks.length) return "暂无";
+  return tasks
+    .slice(0, 8)
+    .map((task) => `${task.title || "未命名任务"}｜${task.status || "todo"}｜${task.dueDate || "未设截止"}｜${task.nextAction || "待补充"}`)
+    .join("\n");
 }
 
 function buildIntentMessages(input) {
@@ -231,9 +240,12 @@ function buildIntentMessages(input) {
   const context = [
     `当前项目：${project.name || "未命名项目"}`,
     `项目类型：${project.type || "未知"}`,
-    `目标：${project.goal || "待补充"}`,
+    `核心要求：${project.goal || "待补充"}`,
+    `需求细节：${project.requirements || "待补充"}`,
     `交付物：${(project.deliverables || []).join("、") || "待补充"}`,
     `截止时间：${project.dueDate || "待补充"}`,
+    `当前进度：${project.progressNote || "待补充"}`,
+    `项目任务：${formatProjectTasks(project.tasks)}`,
     `今天日期：${currentDate || "未知"}`,
   ].join("\n");
   return [

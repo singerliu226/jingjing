@@ -40,19 +40,6 @@
           <div class="project-list" id="project-list"></div>
         </section>
 
-        <section class="sidebar-section sidebar-bottom">
-          <div class="section-title">
-            <h2>沉淀</h2>
-          </div>
-          <button class="view-link secondary-view-link" data-panel="portfolio" type="button">
-            <svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V5h8v2"/></svg>
-            项目归档
-          </button>
-          <button class="view-link secondary-view-link" data-panel="library" type="button">
-            <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM16 4v4h4M8 12h8M8 16h6"/></svg>
-            设计词典
-          </button>
-        </section>
       </aside>
 
       <main class="workspace">
@@ -67,115 +54,71 @@
           <section class="chat-panel conversation-panel" aria-label="和小画桌对话">
             <div class="conversation-head">
               <div>
-                <h3>先把今天的事说给小画桌</h3>
-                <p>需求、反馈、进度和截止时间都可以直接说，菁菁不用先想格式。</p>
-              </div>
-              <div class="activity-tools" aria-label="常用整理">
-                <button class="mini-action" id="daily-summary-btn" type="button">日报</button>
-                <button class="mini-action" id="review-btn" type="button">自检</button>
-                <button class="mini-action" id="checklist-btn" type="button">交付</button>
-                <button class="mini-action" id="risk-audit-btn" type="button">风险</button>
-                <button class="mini-action" id="portfolio-btn" type="button">归档</button>
+                <h3>菁菁，和小画桌慢慢说</h3>
+                <p>这个项目的要求、卡住的地方、老板的反馈，都可以直接丢给我。我会结合右侧项目详情来回答。</p>
               </div>
             </div>
 
             <div class="chat-stream compact-stream" id="chat-stream" aria-live="polite"></div>
 
-            <div class="quick-actions" aria-label="快速记录">
-              <button class="quick-action" data-template="主管反馈：" type="button">记录反馈</button>
-              <button class="quick-action" data-template="新需求：" type="button">新需求</button>
-              <button class="quick-action" data-template="我完成了：" type="button">完成进度</button>
-              <button class="quick-action" data-template="等待确认：" type="button">等待确认</button>
+            <div class="prompt-strip" aria-label="可以这样问">
+              <button class="prompt-chip" data-template="这个项目我应该先从哪里开始？" type="button">先从哪里开始？</button>
+              <button class="prompt-chip" data-template="老板说画面不够高级，我应该怎么改？" type="button">老板说不够高级</button>
+              <button class="prompt-chip" data-template="帮我把这个需求拆成今天能做的任务。" type="button">拆成今天任务</button>
+              <button class="prompt-chip" data-template="交付前我需要确认哪些尺寸和格式？" type="button">交付前确认什么？</button>
             </div>
 
             <form class="composer" id="composer">
-              <textarea id="message-input" rows="2" placeholder="输入你的问题，或记录需求 / 反馈 / 截止时间。例如：主管说海报颜色太暗，要更年轻一点，明天下午前改。"></textarea>
+              <textarea id="message-input" rows="2" placeholder="输入你想聊的问题，或记录需求 / 反馈 / 进度。例如：主管说画面太暗，要更年轻一点，明天下午前改。"></textarea>
               <button class="send-button" type="submit" title="发送">
                 <svg viewBox="0 0 24 24"><path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/></svg>
               </button>
             </form>
           </section>
 
-          <aside class="work-rail" aria-label="今日安排和项目小纸条">
-            <section class="rail-card task-card" aria-label="今日工作安排">
-              <div class="rail-card-head">
+          <aside class="work-rail" aria-label="项目详情">
+            <section class="rail-card project-detail-card" aria-label="项目详情">
+              <div class="rail-card-head project-detail-head">
                 <div>
-                  <h3>今天要做 <span id="today-count">0</span></h3>
-                  <p id="daily-guidance">小画桌把最该推进的事放在这里。</p>
+                  <h3>项目详情</h3>
+                  <p>这里会作为小画桌回答时的项目上下文。</p>
                 </div>
-                <button class="secondary-button compact-button" id="plan-day-btn" type="button">
-                  <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>
-                  整理
-                </button>
+                <button class="text-button danger-text-button" id="delete-project-btn" type="button">删除项目</button>
               </div>
-              <div class="plan-list" id="today-list"></div>
+              <form class="project-form detail-form" id="project-form">
+                <label>项目名称<input id="project-name-input" type="text" /></label>
+                <label>设计类型<input id="project-type-input" type="text" placeholder="海报 / 品牌 / 社媒图 / 包装" /></label>
+                <div class="form-row">
+                  <label>DDL<input id="project-due-input" type="date" /></label>
+                  <label>进度
+                    <select id="project-status-input">
+                      <option value="todo">未开始</option>
+                      <option value="designing">设计中</option>
+                      <option value="waiting">待确认</option>
+                      <option value="done">已完成</option>
+                    </select>
+                  </label>
+                </div>
+                <label>核心要求<textarea id="project-goal-input" rows="3" placeholder="这次要解决什么？谁看？希望对方做什么？"></textarea></label>
+                <label>需求细节<textarea id="project-requirements-input" rows="4" placeholder="品牌调性、必须出现的信息、客户偏好、禁用元素、参考方向..."></textarea></label>
+                <label>交付物<input id="project-deliverables-input" type="text" placeholder="例如：海报、公众号头图、小红书封面" /></label>
+                <label>进度备注<textarea id="project-progress-input" rows="3" placeholder="做到哪一步了？等谁确认？下一步卡在哪里？"></textarea></label>
+              </form>
+              <div class="detail-section">
+                <div class="panel-heading">
+                  <h3>任务细节 <span id="today-count">0</span></h3>
+                  <button class="text-button" id="add-task-btn" type="button">新增任务</button>
+                </div>
+                <div class="project-task-list" id="project-task-list"></div>
+              </div>
               <span class="hidden-flow" id="waiting-count">0</span>
               <div class="hidden-flow" id="waiting-list"></div>
               <div class="hidden-flow" id="next-list"></div>
+              <div class="hidden-flow" id="risk-list"></div>
+              <button class="hidden-flow" id="save-project-btn" type="button">已自动保存</button>
             </section>
-
-            <aside class="inspector assistant-panel rail-card note-card" aria-label="项目小纸条">
-              <section class="inspector-section focus-section">
-                <div class="panel-heading">
-                  <h3>项目小纸条</h3>
-                  <button class="text-button" id="save-project-btn" type="button">已自动保存</button>
-                </div>
-                <form class="project-form" id="project-form">
-                  <label>项目<input id="project-name-input" type="text" /></label>
-                  <label>类型<input id="project-type-input" type="text" placeholder="海报 / 品牌 / 社媒图" /></label>
-                  <label>截止<input id="project-due-input" type="date" /></label>
-                  <label>目标<textarea id="project-goal-input" rows="2" placeholder="这次要让谁看懂什么、做什么"></textarea></label>
-                  <label>主要给谁看<textarea id="project-audience-input" rows="2"></textarea></label>
-                  <label>会出现在哪里<textarea id="project-scene-input" rows="2"></textarea></label>
-                  <label>交付物<input id="project-deliverables-input" type="text" placeholder="例如：海报、公众号头图、小红书封面" /></label>
-                </form>
-              </section>
-
-              <section class="inspector-section">
-                <div class="panel-heading">
-                  <h3>为什么先做它</h3>
-                  <button class="text-button" id="show-all-tasks" type="button">任务清单</button>
-                </div>
-                <p class="assistant-copy" id="assistant-advice">先处理最临近截止的任务，完成后我会帮菁菁更新进度。</p>
-                <p class="advice-source" id="assistant-source">来源：项目缺失信息、任务截止时间和等待确认事项。</p>
-              </section>
-
-              <section class="inspector-section">
-                <div class="panel-heading">
-                  <h3>需要确认</h3>
-                  <button class="text-button" id="mark-waiting" type="button">整理话术</button>
-                </div>
-                <div class="risk-list" id="risk-list"></div>
-              </section>
-            </aside>
           </aside>
         </div>
-
-        <section class="app-view portfolio-view" id="portfolio-view" aria-label="项目归档">
-          <div class="view-panel">
-            <div class="view-head">
-              <div>
-                <h3>项目归档</h3>
-                <p>把做过的项目整理成能讲清楚过程、策略和成长的记录。</p>
-              </div>
-              <button class="secondary-button compact-button" id="portfolio-generate-all" type="button">整理这个项目</button>
-            </div>
-            <div class="portfolio-grid" id="portfolio-page-list"></div>
-          </div>
-        </section>
-
-        <section class="app-view library-view" id="library-view" aria-label="设计词典">
-          <div class="view-panel">
-            <div class="view-head">
-              <div>
-                <h3>设计词典</h3>
-                <p>把常见反馈翻译成菁菁能直接执行的设计动作。</p>
-              </div>
-              <button class="secondary-button compact-button" id="library-insert-tip" type="button">拿一句试试</button>
-            </div>
-            <div class="library-grid" id="library-page-list"></div>
-          </div>
-        </section>
       </main>
     </div>
 

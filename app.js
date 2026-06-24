@@ -11,45 +11,32 @@
 
   const nodes = {
     workbenchView: document.querySelector("#workbench-view"),
-    portfolioView: document.querySelector("#portfolio-view"),
-    libraryView: document.querySelector("#library-view"),
     projectList: document.querySelector("#project-list"),
     chatStream: document.querySelector("#chat-stream"),
     composer: document.querySelector("#composer"),
     messageInput: document.querySelector("#message-input"),
     activeProjectName: document.querySelector("#active-project-name"),
     activeProjectType: document.querySelector("#active-project-type"),
-    todayList: document.querySelector("#today-list"),
+    projectTaskList: document.querySelector("#project-task-list"),
     waitingList: document.querySelector("#waiting-list"),
     nextList: document.querySelector("#next-list"),
     riskList: document.querySelector("#risk-list"),
     todayCount: document.querySelector("#today-count"),
     waitingCount: document.querySelector("#waiting-count"),
-    assistantAdvice: document.querySelector("#assistant-advice"),
-    assistantSource: document.querySelector("#assistant-source"),
     saveProjectBtn: document.querySelector("#save-project-btn"),
     newProjectBtn: document.querySelector("#new-project-btn"),
     sortProjectsBtn: document.querySelector("#sort-projects-btn"),
-    dailySummaryBtn: document.querySelector("#daily-summary-btn"),
-    planDayBtn: document.querySelector("#plan-day-btn"),
-    reviewBtn: document.querySelector("#review-btn"),
-    riskAuditBtn: document.querySelector("#risk-audit-btn"),
-    checklistBtn: document.querySelector("#checklist-btn"),
-    portfolioBtn: document.querySelector("#portfolio-btn"),
-    markWaiting: document.querySelector("#mark-waiting"),
-    showAllTasks: document.querySelector("#show-all-tasks"),
+    addTaskBtn: document.querySelector("#add-task-btn"),
+    deleteProjectBtn: document.querySelector("#delete-project-btn"),
     projectForm: document.querySelector("#project-form"),
     projectNameInput: document.querySelector("#project-name-input"),
     projectTypeInput: document.querySelector("#project-type-input"),
     projectDueInput: document.querySelector("#project-due-input"),
+    projectStatusInput: document.querySelector("#project-status-input"),
     projectGoalInput: document.querySelector("#project-goal-input"),
-    projectAudienceInput: document.querySelector("#project-audience-input"),
-    projectSceneInput: document.querySelector("#project-scene-input"),
+    projectRequirementsInput: document.querySelector("#project-requirements-input"),
     projectDeliverablesInput: document.querySelector("#project-deliverables-input"),
-    portfolioPageList: document.querySelector("#portfolio-page-list"),
-    portfolioGenerateAll: document.querySelector("#portfolio-generate-all"),
-    libraryPageList: document.querySelector("#library-page-list"),
-    libraryInsertTip: document.querySelector("#library-insert-tip"),
+    projectProgressInput: document.querySelector("#project-progress-input"),
   };
 
   function persist() {
@@ -61,13 +48,10 @@
     if (!active) return;
     state.projects.forEach(syncProjectWork);
     renderProjectHeader(active);
-    renderInsights(active);
     renderProjectForm(active);
     renderProjects();
     renderMessages();
     renderDashboard();
-    renderPortfolioPage();
-    renderLibraryPage();
     persist();
   }
 
@@ -76,35 +60,15 @@
     nodes.activeProjectType.textContent = `${project.type} · ${statusLabel(project.status)}`;
   }
 
-  function renderInsights(project) {
-    const insights = Core.getProjectInsights(state, project.id);
-    nodes.assistantAdvice.textContent = humanizeAdvice(insights);
-    nodes.assistantSource.textContent = `来源：${buildInsightSource(insights)}`;
-  }
-
-  function humanizeAdvice(insights) {
-    if (insights.missing.length) {
-      return `先把「${insights.missing[0]}」补上。信息清楚后，小画桌再帮菁菁排今天的任务。`;
-    }
-    return insights.nextStep;
-  }
-
-  function buildInsightSource(insights) {
-    const source = [];
-    if (insights.missing.length) source.push(`缺失字段：${insights.missing.slice(0, 3).join("、")}`);
-    if (insights.deadline !== "未设截止") source.push(`截止状态：${insights.deadline}`);
-    if (!source.length) source.push("当前任务状态和交付检查清单");
-    return source.join("；");
-  }
-
   function renderProjectForm(project) {
     nodes.projectNameInput.value = project.name || "";
     nodes.projectTypeInput.value = project.type || "";
     nodes.projectDueInput.value = project.dueDate || "";
+    nodes.projectStatusInput.value = project.status || "todo";
     nodes.projectGoalInput.value = project.goal || "";
-    nodes.projectAudienceInput.value = project.audience || "";
-    nodes.projectSceneInput.value = project.scene || "";
+    nodes.projectRequirementsInput.value = project.requirements || "";
     nodes.projectDeliverablesInput.value = (project.deliverables || []).join("、");
+    nodes.projectProgressInput.value = project.progressNote || "";
   }
 
   function renderProjects() {
@@ -157,18 +121,98 @@
 
   function renderDashboard() {
     const dashboard = Core.getDashboard(state);
-    const activeTasks = state.tasks.filter((task) => task.projectId === state.activeProjectId && task.status !== "done");
-    const todayIds = new Set(dashboard.today.map((task) => task.id));
-    const waitingIds = new Set(dashboard.waiting.map((task) => task.id));
-    const nextTasks = activeTasks.filter((task) => !todayIds.has(task.id) && !waitingIds.has(task.id));
-    const combinedTasks = uniqueTasks(dashboard.today.concat(dashboard.waiting, nextTasks)).slice(0, 6);
-    nodes.todayCount.textContent = combinedTasks.length;
+    const activeTasks = state.tasks.filter((task) => task.projectId === state.activeProjectId);
+    nodes.todayCount.textContent = activeTasks.length;
     nodes.waitingCount.textContent = dashboard.waiting.length;
-    nodes.todayList.replaceChildren(...withEmpty(combinedTasks.map(renderPlanTask), "今天还没有安排。可以点左侧新建项目，或者在下方直接记一句需求。"));
+    nodes.projectTaskList.replaceChildren(...withEmpty(activeTasks.map(renderProjectTaskEditor), "还没有任务。点“新增任务”，或者直接在中间告诉小画桌要做什么。"));
     nodes.waitingList.replaceChildren(...withEmpty(dashboard.waiting.slice(0, 3).map(renderPlanTask), "没有等待确认，菁菁可以专心推进设计"));
-    nodes.nextList.replaceChildren(...withEmpty(nextTasks.slice(0, 4).map(renderPlanTask), "暂时没有可推进任务"));
+    nodes.nextList.replaceChildren();
     const activeRisks = dashboard.risks.filter((risk) => risk.projectId === state.activeProjectId);
     nodes.riskList.replaceChildren(...withEmpty(activeRisks.slice(0, 4).map(renderRisk), "这个项目暂时没有需要确认的风险"));
+  }
+
+  function renderProjectTaskEditor(task) {
+    const item = el("article", { className: `detail-task priority-${task.priority}` });
+    item.append(
+      el("div", { className: "detail-task-grid" }, [
+        el("label", {}, [
+          document.createTextNode("任务"),
+          taskInput(task, "title", task.title, "例如：完成首版包装主视觉"),
+        ]),
+        el("label", {}, [
+          document.createTextNode("截止"),
+          taskInput(task, "dueDate", task.dueDate || "", "", "date"),
+        ]),
+        el("label", {}, [
+          document.createTextNode("状态"),
+          taskSelect(task, "status", task.status),
+        ]),
+        el("label", {}, [
+          document.createTextNode("优先级"),
+          taskSelect(task, "priority", task.priority || "normal", [
+            ["high", "高"],
+            ["normal", "普通"],
+          ]),
+        ]),
+      ]),
+      el("label", { className: "task-detail-label" }, [
+        document.createTextNode("细节 / 下一步"),
+        taskTextarea(task, "nextAction", task.nextAction || "", "写清楚要改哪里、等谁确认、交付时注意什么"),
+      ]),
+      el("div", { className: "detail-task-actions" }, [
+        el("button", {
+          className: "mini-action is-done",
+          type: "button",
+          textContent: task.status === "done" ? "已完成" : "完成",
+          onclick: () => completeTask(task.id),
+        }),
+        el("button", {
+          className: "mini-action",
+          type: "button",
+          textContent: "删除",
+          onclick: () => deleteTask(task.id),
+        }),
+      ])
+    );
+    return item;
+  }
+
+  function taskInput(task, field, value, placeholder = "", type = "text") {
+    return el("input", {
+      type,
+      value,
+      placeholder,
+      oninput: (event) => updateTaskField(task.id, field, event.target.value),
+    });
+  }
+
+  function taskTextarea(task, field, value, placeholder = "") {
+    return el("textarea", {
+      rows: 2,
+      value,
+      placeholder,
+      oninput: (event) => updateTaskField(task.id, field, event.target.value),
+    });
+  }
+
+  function taskSelect(task, field, value, options) {
+    const choices =
+      options ||
+      [
+        ["todo", "未开始"],
+        ["designing", "设计中"],
+        ["waiting", "待确认"],
+        ["done", "已完成"],
+      ];
+    const select = el("select", {
+      onchange: (event) => updateTaskField(task.id, field, event.target.value),
+    });
+    choices.forEach(([optionValue, label]) => {
+      const option = el("option", { value: optionValue, textContent: label });
+      option.selected = optionValue === value;
+      select.append(option);
+    });
+    return select;
   }
 
   function renderPlanTask(task) {
@@ -234,7 +278,53 @@
     if (!task) return;
     state.activeProjectId = task.projectId;
     task.status = "done";
-    addAgentMessage(`已完成：${task.title}\n小画桌已帮菁菁更新今日进度。下一步可以处理等待确认，或记录这次修改的版本变化。`);
+    render();
+  }
+
+  function updateTaskField(taskId, field, value) {
+    const task = state.tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    task[field] = value;
+    persist();
+    renderProjects();
+  }
+
+  function addProjectTask() {
+    const project = Core.getProject(state, state.activeProjectId);
+    state.tasks.push({
+      id: `t-${Date.now()}`,
+      projectId: project.id,
+      title: "新任务",
+      priority: "normal",
+      dueDate: project.dueDate || "",
+      status: "todo",
+      nextAction: "写清楚下一步要做什么",
+      feedbackIds: [],
+    });
+    render();
+  }
+
+  function deleteTask(taskId) {
+    state.tasks = state.tasks.filter((task) => task.id !== taskId);
+    render();
+  }
+
+  function deleteActiveProject() {
+    const project = Core.getProject(state, state.activeProjectId);
+    if (!project) return;
+    const confirmed = window.confirm(`确定删除「${project.name}」吗？这个项目的对话、任务和反馈都会一起删除。`);
+    if (!confirmed) return;
+    state.projects = state.projects.filter((item) => item.id !== project.id);
+    state.tasks = state.tasks.filter((item) => item.projectId !== project.id);
+    state.messages = state.messages.filter((item) => item.projectId !== project.id);
+    state.feedback = state.feedback.filter((item) => item.projectId !== project.id);
+    state.checklist = state.checklist.filter((item) => item.projectId !== project.id);
+    if (!state.projects.length) {
+      createNewProject({ silent: true });
+      return;
+    }
+    state.activeProjectId = state.projects[0].id;
+    render();
   }
 
   function snoozeTask(taskId) {
@@ -329,7 +419,7 @@
 
   async function askQwenIntent(message) {
     try {
-      const project = Core.getProject(state, state.activeProjectId);
+      const project = getProjectContext(state.activeProjectId);
       const dashboard = Core.getDashboard(state);
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), 2500);
@@ -401,7 +491,7 @@
     agentMessage.text = composePendingModelReply(visibleLocalReply);
     render();
     try {
-      const project = Core.getProject(state, state.activeProjectId);
+      const project = getProjectContext(state.activeProjectId);
       const dashboard = Core.getDashboard(state);
       const response = await fetch(`${getApiBase()}/api/chat`, {
         method: "POST",
@@ -503,7 +593,7 @@
     render();
   }
 
-  function createNewProject() {
+  function createNewProject(options = {}) {
     const projectId = `p-${Date.now()}`;
     const project = {
       id: projectId,
@@ -513,6 +603,8 @@
       goal: "",
       audience: "",
       scene: "",
+      requirements: "",
+      progressNote: "",
       keywords: [],
       deliverables: [],
       dueDate: "",
@@ -534,11 +626,11 @@
     state.tasks.push({
       id: `t-${Date.now()}`,
       projectId,
-      title: "补齐项目小纸条：目标、截止时间、交付物",
+      title: "补齐项目详情",
       priority: "high",
       dueDate: "",
       status: "todo",
-      nextAction: "先在右侧写清楚做什么、什么时候交、最后交哪些图",
+      nextAction: "先写清楚要求、DDL、交付物和当前进度",
       feedbackIds: [],
     });
     state.checklist.push(
@@ -548,7 +640,11 @@
     );
     state.activeProjectId = projectId;
     showView("workbench");
-    addAgentMessage("新项目已创建。先在右侧「项目小纸条」写清楚：做什么、什么时候交、最后要交哪些图。小画桌会据此重新安排今天要做的事。");
+    if (options.silent) {
+      render();
+      return;
+    }
+    addAgentMessage("新项目已创建。菁菁先在右侧填一点项目详情：要求、DDL、交付物和当前进度。填完以后，中间直接问我怎么做就好。");
   }
 
   function sortProjects() {
@@ -601,14 +697,14 @@
     project.name = nodes.projectNameInput.value.trim() || "未命名设计项目";
     project.type = nodes.projectTypeInput.value.trim() || "设计项目";
     project.dueDate = nodes.projectDueInput.value;
+    project.status = nodes.projectStatusInput.value || "todo";
     project.goal = nodes.projectGoalInput.value.trim();
-    project.audience = nodes.projectAudienceInput.value.trim();
-    project.scene = nodes.projectSceneInput.value.trim();
+    project.requirements = nodes.projectRequirementsInput.value.trim();
     project.deliverables = splitList(nodes.projectDeliverablesInput.value);
+    project.progressNote = nodes.projectProgressInput.value.trim();
     project.risks = Array.from(new Set(buildProjectRisks(project).concat(preservedRisks)));
     syncProjectWork(project);
     renderProjectHeader(project);
-    renderInsights(project);
     renderProjects();
     renderDashboard();
     persist();
@@ -631,7 +727,7 @@
   }
 
   function updateProjectBriefTask(project) {
-    const task = state.tasks.find((item) => item.projectId === project.id && item.title.startsWith("补齐项目小纸条"));
+    const task = state.tasks.find((item) => item.projectId === project.id && (item.title.startsWith("补齐项目小纸条") || item.title.startsWith("补齐项目详情")));
     project.risks = project.risks.filter((risk) => {
       if (risk === "缺少设计目标" && project.goal) return false;
       if (risk === "缺少交付物清单" && project.deliverables.length) return false;
@@ -641,7 +737,7 @@
     if (!task) return;
     const hasBaseInfo = project.goal && project.deliverables.length && project.dueDate;
     task.status = hasBaseInfo ? "done" : "todo";
-    task.nextAction = hasBaseInfo ? "可以开始设计或记录下一条反馈" : "先在右侧写清楚做什么、什么时候交、最后交哪些图";
+    task.nextAction = hasBaseInfo ? "可以开始设计或记录下一条反馈" : "先在右侧写清楚要求、DDL、交付物和当前进度";
   }
 
   function syncProjectWork(project) {
@@ -670,11 +766,25 @@
   }
 
   function isProjectReadyForWorkflow(project) {
-    return Boolean(project && project.name && project.type && project.goal && project.dueDate && project.deliverables.length);
+    return Boolean(project && project.name && project.type && (project.goal || project.requirements) && project.dueDate && project.deliverables.length);
   }
 
   function projectWorkflowFingerprint(project) {
-    return [project.id, project.name, project.type, project.dueDate, project.goal, project.deliverables.join("|")].join("::");
+    const taskFingerprint = state.tasks
+      .filter((task) => task.projectId === project.id)
+      .map((task) => [task.title, task.status, task.priority, task.dueDate, task.nextAction].join("|"))
+      .join("::");
+    return [
+      project.id,
+      project.name,
+      project.type,
+      project.dueDate,
+      project.goal,
+      project.requirements,
+      project.progressNote,
+      project.deliverables.join("|"),
+      taskFingerprint,
+    ].join("::");
   }
 
   async function analyzeProjectFromCard(projectId) {
@@ -696,7 +806,7 @@
       role: "agent",
       projectId: project.id,
       createdAt: new Date().toISOString(),
-      text: `${workflow.summary}\n\n正在请千问根据项目小纸条补充更细的安排...`,
+      text: `${workflow.summary}\n\n正在请千问根据项目详情补充更细的安排...`,
     });
     render();
     await askQwenForProjectWorkflow(project.id, messageId, workflow.summary, runId);
@@ -731,7 +841,7 @@
 
   async function askQwenForProjectWorkflow(projectId, messageId, fallbackReply, runId) {
     try {
-      const project = Core.getProject(state, projectId);
+      const project = getProjectContext(projectId);
       const dashboard = Core.getDashboard(state);
       const response = await fetch(`${getApiBase()}/api/chat`, {
         method: "POST",
@@ -739,7 +849,7 @@
         body: JSON.stringify({
           intent: "project_workflow",
           message: [
-            "请根据我刚填写的项目小纸条，分析这个设计项目，并安排一个可执行工作流。",
+            "请根据我刚填写的项目详情，分析这个设计项目，并安排一个可执行工作流。",
             "请重点说明：项目判断、今日先做、后续步骤、需要确认、交付风险。",
             "不要假设已经完成的结果，不要编造客户反馈。",
           ].join("\n"),
@@ -768,14 +878,34 @@
     render();
   }
 
+  function getProjectContext(projectId) {
+    const project = Core.getProject(state, projectId);
+    return {
+      ...project,
+      tasks: state.tasks
+        .filter((task) => task.projectId === project.id)
+        .map((task) => ({
+          title: task.title,
+          status: task.status,
+          priority: task.priority,
+          dueDate: task.dueDate,
+          nextAction: task.nextAction,
+        })),
+      feedback: state.feedback
+        .filter((item) => item.projectId === project.id)
+        .slice(-5)
+        .map((item) => ({
+          from: item.from,
+          raw: item.raw,
+          action: item.action,
+          handled: item.handled,
+        })),
+    };
+  }
+
   function showView(view) {
     currentView = view;
     nodes.workbenchView.classList.toggle("is-active", view === "workbench");
-    nodes.portfolioView.classList.toggle("is-active", view === "portfolio");
-    nodes.libraryView.classList.toggle("is-active", view === "library");
-    document.querySelectorAll(".view-link").forEach((item) => item.classList.toggle("is-active", item.dataset.panel === view));
-    renderPortfolioPage();
-    renderLibraryPage();
   }
 
   function filterProject(project, filter) {
@@ -855,43 +985,15 @@
     });
   });
 
-  document.querySelectorAll(".quick-action").forEach((button) => {
+  document.querySelectorAll(".prompt-chip").forEach((button) => {
     button.addEventListener("click", () => fillQuickTemplate(button.dataset.template));
-  });
-
-  document.querySelectorAll(".view-link").forEach((button) => {
-    button.addEventListener("click", () => {
-      showView(button.dataset.panel);
-    });
   });
 
   nodes.newProjectBtn.addEventListener("click", createNewProject);
   nodes.sortProjectsBtn.addEventListener("click", sortProjects);
-  nodes.dailySummaryBtn.addEventListener("click", () => addAgentMessage(Core.generateDailySummary(state)));
-  nodes.planDayBtn.addEventListener("click", () => addAgentMessage(Core.generateDailyPlan(state)));
-  nodes.reviewBtn.addEventListener("click", () => {
-    const project = Core.getProject(state, state.activeProjectId);
-    addAgentMessage(Core.generateReview(project, state.feedback.filter((item) => item.projectId === project.id)));
-  });
-  nodes.riskAuditBtn.addEventListener("click", auditRisks);
-  nodes.checklistBtn.addEventListener("click", showChecklist);
-  nodes.markWaiting.addEventListener("click", markWaitingSummary);
-  nodes.showAllTasks.addEventListener("click", showAllTasks);
-  nodes.portfolioBtn.addEventListener("click", () => {
-    const project = Core.getProject(state, state.activeProjectId);
-    addAgentMessage(Core.generatePortfolioCase(project, state.feedback.filter((item) => item.projectId === project.id)));
-  });
+  nodes.addTaskBtn.addEventListener("click", addProjectTask);
+  nodes.deleteProjectBtn.addEventListener("click", deleteActiveProject);
   nodes.projectForm.addEventListener("input", updateActiveProjectFromForm);
-  nodes.portfolioGenerateAll.addEventListener("click", () => {
-    const project = Core.getProject(state, state.activeProjectId);
-    showView("workbench");
-    addAgentMessage(Core.generatePortfolioCase(project, state.feedback.filter((item) => item.projectId === project.id)));
-  });
-  nodes.libraryInsertTip.addEventListener("click", () => {
-    showView("workbench");
-    nodes.messageInput.value = "反馈：画面太普通，希望更高级一点。";
-    nodes.messageInput.focus();
-  });
 
   render();
 })();

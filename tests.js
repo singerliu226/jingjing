@@ -2240,13 +2240,21 @@ function applyInput(state, text, now = fixedNow, options = {}) {
 {
   const indexSource = fs.readFileSync("index.html", "utf8");
   const stylesSource = fs.readFileSync("styles.css", "utf8");
-  assert.ok(indexSource.includes("先把今天的事说给小画桌"));
-  assert.ok(indexSource.includes("<h2>沉淀</h2>"));
+  assert.ok(indexSource.includes("菁菁，和小画桌慢慢说"));
+  assert.ok(indexSource.includes("<h3>项目详情</h3>"));
+  assert.ok(indexSource.includes("id=\"project-task-list\""));
+  assert.ok(indexSource.includes("prompt-chip"));
+  assert.ok(!indexSource.includes("id=\"daily-summary-btn\""));
+  assert.ok(!indexSource.includes("id=\"review-btn\""));
+  assert.ok(!indexSource.includes("id=\"checklist-btn\""));
+  assert.ok(!indexSource.includes("id=\"risk-audit-btn\""));
+  assert.ok(!indexSource.includes("id=\"portfolio-btn\""));
+  assert.ok(!indexSource.includes("<h2>沉淀</h2>"));
   assert.ok(!indexSource.includes("<h2>更多</h2>"));
   assert.ok(!indexSource.includes("data-panel=\"workbench\""));
-  assert.ok(indexSource.includes("secondary-view-link"));
-  assert.ok(stylesSource.includes(".secondary-view-link"));
-  assert.ok(stylesSource.includes("minmax(620px, 1fr) minmax(320px, 360px)"));
+  assert.ok(stylesSource.includes(".project-detail-card"));
+  assert.ok(stylesSource.includes(".prompt-chip"));
+  assert.ok(stylesSource.includes("minmax(620px, 1fr) minmax(360px, 420px)"));
 }
 
 {
@@ -2272,11 +2280,18 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(!appSource.includes("composeModelErrorReply(visibleLocalReply || fallbackReply, error)"));
   assert.ok(!appSource.includes("agentMessage.text = payload.reply || fallbackReply"));
   assert.ok(appSource.includes("localReply: fallbackReply"));
+  assert.ok(appSource.includes("function getProjectContext(projectId)"));
+  assert.ok(appSource.includes("project.requirements"));
+  assert.ok(appSource.includes("project.progressNote"));
+  assert.ok(appSource.includes("taskFingerprint"));
   assert.ok(appSource.includes("\"record_feedback\""));
   assert.ok(!appSource.match(/shouldShowLocalUpdateWithModelReply[\s\S]*?optimize_readability/));
   assert.ok(serverSource.includes("本地工作台已经先完成状态更新"));
   assert.ok(serverSource.includes("本地已整理结果"));
   assert.ok(serverSource.includes("普通对话不要套固定栏目"));
+  assert.ok(serverSource.includes("需求细节："));
+  assert.ok(serverSource.includes("当前进度："));
+  assert.ok(serverSource.includes("项目任务："));
   assert.ok(serverSource.includes("格式固定为：项目判断、今日先做、后续步骤、需要确认、交付风险"));
   assert.ok(!serverSource.includes("格式固定为：已记录、设计动作、下一步、需要确认、交付风险"));
 }
