@@ -2276,6 +2276,10 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(indexSource.includes("id=\"attachment-input\""));
   assert.ok(indexSource.includes("id=\"attach-button\""));
   assert.ok(indexSource.includes("id=\"attachment-dock\""));
+  assert.ok(indexSource.includes("id=\"service-gate\""));
+  assert.ok(indexSource.includes("id=\"detail-toggle\""));
+  assert.ok(indexSource.includes("id=\"detail-fab\""));
+  assert.ok(indexSource.includes("id=\"rail-backdrop\""));
   assert.ok(indexSource.includes("id=\"project-task-list\""));
   assert.ok(indexSource.includes("prompt-chip"));
   assert.ok(!indexSource.includes("id=\"daily-summary-btn\""));
@@ -2293,6 +2297,9 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(stylesSource.includes(".attachment-dock"));
   assert.ok(stylesSource.includes(".attach-button"));
   assert.ok(stylesSource.includes(".message-attachments"));
+  assert.ok(stylesSource.includes(".service-gate"));
+  assert.ok(stylesSource.includes("body.detail-open .work-rail"));
+  assert.ok(stylesSource.includes("grid-template-columns: 40px minmax(0, 1fr) 44px"));
   assert.ok(stylesSource.includes("minmax(620px, 1fr) minmax(360px, 420px)"));
 }
 
@@ -2323,6 +2330,9 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(appSource.includes("pendingAttachments"));
   assert.ok(appSource.includes("readAttachmentFile(file)"));
   assert.ok(appSource.includes("buildProjectAutofill(message, modelIntent, analysis)"));
+  assert.ok(appSource.includes("buildFallbackRequirement"));
+  assert.ok(appSource.includes("菁菁想做"));
+  assert.ok(!appSource.includes("从对话提取："));
   assert.ok(appSource.includes("已从对话补齐"));
   assert.ok(appSource.includes("function getProjectContext(projectId)"));
   assert.ok(appSource.includes("project.requirements"));
@@ -2339,6 +2349,8 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(serverSource.includes("VISION_MODEL"));
   assert.ok(serverSource.includes("image_url"));
   assert.ok(serverSource.includes("data:image"));
+  assert.ok(serverSource.includes("视觉诊断卡"));
+  assert.ok(serverSource.includes("第一眼看到什么"));
   assert.ok(serverSource.includes("requirements、progressNote"));
   assert.ok(serverSource.includes("tasks 结构"));
   assert.ok(serverSource.includes("格式固定为：项目判断、今日先做、后续步骤、需要确认、交付风险"));

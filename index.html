@@ -7,6 +7,13 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div class="service-gate" id="service-gate" hidden>
+      <div class="service-gate-panel">
+        <h2>请从服务版打开小画桌</h2>
+        <p>图片分析和千问对话需要本地服务支持。直接打开 HTML 文件会让这些能力不稳定。</p>
+        <a href="http://localhost:4174/">打开 http://localhost:4174/</a>
+      </div>
+    </div>
     <div class="app-shell">
       <aside class="sidebar" aria-label="项目与视图">
         <div class="brand">
@@ -48,6 +55,7 @@
             <div class="project-kicker" id="active-project-type">视觉设计 · 进行中</div>
             <h2 id="active-project-name">品牌升级 · 青禾咖啡</h2>
           </div>
+          <button class="detail-toggle" id="detail-toggle" type="button">项目详情</button>
         </section>
 
         <div class="content-grid app-view is-active" id="workbench-view">
@@ -129,6 +137,8 @@
         </div>
       </main>
     </div>
+    <button class="detail-fab" id="detail-fab" type="button">项目详情</button>
+    <div class="rail-backdrop" id="rail-backdrop"></div>
 
     <template id="message-template">
       <article class="message">

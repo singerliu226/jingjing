@@ -76,9 +76,18 @@ function makeRedPngDataUrl() {
 
 record("首屏信息架构：左项目、中对话、右项目详情", () => {
   const html = read("index.html");
+  const app = read("app.js");
+  const css = read("styles.css");
   assert.ok(html.includes("id=\"project-list\""));
   assert.ok(html.includes("aria-label=\"和小画桌对话\""));
   assert.ok(html.includes("aria-label=\"项目详情\""));
+  assert.ok(html.includes("id=\"service-gate\""));
+  assert.ok(html.includes("id=\"detail-toggle\""));
+  assert.ok(html.includes("id=\"detail-fab\""));
+  assert.ok(html.includes("id=\"rail-backdrop\""));
+  assert.ok(app.includes("guardServiceEntry"));
+  assert.ok(app.includes("openProjectDetail"));
+  assert.ok(css.includes("body.detail-open .work-rail"));
   assert.ok(!html.includes("日报"));
   assert.ok(!html.includes("知识库"));
 });
@@ -118,7 +127,16 @@ record("服务端：有图片时切视觉模型，无图片时保留文本模型
   assert.ok(server.includes("VISION_MODEL"));
   assert.ok(server.includes("hasImage ? VISION_MODEL : MODEL"));
   assert.ok(server.includes("image_url"));
-  assert.ok(server.includes("从信息层级、构图、字体、色彩、留白"));
+  assert.ok(server.includes("视觉诊断卡"));
+  assert.ok(server.includes("第一眼看到什么"));
+  assert.ok(server.includes("版式层级、构图、字体、色彩、留白"));
+});
+
+record("对话回填：兜底内容要像项目小结，不暴露机器拼接", () => {
+  const app = read("app.js");
+  assert.ok(app.includes("菁菁想做"));
+  assert.ok(app.includes("还需要确认："));
+  assert.ok(!app.includes("从对话提取："));
 });
 
 record("核心记录：新项目、交付物、截止时间能被整理", () => {
@@ -237,6 +255,7 @@ recordLive("真实图片对话：上传图片时切到视觉模型", async () =>
   });
   assert.equal(payload.model, "qwen-vl-plus");
   assert.ok(payload.reply.length > 10);
+  assert.ok(payload.reply.includes("视觉诊断卡") || payload.reply.includes("第一眼"));
   return payload.reply.slice(0, 40).replace(/\s+/g, " ");
 });
 

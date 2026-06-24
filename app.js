@@ -13,6 +13,7 @@
 
   const nodes = {
     workbenchView: document.querySelector("#workbench-view"),
+    serviceGate: document.querySelector("#service-gate"),
     projectList: document.querySelector("#project-list"),
     chatStream: document.querySelector("#chat-stream"),
     composer: document.querySelector("#composer"),
@@ -33,6 +34,9 @@
     sortProjectsBtn: document.querySelector("#sort-projects-btn"),
     addTaskBtn: document.querySelector("#add-task-btn"),
     deleteProjectBtn: document.querySelector("#delete-project-btn"),
+    detailToggle: document.querySelector("#detail-toggle"),
+    detailFab: document.querySelector("#detail-fab"),
+    railBackdrop: document.querySelector("#rail-backdrop"),
     projectForm: document.querySelector("#project-form"),
     projectNameInput: document.querySelector("#project-name-input"),
     projectTypeInput: document.querySelector("#project-type-input"),
@@ -63,6 +67,20 @@
   function renderProjectHeader(project) {
     nodes.activeProjectName.textContent = project.name;
     nodes.activeProjectType.textContent = `${project.type} · ${statusLabel(project.status)}`;
+  }
+
+  function guardServiceEntry() {
+    if (window.location.protocol !== "file:") return;
+    document.body.classList.add("service-entry-required");
+    if (nodes.serviceGate) nodes.serviceGate.hidden = false;
+  }
+
+  function openProjectDetail() {
+    document.body.classList.add("detail-open");
+  }
+
+  function closeProjectDetail() {
+    document.body.classList.remove("detail-open");
   }
 
   function renderProjectForm(project) {
@@ -609,8 +627,24 @@
   }
 
   function buildFallbackRequirement(message, fill) {
-    if (!fill.name && !fill.type && !fill.deliverables.length && !fill.goal) return "";
-    return `从对话提取：${message}`;
+    const facts = [];
+    const target = fill.name || (fill.deliverables.length ? `${fill.deliverables[0]}项目` : "");
+    if (target) facts.push(`菁菁想做「${target}」`);
+    if (fill.deliverables.length) facts.push(`交付物先按 ${fill.deliverables.join("、")} 记录`);
+    if (fill.goal) facts.push(`核心目标是 ${fill.goal}`);
+    if (!facts.length) return "";
+    const needs = inferMissingQuestions(message, fill);
+    return `${facts.join("；")}。${needs}`;
+  }
+
+  function inferMissingQuestions(message, fill) {
+    const questions = [];
+    if (!/(投放|发布|门口|店内|朋友圈|小红书|公众号|线下|线上|场景|用途)/.test(message)) questions.push("投放位置");
+    if (!/(主题|活动|优惠|新品|开业|乐队|DJ|时间|地点|标题|主信息)/i.test(message)) questions.push("主信息");
+    if (!/(高级|年轻|复古|霓虹|工业|可爱|国潮|极简|暗黑|活泼|风格|调性)/.test(message)) questions.push("视觉调性");
+    if (!fill.deliverables.length) questions.push("交付物");
+    if (!questions.length) return "基础方向已记录，下一步可以让小画桌拆成今天能做的任务。";
+    return `还需要确认：${questions.slice(0, 4).join("、")}。`;
   }
 
   function normalizeAutofillTasks(tasks) {
@@ -1275,7 +1309,11 @@
   nodes.projectForm.addEventListener("input", updateActiveProjectFromForm);
   nodes.attachButton.addEventListener("click", () => nodes.attachmentInput.click());
   nodes.attachmentInput.addEventListener("change", (event) => handleAttachmentFiles(event.target.files));
+  nodes.detailToggle.addEventListener("click", openProjectDetail);
+  nodes.detailFab.addEventListener("click", openProjectDetail);
+  nodes.railBackdrop.addEventListener("click", closeProjectDetail);
 
+  guardServiceEntry();
   render();
   renderAttachmentDock();
 })();
