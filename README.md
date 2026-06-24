@@ -14,6 +14,12 @@ DASHSCOPE_API_KEY="你的阿里云百炼 API Key" node server.js
 
 然后访问 `http://localhost:4174`。
 
+## 部署上线
+
+如果要远程给菁菁体验，请部署 Node 服务，不要只部署静态文件。推荐使用阿里云轻量应用服务器或 ECS，并把千问 API Key 配到服务器环境变量里。
+
+完整步骤见：[docs/deploy-online.md](docs/deploy-online.md)。
+
 可选模型配置：
 
 ```bash

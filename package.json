@@ -1,0 +1,15 @@
+{
+  "name": "jingjing-design-desk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "菁菁小画桌：给初级平面设计师使用的聊天式工作整理 agent。",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests.js && node eval-intents.js",
+    "qa": "node qa-tests.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
