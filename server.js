@@ -8,7 +8,15 @@ const API_KEY = process.env.DASHSCOPE_API_KEY || "";
 const MODEL = process.env.DASHSCOPE_MODEL || "qwen-plus";
 const VISION_MODEL = process.env.DASHSCOPE_VISION_MODEL || "qwen-vl-plus";
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 12_000_000);
+const MAX_UPSTREAM_BYTES = Number(process.env.MAX_UPSTREAM_BYTES || 1_000_000);
+const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_TIMEOUT_MS || 25_000);
+const API_TOKEN = process.env.DESIGN_DESK_API_TOKEN || "";
 const ROOT = __dirname;
+const DEFAULT_ALLOWED_ORIGINS = [`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`, `http://[::1]:${PORT}`];
+const ALLOWED_ORIGINS = (process.env.DESIGN_DESK_ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS.join(","))
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 const INTENT_BEHAVIORS = [
   "ask_plan",
   "ask_summary",
@@ -23,6 +31,7 @@ const INTENT_BEHAVIORS = [
   "project_retrospective",
   "record_project_outcome",
   "generate_growth_profile",
+  "explain_sanitized_error",
   "ask_confirmation_message",
   "request_missing_assets",
   "clarify_vague_feedback",
@@ -104,10 +113,16 @@ const mimeTypes = {
 const publicFiles = new Set(["index.html", "styles.css", "app.js", "core.js"]);
 
 function send(res, status, body, headers = {}) {
+  const corsHeaders = res._corsOrigin
+    ? {
+        "Access-Control-Allow-Origin": res._corsOrigin,
+        Vary: "Origin",
+      }
+    : {};
   res.writeHead(status, {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "content-type",
+    "Access-Control-Allow-Headers": "content-type, authorization, x-design-desk-token",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    ...corsHeaders,
     ...headers,
   });
   res.end(body);
@@ -130,6 +145,70 @@ function readBody(req) {
     req.on("end", () => resolve(body));
     req.on("error", reject);
   });
+}
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  return ALLOWED_ORIGINS.includes(origin);
+}
+
+function prepareCors(req, res) {
+  const origin = req.headers.origin || "";
+  if (!origin) return true;
+  if (!isAllowedOrigin(origin)) return false;
+  res._corsOrigin = origin;
+  return true;
+}
+
+function authorizeApiRequest(req) {
+  if (!API_TOKEN) return true;
+  const token = String(req.headers["x-design-desk-token"] || "");
+  const bearer = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  return token === API_TOKEN || bearer === API_TOKEN;
+}
+
+function sanitizeServerError(error, fallback) {
+  const message = String((error && error.message) || "");
+  if (/DASHSCOPE_API_KEY|API key|API Key|401|403|Unauthorized|Forbidden/i.test(message)) return "千问服务访问未授权或密钥未配置，请检查本地服务配置。";
+  if (/timed out|timeout/i.test(message)) return "千问服务响应超时，请稍后再试。";
+  if (/too large|response body/i.test(message)) return "千问服务返回内容过大，已停止处理。";
+  if (/non-JSON|JSON/i.test(message)) return "千问服务返回格式异常，请稍后再试。";
+  return fallback;
+}
+
+function isSensitiveErrorDisclosureRequest(message) {
+  return (
+    /(完整|原始|全部|详细).*(错误|报错|异常|日志|堆栈|stack|trace)|把.*(错误|报错|异常|日志|堆栈).*(给我|发我|贴出来)|show.*(full|raw).*(error|stack|log)/i.test(String(message || "")) &&
+    /(千问|DashScope|dashscope|api|API|key|Key|密钥|token|Token|Authorization|Bearer|配额|额度|账号|区域|region|上游|服务|代理|server|服务器)/i.test(String(message || ""))
+  );
+}
+
+function buildSanitizedErrorReply() {
+  return [
+    "核心判断：完整上游错误可能包含密钥、账号、配额或区域信息，不能原样展示。",
+    "优先动作（下一步）：",
+    "1. 只看脱敏后的错误类别：未配置、未授权、超时、额度/区域限制、返回格式异常。",
+    "2. 检查服务是否通过本地入口打开，并确认环境变量和授权 token 已配置。",
+    "3. 如果要排查，把密钥、授权头、账号 ID、区域信息和堆栈明细先打码。",
+    "为什么：排查问题只需要错误类别和发生位置；原始错误会扩大泄露面。",
+    "验收标准：发给别人前，文本里不出现密钥、授权头、账号、区域细节或堆栈明细。",
+  ].join("\n");
+}
+
+function isFinalDeliveryCheckRequest(message) {
+  return /准备发客户|发客户|最终检查|最后帮我看|最后看下|交付前|准备交付|终稿|定稿/.test(String(message || ""));
+}
+
+function buildFinalDeliveryBoundaryReply() {
+  return [
+    "核心判断：暂不建议直接发客户，因为目前缺少当前稿截图、客户验收标准和交付规格这三类证据。",
+    "优先动作（下一步）：",
+    "1. 先补当前稿截图或链接，确认主信息、可读性和错漏。",
+    "2. 对照客户原始要求，核对尺寸、格式、文案终稿、版权和命名规范。",
+    "3. 如果时间紧，只做交付风险修正，不临门重做风格方向。",
+    "为什么：终稿检查的目标不是继续发散创意，而是降低客户验收风险。",
+    "验收标准：截图、尺寸/格式、文案终稿、素材授权和导出文件都确认后，再发客户。",
+  ].join("\n");
 }
 
 function serveStatic(req, res) {
@@ -158,8 +237,11 @@ function buildMessages(input, attachments = []) {
   const recentMessages = Array.isArray(input.recentMessages) ? input.recentMessages.slice(-8) : [];
   const dashboard = input.dashboard || {};
   const localReply = String(input.localReply || "").slice(0, 2000);
+  const analysis = input.analysis && typeof input.analysis === "object" ? input.analysis : {};
   const imageAttachments = attachments.filter((attachment) => attachment.kind === "image");
   const textAttachments = attachments.filter((attachment) => attachment.kind === "text");
+  const isDesignMentor = shouldUseDesignMentorContract(input, analysis, imageAttachments);
+  const asksErrorDisclosure = analysis.behavior === "explain_sanitized_error" || isSensitiveErrorDisclosureRequest(input.message);
   const projectWorkflowInstruction =
     input.intent === "project_workflow"
       ? [
@@ -172,6 +254,21 @@ function buildMessages(input, attachments = []) {
   const formatInstruction =
     input.intent === "project_workflow"
       ? "格式固定为：项目判断、今日先做、后续步骤、需要确认、交付风险。没有的项目可以省略。"
+      : isDesignMentor
+        ? [
+            "设计咨询必须用成长型 mentor 结构，不要写成整段说明书。",
+            "格式固定为：核心判断、优先动作、为什么、验收标准。每个标题后直接写内容。",
+            "用初级设计师能马上照做的话说，不要堆术语；少说“视觉层级重构、微质感、视觉锚点、材质语言”，多说“放大标题、删掉多余颜色、加一点留白、先用手机看 3 秒”。",
+            "核心判断只写 1 句人话，直接告诉她现在最大问题是什么。",
+            "优先动作最多 3 条，每条都用“动词 + 对象 + 怎么做”的句式，例如“把主标题放大一档”“把颜色收成黑白灰 + 1 个强调色”。",
+            "为什么只解释最关键原因，不讲抽象理论。",
+            "验收标准给 1 条用户改完后能自己检查的标准，最好能用 3 秒预览、手机预览、缩小截图这类方法。",
+            "没有截图、Figma 节点、明确规格或用户给出的数值时，不要编造精确 px、色值、比例或“我看到”的视觉结论；尤其不要输出 24px、32px、#333 这类假精确参数；用范围、排查顺序和自查方法表达。",
+            "可访问性建议不要说“WCAG AA 最小字号 14px”；优先提醒对比度、真实设备预览、系统字号缩放、触控目标和阅读距离。",
+            "如果用户说“按你说的/上一轮/上版/再看看”，先写“上轮目标对照”，逐项复评上一轮目标是否改善，然后仍然必须写“核心判断”。",
+            "如果用户说“准备发客户/最终检查/最后看下”，即使缺少截图或需求，也必须用固定结构回答；核心判断先明确“可以发/暂不建议发”，再列交付风险，不要只让用户补材料。",
+            "不要输出“我已整理/我已同步/我记录到”，不要把内部过程甩给用户。",
+          ].join("\n")
       : [
           "普通对话不要套固定栏目，回复保持 3-6 行。",
           "优先给菁菁一个清楚判断，再给 1-3 个下一步动作。",
@@ -185,10 +282,12 @@ function buildMessages(input, attachments = []) {
     "如果用户输入的是反馈，先翻译成设计动作；如果是需求，先整理 brief；如果是进度，帮她更新复盘口径。",
     "不要编造已完成的文件或真实业务结果。没有信息时直接说需要补充什么。",
     "不要编造具体时刻、人员、确认结果、业务效果或文件名；除非用户明确给出。",
+    "如果用户要求查看完整错误、原始报错、堆栈、Authorization、Bearer、API Key、账号、配额或区域信息，只能给脱敏摘要和排查步骤，绝不输出原始敏感内容。",
+    asksErrorDisclosure ? "这次用户在要求完整错误信息。直接拒绝原样展示，使用：核心判断、优先动作、为什么、验收标准；只给脱敏排查摘要。" : "",
     imageAttachments.length
       ? [
           "用户上传了设计图、参考图或截图。你要像资深平面设计师一样看图，不要只描述图片内容。",
-          "图片回复固定用「视觉诊断卡」结构：第一眼看到什么、最大问题、优先改哪 3 件事、如果只剩 30 分钟怎么救、需要确认什么。",
+          "图片回复优先使用「核心判断、优先动作、为什么、验收标准」结构；如果必须描述图面，只用“第一眼看到什么”补一句。",
           "每条建议必须落到版式层级、构图、字体、色彩、留白、视觉锚点、品牌一致性、可读性或交付风险，不要空泛说高级感/美观。",
         ].join("\n")
       : "",
@@ -226,6 +325,34 @@ function buildMessages(input, attachments = []) {
     })),
     { role: "user", content: finalUserContent },
   ];
+}
+
+function shouldUseDesignMentorContract(input, analysis, imageAttachments) {
+  if (imageAttachments.length) return true;
+  const behavior = String(analysis.behavior || input.behavior || "").trim();
+  if (behavior === "explain_sanitized_error") return true;
+  const mentorBehaviors = new Set([
+    "answer_design_question",
+    "ask_design_directions",
+    "optimize_readability",
+    "recommend_color_system",
+    "recommend_typography_system",
+    "solve_design_issue",
+    "guide_design_software_operation",
+    "prepare_design_presentation",
+    "simulate_design_defense",
+    "ask_plan",
+    "ask_summary",
+    "ask_checklist",
+    "ask_portfolio",
+    "project_retrospective",
+    "generate_growth_profile",
+    "summarize_version_changes",
+  ]);
+  if (mentorBehaviors.has(behavior)) return true;
+  return /高级感|不高级|怎么改|哪里乱|好看|丑|普通|质感|版式|字体|字号|配色|颜色|留白|层级|对齐|按钮|卡片|动效|交互|UI|UX|设计|老板说|客户说|复盘|成长/.test(
+    String(input.message || "")
+  );
 }
 
 function buildUserContent(text, imageAttachments) {
@@ -311,16 +438,14 @@ function buildIntentMessages(input) {
   ];
 }
 
-function callQwen(payload) {
+function callDashScope(body, parseContent) {
   return new Promise((resolve, reject) => {
-    const attachments = normalizeAttachments(payload.attachments);
-    const hasImage = attachments.some((attachment) => attachment.kind === "image");
-    const body = JSON.stringify({
-      model: hasImage ? VISION_MODEL : MODEL,
-      messages: buildMessages(payload, attachments),
-      temperature: 0.25,
-      max_tokens: hasImage ? 900 : 520,
-    });
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
     const req = https.request(
       {
         hostname: "dashscope.aliyuncs.com",
@@ -334,79 +459,74 @@ function callQwen(payload) {
       },
       (res) => {
         let data = "";
+        let bytes = 0;
         res.on("data", (chunk) => {
+          if (settled) return;
+          bytes += chunk.length;
+          if (bytes > MAX_UPSTREAM_BYTES) {
+            fail(new Error("Qwen response body too large."));
+            res.destroy();
+            req.destroy();
+            return;
+          }
           data += chunk;
         });
         res.on("end", () => {
+          if (settled) return;
+          settled = true;
           let parsed;
           try {
             parsed = JSON.parse(data);
           } catch (error) {
-            reject(new Error(`Qwen returned non-JSON response: ${data.slice(0, 200)}`));
+            reject(new Error("Qwen returned non-JSON response."));
             return;
           }
           if (res.statusCode < 200 || res.statusCode >= 300) {
-            reject(new Error(parsed.error?.message || parsed.message || `Qwen request failed with ${res.statusCode}`));
-            return;
-          }
-          resolve(sanitizeReply(parsed.choices?.[0]?.message?.content || "", payload.message || ""));
-        });
-      }
-    );
-    req.on("error", reject);
-    req.write(body);
-    req.end();
-  });
-}
-
-function callQwenIntent(payload) {
-  return new Promise((resolve, reject) => {
-    const body = JSON.stringify({
-      model: MODEL,
-      messages: buildIntentMessages(payload),
-      temperature: 0.05,
-      max_tokens: 360,
-    });
-    const req = https.request(
-      {
-        hostname: "dashscope.aliyuncs.com",
-        path: "/compatible-mode/v1/chat/completions",
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(body),
-        },
-      },
-      (res) => {
-        let data = "";
-        res.on("data", (chunk) => {
-          data += chunk;
-        });
-        res.on("end", () => {
-          let parsed;
-          try {
-            parsed = JSON.parse(data);
-          } catch (error) {
-            reject(new Error(`Qwen returned non-JSON response: ${data.slice(0, 200)}`));
-            return;
-          }
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            reject(new Error(parsed.error?.message || parsed.message || `Qwen request failed with ${res.statusCode}`));
+            reject(new Error(`Qwen request failed with ${res.statusCode}`));
             return;
           }
           try {
-            resolve(normalizeIntent(parseJsonObject(parsed.choices?.[0]?.message?.content || "")));
+            resolve(parseContent(parsed.choices?.[0]?.message?.content || ""));
           } catch (error) {
             reject(error);
           }
         });
       }
     );
-    req.on("error", reject);
+    req.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
+      fail(new Error("Qwen request timed out."));
+      req.destroy();
+    });
+    req.on("error", fail);
     req.write(body);
     req.end();
   });
+}
+
+function callQwen(payload) {
+  if (isSensitiveErrorDisclosureRequest(payload.message)) return Promise.resolve(buildSanitizedErrorReply());
+  const attachments = normalizeAttachments(payload.attachments);
+  if (!attachments.some((attachment) => attachment.kind === "image") && isFinalDeliveryCheckRequest(payload.message)) {
+    return Promise.resolve(buildFinalDeliveryBoundaryReply());
+  }
+  const hasImage = attachments.some((attachment) => attachment.kind === "image");
+  const body = JSON.stringify({
+    model: hasImage ? VISION_MODEL : MODEL,
+    messages: buildMessages(payload, attachments),
+    temperature: 0.25,
+    max_tokens: hasImage ? 900 : 520,
+  });
+  return callDashScope(body, (content) => sanitizeReply(content, payload.message || ""));
+}
+
+function callQwenIntent(payload) {
+  const body = JSON.stringify({
+    model: MODEL,
+    messages: buildIntentMessages(payload),
+    temperature: 0.05,
+    max_tokens: 360,
+  });
+  return callDashScope(body, (content) => normalizeIntent(parseJsonObject(content)));
 }
 
 function parseJsonObject(text) {
@@ -469,29 +589,29 @@ function sanitizeReply(reply, originalMessage) {
 }
 
 async function handleChat(req, res) {
-  if (!API_KEY) {
-    sendJson(res, 500, {
-      error: "DASHSCOPE_API_KEY is not set. Start the server with DASHSCOPE_API_KEY before using Qwen chat.",
-    });
-    return;
-  }
   try {
     const body = await readBody(req);
     const payload = JSON.parse(body || "{}");
+    if (isSensitiveErrorDisclosureRequest(payload.message)) {
+      sendJson(res, 200, { reply: buildSanitizedErrorReply(), model: "local-safety" });
+      return;
+    }
+    if (!API_KEY) {
+      sendJson(res, 500, { error: "千问服务访问密钥未配置，请检查本地服务启动配置。" });
+      return;
+    }
     const reply = await callQwen(payload);
     const attachments = normalizeAttachments(payload.attachments);
     const hasImage = attachments.some((attachment) => attachment.kind === "image");
     sendJson(res, 200, { reply, model: hasImage ? VISION_MODEL : MODEL });
   } catch (error) {
-    sendJson(res, 500, { error: error.message || "Qwen request failed." });
+    sendJson(res, 500, { error: sanitizeServerError(error, "千问对话服务暂时不可用，请稍后再试。") });
   }
 }
 
 async function handleIntent(req, res) {
   if (!API_KEY) {
-    sendJson(res, 500, {
-      error: "DASHSCOPE_API_KEY is not set. Start the server with DASHSCOPE_API_KEY before using Qwen intent recognition.",
-    });
+    sendJson(res, 500, { error: "千问意图识别访问密钥未配置，请检查本地服务启动配置。" });
     return;
   }
   try {
@@ -500,13 +620,22 @@ async function handleIntent(req, res) {
     const intent = await callQwenIntent(payload);
     sendJson(res, 200, { intent, model: MODEL });
   } catch (error) {
-    sendJson(res, 500, { error: error.message || "Qwen intent request failed." });
+    sendJson(res, 500, { error: sanitizeServerError(error, "千问意图识别暂时不可用，请稍后再试。") });
   }
 }
 
 const server = http.createServer((req, res) => {
+  const isProtectedApi = req.url.startsWith("/api/chat") || req.url.startsWith("/api/intent");
+  if (!prepareCors(req, res)) {
+    send(res, 403, "Forbidden", { "Content-Type": "text/plain; charset=utf-8" });
+    return;
+  }
   if (req.method === "OPTIONS") {
     send(res, 204, "");
+    return;
+  }
+  if (isProtectedApi && !authorizeApiRequest(req)) {
+    sendJson(res, 401, { error: "未授权的本地代理请求。" });
     return;
   }
   if (req.url.startsWith("/api/chat") && req.method === "POST") {

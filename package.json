@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node tests.js && node eval-intents.js",
+    "bench": "node eval-design-mentor-bench.js",
     "qa": "node qa-tests.js"
   },
   "engines": {

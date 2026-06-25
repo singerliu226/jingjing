@@ -61,7 +61,7 @@ async function fetchJson(path, options) {
     throw new Error(`接口没有返回 JSON：HTTP ${response.status}`);
   }
   if (!response.ok) {
-    if (/DASHSCOPE_API_KEY/.test(payload.error || "")) skip("本地服务未配置 DASHSCOPE_API_KEY。");
+    if (/密钥未配置|访问密钥未配置/.test(payload.error || "")) skip("本地服务未配置千问访问密钥。");
     throw new Error(payload.error || `HTTP ${response.status}`);
   }
   return payload;
@@ -122,12 +122,28 @@ record("附件安全：图片预览不把 base64 长期写进状态", () => {
   assert.ok(app.includes("text: kind === \"text\" ? text : \"\""));
 });
 
+record("代理安全：限制来源、可选 token、超时和响应体上限", () => {
+  const server = read("server.js");
+  const app = read("app.js");
+  const css = read("styles.css");
+  assert.ok(!server.includes("\"Access-Control-Allow-Origin\": \"*\""));
+  assert.ok(server.includes("DESIGN_DESK_ALLOWED_ORIGINS"));
+  assert.ok(server.includes("DESIGN_DESK_API_TOKEN"));
+  assert.ok(server.includes("UPSTREAM_TIMEOUT_MS"));
+  assert.ok(server.includes("MAX_UPSTREAM_BYTES"));
+  assert.ok(server.includes("sanitizeServerError"));
+  assert.ok(app.includes("fetchJsonWithTimeout"));
+  assert.ok(app.includes("shell.inert = true"));
+  assert.ok(css.includes(".service-entry-required .app-shell"));
+});
+
 record("服务端：有图片时切视觉模型，无图片时保留文本模型", () => {
   const server = read("server.js");
   assert.ok(server.includes("VISION_MODEL"));
   assert.ok(server.includes("hasImage ? VISION_MODEL : MODEL"));
   assert.ok(server.includes("image_url"));
-  assert.ok(server.includes("视觉诊断卡"));
+  assert.ok(server.includes("成长型 mentor 结构"));
+  assert.ok(server.includes("核心判断、优先动作、为什么、验收标准"));
   assert.ok(server.includes("第一眼看到什么"));
   assert.ok(server.includes("版式层级、构图、字体、色彩、留白"));
 });
@@ -255,7 +271,7 @@ recordLive("真实图片对话：上传图片时切到视觉模型", async () =>
   });
   assert.equal(payload.model, "qwen-vl-plus");
   assert.ok(payload.reply.length > 10);
-  assert.ok(payload.reply.includes("视觉诊断卡") || payload.reply.includes("第一眼"));
+  assert.ok(payload.reply.includes("核心判断") || payload.reply.includes("第一眼"));
   return payload.reply.slice(0, 40).replace(/\s+/g, " ");
 });
 

@@ -143,6 +143,7 @@ curl http://服务器公网 IP:4174/api/health
 ## 注意事项
 
 - API Key 只放在服务器 `.env`，不要放进前端文件。
+- 公网部署时用 `DESIGN_DESK_ALLOWED_ORIGINS` 限定页面来源；如果链接会给多人使用，再设置 `DESIGN_DESK_API_TOKEN`，前端通过 `localStorage.design-desk-api-token` 发送代理 token。
 - 如果公网链接发给多人，千问调用会产生费用，先只发给菁菁体验。
 - 第一版数据保存在浏览器本地，同一个网址换设备不会自动同步项目记录。
 - 上传图片会发给服务器和千问视觉模型做分析，不要上传敏感商业稿件。

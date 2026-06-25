@@ -10,6 +10,7 @@
   let projectAnalysisRun = 0;
   let pendingAttachments = [];
   const transientAttachmentPreviews = new Map();
+  const MODEL_REQUEST_TIMEOUT_MS = 30_000;
 
   const nodes = {
     workbenchView: document.querySelector("#workbench-view"),
@@ -55,13 +56,16 @@
   function render() {
     const active = Core.getProject(state, state.activeProjectId);
     if (!active) return;
-    state.projects.forEach(syncProjectWork);
     renderProjectHeader(active);
     renderProjectForm(active);
     renderProjects();
     renderMessages();
     renderDashboard();
+  }
+
+  function commitAndRender() {
     persist();
+    render();
   }
 
   function renderProjectHeader(project) {
@@ -73,6 +77,11 @@
     if (window.location.protocol !== "file:") return;
     document.body.classList.add("service-entry-required");
     if (nodes.serviceGate) nodes.serviceGate.hidden = false;
+    const shell = document.querySelector(".app-shell");
+    if (shell) {
+      shell.inert = true;
+      shell.setAttribute("aria-hidden", "true");
+    }
   }
 
   function openProjectDetail() {
@@ -105,7 +114,7 @@
           type: "button",
           onclick: () => {
             state.activeProjectId = project.id;
-            render();
+            commitAndRender();
           },
         });
         button.append(
@@ -133,7 +142,7 @@
               className: "message-meta",
               textContent: `${message.role === "agent" ? "小画桌" : "菁菁"} · ${formatTime(message.createdAt)}`,
             }),
-            el("div", { className: "bubble", innerHTML: formatBubble(message.text) }),
+            renderMessageBubble(message),
             renderMessageAttachments(message),
           ])
         );
@@ -270,7 +279,7 @@
       type: "button",
       onclick: () => {
         state.activeProjectId = task.projectId;
-        render();
+        commitAndRender();
       },
     });
     item.append(
@@ -350,7 +359,7 @@
     if (!task) return;
     state.activeProjectId = task.projectId;
     task.status = "done";
-    render();
+    commitAndRender();
   }
 
   function updateTaskField(taskId, field, value) {
@@ -364,7 +373,7 @@
   function addProjectTask() {
     const project = Core.getProject(state, state.activeProjectId);
     state.tasks.push({
-      id: `t-${Date.now()}`,
+      id: uid("t"),
       projectId: project.id,
       title: "新任务",
       priority: "normal",
@@ -373,12 +382,12 @@
       nextAction: "写清楚下一步要做什么",
       feedbackIds: [],
     });
-    render();
+    commitAndRender();
   }
 
   function deleteTask(taskId) {
     state.tasks = state.tasks.filter((task) => task.id !== taskId);
-    render();
+    commitAndRender();
   }
 
   function deleteActiveProject() {
@@ -396,7 +405,7 @@
       return;
     }
     state.activeProjectId = state.projects[0].id;
-    render();
+    commitAndRender();
   }
 
   function snoozeTask(taskId) {
@@ -416,7 +425,7 @@
       type: "button",
       onclick: () => {
         state.activeProjectId = risk.projectId;
-        render();
+        commitAndRender();
       },
     });
     item.append(el("strong", { textContent: risk.projectName }), el("span", { textContent: risk.text }));
@@ -489,7 +498,7 @@
     nodes.messageInput.value = "";
     pendingAttachments = [];
     renderAttachmentDock();
-    render();
+    commitAndRender();
     if (result && shouldKeepLocalReply(result.analysis)) return;
     await askQwen(clean, previousMessageCount, result ? result.analysis : null, attachmentsToSend);
   }
@@ -557,7 +566,7 @@
     fill.tasks.forEach((task) => {
       if (hasSimilarTask(project.id, task.title)) return;
       state.tasks.push({
-        id: `t-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        id: uid("t"),
         projectId: project.id,
         title: task.title,
         priority: task.priority || "normal",
@@ -685,12 +694,9 @@
     try {
       const project = getProjectContext(state.activeProjectId);
       const dashboard = Core.getDashboard(state);
-      const controller = new AbortController();
-      const timer = window.setTimeout(() => controller.abort(), 2500);
-      const response = await fetch(`${getApiBase()}/api/intent`, {
+      const { response, payload } = await fetchJsonWithTimeout(`${getApiBase()}/api/intent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
+        headers: getApiHeaders(),
         body: JSON.stringify({
           message,
           currentDate: getLocalDateString(),
@@ -704,9 +710,7 @@
             .filter((item) => item.projectId === state.activeProjectId)
             .slice(Math.max(0, state.messages.length - 8)),
         }),
-      });
-      window.clearTimeout(timer);
-      const payload = await response.json();
+      }, 2500);
       if (!response.ok || payload.error) return null;
       return payload.intent || null;
     } catch (error) {
@@ -724,22 +728,14 @@
   function shouldKeepLocalReply(analysis) {
     if (!analysis) return false;
     const localOnlyBehaviors = [
-      "ask_plan",
-      "ask_summary",
-      "ask_checklist",
-      "ask_portfolio",
-      "project_retrospective",
-      "record_project_outcome",
-      "generate_growth_profile",
       "cancel_task",
       "complete_checklist",
+      "explain_sanitized_error",
       "snooze_task",
-      "summarize_version_changes",
       "clear_waiting",
       "mark_feedback_handled",
       "record_version",
       "update_deadline",
-      "update_brief",
       "update_project_name",
       "update_project_type",
       "update_project_specs",
@@ -753,16 +749,23 @@
     const fallbackReply = agentMessage.text;
     const visibleLocalReply = getVisibleLocalReply(fallbackReply, analysis);
     agentMessage.text = composePendingModelReply(visibleLocalReply);
-    render();
+    commitAndRender();
     try {
       const project = getProjectContext(state.activeProjectId);
       const dashboard = Core.getDashboard(state);
-      const response = await fetch(`${getApiBase()}/api/chat`, {
+      const { response, payload } = await fetchJsonWithTimeout(`${getApiBase()}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getApiHeaders(),
         body: JSON.stringify({
           message,
           localReply: fallbackReply,
+          analysis: analysis
+            ? {
+                behavior: analysis.behavior,
+                summary: analysis.summary,
+                missing: analysis.missing,
+              }
+            : null,
           attachments: attachments.map((attachment) => ({
             kind: attachment.kind,
             name: attachment.name,
@@ -782,13 +785,12 @@
             .slice(Math.max(0, state.messages.length - 8)),
         }),
       });
-      const payload = await response.json();
       if (!response.ok || payload.error) throw new Error(payload.error || "千问请求失败");
       agentMessage.text = composeModelReply(visibleLocalReply, payload.reply);
     } catch (error) {
-      agentMessage.text = composeModelErrorReply(visibleLocalReply, error);
+      agentMessage.text = composeModelErrorReply(visibleLocalReply, error, fallbackReply, analysis);
     }
-    render();
+    commitAndRender();
   }
 
   function getVisibleLocalReply(localReply, analysis) {
@@ -805,6 +807,8 @@
       "update_deliverables",
       "complete_progress",
       "waiting_confirmation",
+      "record_project_outcome",
+      "update_brief",
     ].includes(analysis.behavior);
   }
 
@@ -820,10 +824,26 @@
     return `已先整理：\n${localReply}\n\n千问建议：\n${cleanModelReply}`;
   }
 
-  function composeModelErrorReply(localReply, error) {
+  function composeModelErrorReply(localReply, error, fallbackReply = "", analysis = null) {
     const hint = buildModelErrorHint(error);
+    if (!localReply && shouldKeepFallbackOnModelError(analysis, fallbackReply)) {
+      return `${fallbackReply}\n\n${hint} 模型暂时没接上，我先保留这版本地设计判断。`;
+    }
     if (!localReply) return `${hint} 可以先继续记录下一条；我不会把设计咨询误写进项目。`;
     return `已先整理：\n${localReply}\n\n${hint} 本地整理结果已保留，可以继续记录下一条。`;
+  }
+
+  function shouldKeepFallbackOnModelError(analysis, fallbackReply) {
+    if (!analysis || !fallbackReply) return false;
+    if (/核心判断[:：]/.test(fallbackReply) && /验收标准[:：]/.test(fallbackReply)) return true;
+    return [
+      "answer_design_question",
+      "ask_design_directions",
+      "solve_design_issue",
+      "optimize_readability",
+      "recommend_typography_system",
+      "recommend_color_system",
+    ].includes(analysis.behavior);
   }
 
   function buildModelErrorHint(error) {
@@ -832,7 +852,7 @@
       return "本地千问服务没有连上：请确认 localhost:4174 服务正在运行，并且页面是从 http://localhost:4174 打开的。";
     }
     if (/DASHSCOPE_API_KEY|API Key|401|403|Unauthorized|Forbidden/i.test(message)) {
-      return "千问 API Key 没有配置好：请用 DASHSCOPE_API_KEY 启动本地服务。";
+      return "千问访问密钥还没配置好：请检查本地服务的启动配置。";
     }
     return `千问暂时没有连上：${message || "请求失败"}。`;
   }
@@ -840,6 +860,31 @@
   function getApiBase() {
     if (window.location.protocol === "http:" || window.location.protocol === "https:") return "";
     return window.localStorage.getItem("design-desk-api-base") || "http://localhost:4174";
+  }
+
+  function getApiHeaders() {
+    const headers = { "Content-Type": "application/json" };
+    const token = window.localStorage.getItem("design-desk-api-token");
+    if (token) headers["X-Design-Desk-Token"] = token;
+    return headers;
+  }
+
+  async function fetchJsonWithTimeout(url, options = {}, timeoutMs = MODEL_REQUEST_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      let payload = {};
+      try {
+        payload = await response.json();
+      } catch (error) {
+        if (!response.ok) throw new Error("本地服务返回格式异常。");
+        throw error;
+      }
+      return { response, payload };
+    } finally {
+      window.clearTimeout(timer);
+    }
   }
 
   function handleAttachmentFiles(files) {
@@ -869,7 +914,7 @@
       reader.onerror = () => reject(new Error("文件读取失败。"));
       reader.onload = () => {
         const base = {
-          id: `att-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          id: uid("att"),
           kind: isImage ? "image" : "text",
           name: file.name,
           mimeType: file.type || (isImage ? "image/png" : "text/plain"),
@@ -897,17 +942,17 @@
 
   function addAgentMessage(text) {
     state.messages.push({
-      id: `m-${Date.now()}`,
+      id: uid("m"),
       role: "agent",
       projectId: state.activeProjectId,
       createdAt: new Date().toISOString(),
       text,
     });
-    render();
+    commitAndRender();
   }
 
   function createNewProject(options = {}) {
-    const projectId = `p-${Date.now()}`;
+    const projectId = uid("p");
     const project = {
       id: projectId,
       name: "未命名设计项目",
@@ -937,7 +982,7 @@
     };
     state.projects.unshift(project);
     state.tasks.push({
-      id: `t-${Date.now()}`,
+      id: uid("t"),
       projectId,
       title: "补齐项目详情",
       priority: "high",
@@ -947,14 +992,14 @@
       feedbackIds: [],
     });
     state.checklist.push(
-      { id: `c-${Date.now()}-1`, projectId, label: "确认尺寸、用途和交付格式", done: false, group: "规格" },
-      { id: `c-${Date.now()}-2`, projectId, label: "检查主信息层级和移动端可读性", done: false, group: "可读性" },
-      { id: `c-${Date.now()}-3`, projectId, label: "整理源文件、导出文件和命名", done: false, group: "交付" }
+      { id: uid("c"), projectId, label: "确认尺寸、用途和交付格式", done: false, group: "规格" },
+      { id: uid("c"), projectId, label: "检查主信息层级和移动端可读性", done: false, group: "可读性" },
+      { id: uid("c"), projectId, label: "整理源文件、导出文件和命名", done: false, group: "交付" }
     );
     state.activeProjectId = projectId;
     showView("workbench");
     if (options.silent) {
-      render();
+      commitAndRender();
       return;
     }
     addAgentMessage("新项目已创建。菁菁先在右侧填一点项目详情：要求、DDL、交付物和当前进度。填完以后，中间直接问我怎么做就好。");
@@ -966,7 +1011,7 @@
       if (riskDiff) return riskDiff;
       return String(a.dueDate || "9999").localeCompare(String(b.dueDate || "9999"));
     });
-    render();
+    commitAndRender();
   }
 
   function auditRisks() {
@@ -1113,7 +1158,7 @@
     nodes.saveProjectBtn.textContent = "正在整理";
     const workflow = Core.generateProjectWorkflow(project, new Date());
     applyWorkflowTasks(project, workflow);
-    const messageId = `m-workflow-${Date.now()}`;
+    const messageId = uid("m-workflow");
     state.messages.push({
       id: messageId,
       role: "agent",
@@ -1121,7 +1166,7 @@
       createdAt: new Date().toISOString(),
       text: `${workflow.summary}\n\n正在请千问根据项目详情补充更细的安排...`,
     });
-    render();
+    commitAndRender();
     await askQwenForProjectWorkflow(project.id, messageId, workflow.summary, runId);
   }
 
@@ -1156,9 +1201,9 @@
     try {
       const project = getProjectContext(projectId);
       const dashboard = Core.getDashboard(state);
-      const response = await fetch(`${getApiBase()}/api/chat`, {
+      const { response, payload } = await fetchJsonWithTimeout(`${getApiBase()}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getApiHeaders(),
         body: JSON.stringify({
           intent: "project_workflow",
           message: [
@@ -1177,7 +1222,6 @@
             .slice(Math.max(0, state.messages.length - 8)),
         }),
       });
-      const payload = await response.json();
       if (!response.ok || payload.error) throw new Error(payload.error || "千问请求失败");
       if (runId !== projectAnalysisRun) return;
       const message = state.messages.find((item) => item.id === messageId);
@@ -1188,7 +1232,7 @@
       if (message) message.text = `${fallbackReply}\n\n千问暂时没有连上：${error.message}。本地工作流已先更新。`;
       nodes.saveProjectBtn.textContent = "已本地整理";
     }
-    render();
+    commitAndRender();
   }
 
   function getProjectContext(projectId) {
@@ -1242,6 +1286,127 @@
     return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
   }
 
+  function renderMessageBubble(message) {
+    if (message.role !== "agent") return el("div", { className: "bubble", innerHTML: formatBubble(message.text) });
+    const blocks = buildAnswerBlocks(message.text);
+    const stack = el("div", { className: "answer-stack" });
+    blocks.forEach((block, index) => {
+      stack.append(renderAnswerBlock(block, index));
+    });
+    return stack;
+  }
+
+  function buildAnswerBlocks(text) {
+    const lines = String(text || "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (!lines.length) return [{ type: "note", title: "我在整理", lines: ["先把重点捞出来，再给你下一步。"] }];
+
+    const hasModelAdvice = lines.some((line) => /^千问建议[:：]?$/.test(line));
+    const blocks = [];
+    let current = null;
+    let statusShown = false;
+
+    const pushCurrent = () => {
+      if (current && current.lines.length) blocks.push(current);
+      current = null;
+    };
+
+    const pushStatus = (textValue) => {
+      if (statusShown || !textValue) return;
+      blocks.push({ type: "status", title: textValue, lines: [] });
+      statusShown = true;
+    };
+
+    lines.forEach((line) => {
+      if (/^已先整理[:：]?$/.test(line) || /^千问建议[:：]?$/.test(line)) {
+        if (/^已先整理/.test(line)) pushStatus("已更新项目信息");
+        pushCurrent();
+        return;
+      }
+      if (/正在请千问|本地工作流已先更新|本地整理结果已保留|已从对话补齐|已本地整理/.test(line)) {
+        pushStatus("正在提炼重点");
+        return;
+      }
+      if (/^(已记录到|反馈已翻译为|我已经同步更新|已完成风险扫描|交付检查[:：])/.test(line)) {
+        pushStatus("已更新项目信息");
+        return;
+      }
+      if (/^(还需要补充|需要确认|交付风险|风险)[:：]/.test(line)) {
+        pushCurrent();
+        blocks.push({ type: "alert", title: line.replace(/[:：].*$/, ""), lines: [line.replace(/^.*?[:：]\s*/, "")].filter(Boolean) });
+        return;
+      }
+      if (/^(核心判断|最大问题|第一眼看到什么|项目判断|设计判断|上轮目标对照)[:：]/.test(line)) {
+        pushCurrent();
+        blocks.push({ type: "focus", title: line.replace(/[:：].*$/, ""), lines: [line.replace(/^.*?[:：]\s*/, "")].filter(Boolean) });
+        return;
+      }
+      if (/^(为什么|判断依据|设计理由)[:：]/.test(line)) {
+        pushCurrent();
+        blocks.push({ type: "note", title: line.replace(/[:：].*$/, ""), lines: [line.replace(/^.*?[:：]\s*/, "")].filter(Boolean) });
+        return;
+      }
+      if (/^(验收标准|自查标准|改完看什么)[:：]/.test(line)) {
+        pushCurrent();
+        blocks.push({ type: "check", title: line.replace(/[:：].*$/, ""), lines: [line.replace(/^.*?[:：]\s*/, "")].filter(Boolean) });
+        return;
+      }
+      if (/^(先做|下一步|优先动作|优先改|优先做|建议|可以这样做|千问建议).*[：:]?$/.test(line)) {
+        pushCurrent();
+        current = { type: "focus", title: line.replace(/[:：]$/, ""), lines: [] };
+        return;
+      }
+      if (/^\d+[.、]\s*/.test(line)) {
+        if (!current || current.type !== "steps") {
+          pushCurrent();
+          current = { type: "steps", title: "先做这几步", lines: [] };
+        }
+        current.lines.push(line.replace(/^\d+[.、]\s*/, ""));
+        return;
+      }
+      if (/^[-•□✓]\s*/.test(line)) {
+        if (!current) current = { type: "steps", title: "重点动作", lines: [] };
+        current.lines.push(line.replace(/^[-•□✓]\s*/, ""));
+        return;
+      }
+      if (/^(需要我|要不要|是否|可以先|如果只剩|做完|发我|把|先把)/.test(line) && line.length <= 80) {
+        pushCurrent();
+        blocks.push({ type: "ask", title: "接下来", lines: [line] });
+        return;
+      }
+      if (!current) current = { type: "note", title: blocks.length ? "补充判断" : "先看重点", lines: [] };
+      current.lines.push(line);
+    });
+    pushCurrent();
+
+    const readable = blocks.filter((block) => {
+      if (block.type !== "status") return true;
+      if (hasModelAdvice) return false;
+      return blocks.length === 1 || block.title !== "正在提炼重点";
+    });
+    return readable.length ? readable.slice(0, 6) : [{ type: "note", title: "先看重点", lines: lines.slice(0, 5) }];
+  }
+
+  function renderAnswerBlock(block, index) {
+    const article = el("article", {
+      className: `answer-card answer-${block.type}`,
+    });
+    article.style.setProperty("--answer-delay", `${Math.min(index * 90, 450)}ms`);
+    if (block.type === "status") {
+      article.append(el("span", { className: "answer-status-dot" }), el("span", { textContent: block.title }));
+      return article;
+    }
+    article.append(el("h4", { textContent: block.title }));
+    const list = block.type === "steps" ? el("ol", { className: "answer-list" }) : el("div", { className: "answer-lines" });
+    block.lines.forEach((line) => {
+      list.append(block.type === "steps" ? el("li", { textContent: line }) : el("p", { textContent: line }));
+    });
+    article.append(list);
+    return article;
+  }
+
   function formatBubble(text) {
     return escapeHtml(text)
       .split("\n")
@@ -1260,6 +1425,11 @@
 
   function normalize(value) {
     return String(value || "").trim();
+  }
+
+  function uid(prefix) {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") return `${prefix}-${window.crypto.randomUUID()}`;
+    return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
   }
 
   function el(tag, props = {}, children = []) {

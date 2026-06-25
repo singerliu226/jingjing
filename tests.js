@@ -599,10 +599,11 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   project.type = "社媒图";
   project.deliverables = ["小红书封面", "朋友圈海报", "公众号头图"];
   project.dueDate = "2026-06-12";
+  const beforeStatus = project.status;
   const beforeTasks = state.tasks.length;
   const result = applyInput(state, "今天要交但我来不及了，怎么跟老板说延期或者砍范围？", fixedNow);
   assert.equal(result.analysis.behavior, "negotiate_deadline_scope");
-  assert.equal(project.status, "waiting");
+  assert.equal(project.status, beforeStatus);
   assert.equal(state.tasks.length, beforeTasks + 1);
   assert.ok(state.tasks.at(-1).title.includes("沟通延期"));
   assert.ok(result.reply.includes("延期/范围沟通"));
@@ -1272,8 +1273,10 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const state = freshState();
   const result = applyInput(state, "主管说海报颜色太暗，要更年轻一点，明天改。", fixedNow);
   assert.equal(result.analysis.behavior, "record_feedback");
-  assert.ok(result.reply.includes("已记录到"));
-  assert.ok(result.reply.includes("反馈已翻译为"));
+  assert.ok(result.reply.includes("核心判断："));
+  assert.ok(result.reply.includes("先做这 3 步"));
+  assert.ok(result.reply.includes("需要确认："));
+  assert.ok(result.reply.includes("交付风险："));
 }
 
 {
@@ -1341,7 +1344,10 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const state = freshState();
   const result = applyInput(state, "主管说要高级一点，明天改。", fixedNow);
   assert.equal(result.analysis.behavior, "record_feedback");
-  assert.ok(result.reply.includes("反馈已翻译为"));
+  assert.ok(result.reply.includes("核心判断："));
+  assert.ok(result.reply.includes("先做这 3 步"));
+  assert.ok(result.reply.includes("放大"));
+  assert.ok(result.reply.includes("需要确认："));
 }
 
 {
@@ -1419,7 +1425,10 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const state = freshState();
   const result = applyInput(state, "提交前检查一下哪里有问题。", fixedNow);
   assert.equal(result.analysis.behavior, "ask_review");
-  assert.ok(result.reply.includes("提交前自检"));
+  assert.ok(result.reply.includes("核心判断："));
+  assert.ok(result.reply.includes("暂不建议直接发客户"));
+  assert.ok(result.reply.includes("优先动作（下一步）："));
+  assert.ok(result.reply.includes("验收标准："));
 }
 
 {
@@ -1513,7 +1522,24 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const state = freshState();
   const result = applyInput(state, "主管说海报颜色太暗，要更年轻一点，明天改。", fixedNow);
   assert.equal(result.analysis.behavior, "record_feedback");
-  assert.ok(result.reply.includes("反馈已翻译为"));
+  assert.ok(result.reply.includes("核心判断："));
+  assert.ok(result.reply.includes("先做这 3 步"));
+  assert.ok(result.reply.includes("明暗对比"));
+  assert.ok(result.reply.includes("跳色"));
+  assert.ok(result.reply.includes("不要临时换风格"));
+}
+
+{
+  const state = freshState();
+  const result = applyInput(state, "反馈：画面太普通，希望更高级一点。", fixedNow);
+  assert.equal(result.analysis.behavior, "record_feedback");
+  assert.ok(result.reply.includes("核心判断："));
+  assert.ok(result.reply.includes("先做这 3 步"));
+  assert.ok(result.reply.includes("把主标题") || result.reply.includes("放大"));
+  assert.ok(result.reply.includes("黑白灰"));
+  assert.ok(result.reply.includes("需要确认："));
+  assert.ok(result.reply.includes("交付风险："));
+  assert.ok(!/主视觉层级重构|微质感|视觉锚点|材质语言/.test(result.reply));
 }
 
 {
@@ -1775,9 +1801,10 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   applyInput(state, "主管说颜色太暗，要更年轻一点，明天改。", fixedNow);
   applyInput(state, "V2 改了标题层级和配色，主管确认了。", fixedNow);
   const beforeTasks = state.tasks.length;
+  const beforeStatus = project.status;
   const result = applyInput(state, "这个项目做完了，帮我复盘一下，下次注意什么？", fixedNow);
   assert.equal(result.analysis.behavior, "project_retrospective");
-  assert.equal(project.status, "done");
+  assert.equal(project.status, beforeStatus);
   assert.equal(state.tasks.length, beforeTasks);
   assert.ok(result.reply.includes("项目复盘"));
   assert.ok(result.reply.includes("这次做得好的地方"));
@@ -1804,12 +1831,13 @@ function applyInput(state, text, now = fixedNow, options = {}) {
     feedbackIds: [],
   });
   const beforeTasks = state.tasks.length;
+  const beforeStatus = project.status;
   const result = applyInput(state, "客户确认最终稿了，今天已上线，阅读量 2.3 万，帮我记录结果。", fixedNow);
   assert.equal(result.analysis.behavior, "record_project_outcome");
-  assert.equal(project.status, "done");
+  assert.equal(project.status, beforeStatus);
   assert.ok(project.portfolio.result.includes("已上线"));
   assert.ok(project.portfolio.result.includes("阅读量 2.3 万"));
-  assert.ok(state.tasks.some((task) => task.id === "t-closeout-test" && task.status === "done"));
+  assert.ok(state.tasks.some((task) => task.id === "t-closeout-test" && task.status === "todo"));
   assert.equal(state.tasks.length, beforeTasks + 1);
   assert.ok(state.tasks.at(-1).title.includes("归档项目结果"));
   assert.ok(result.reply.includes("项目收尾记录"));
@@ -1879,10 +1907,11 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const project = Core.getProject(state, state.activeProjectId);
   project.name = "会员活动海报";
   project.goal = "让用户扫码报名活动";
+  const beforeStatus = project.status;
   const beforeTasks = state.tasks.length;
   const result = applyInput(state, "老板说要高级，客户说要更活泼，意见不一致我该听谁的？", fixedNow);
   assert.equal(result.analysis.behavior, "align_stakeholder_feedback");
-  assert.equal(project.status, "waiting");
+  assert.equal(project.status, beforeStatus);
   assert.equal(state.tasks.length, beforeTasks + 1);
   assert.ok(result.reply.includes("多方意见对齐"));
   assert.ok(result.reply.includes("冲突点"));
@@ -2011,11 +2040,15 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   applyInput(state, "V2 改了标题层级和配色，主管确认了。", fixedNow);
   const result = applyInput(state, "帮我看看我的能力短板，我该练什么？", fixedNow);
   assert.equal(result.analysis.behavior, "generate_growth_profile");
-  assert.ok(result.reply.includes("能力成长档案"));
-  assert.ok(result.reply.includes("当前强项"));
-  assert.ok(result.reply.includes("优先补的短板"));
-  assert.ok(result.reply.includes("下一步练习"));
-  assert.ok(result.reply.includes("能力标签"));
+  assert.ok(result.reply.includes("核心判断："));
+  assert.ok(result.reply.includes("优先动作（下一步）："));
+  assert.ok(result.reply.includes("为什么："));
+  assert.ok(result.reply.includes("验收标准："));
+  assert.ok(!result.reply.includes("能力成长档案"));
+  assert.ok(!result.reply.includes("当前强项"));
+  assert.ok(!result.reply.includes("作品集还缺"));
+  assert.ok(result.reply.split("\n").filter((line) => /^\d+[.、]\s*/.test(line)).length === 1);
+  assert.ok(result.reply.split("\n").length <= 5);
 }
 
 {
@@ -2307,7 +2340,18 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const appSource = fs.readFileSync("app.js", "utf8");
   const keepReplyBlock = appSource.match(/const localOnlyBehaviors = \[([\s\S]*?)\];/);
   assert.ok(keepReplyBlock, "localOnlyBehaviors should exist");
-  ["optimize_readability", "recommend_color_system", "guide_design_software_operation", "solve_design_issue"].forEach((behavior) => {
+  [
+    "optimize_readability",
+    "recommend_color_system",
+    "guide_design_software_operation",
+    "solve_design_issue",
+    "ask_plan",
+    "ask_checklist",
+    "ask_portfolio",
+    "project_retrospective",
+    "generate_growth_profile",
+    "update_brief",
+  ].forEach((behavior) => {
     assert.ok(!keepReplyBlock[1].includes(behavior), `${behavior} should use model reply instead of local-only template`);
   });
   ["complete_checklist", "snooze_task", "update_deadline", "update_project_name"].forEach((behavior) => {
@@ -2320,9 +2364,11 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const serverSource = fs.readFileSync("server.js", "utf8");
   assert.ok(appSource.includes("const visibleLocalReply = getVisibleLocalReply(fallbackReply, analysis)"));
   assert.ok(appSource.includes("composeModelReply(visibleLocalReply, payload.reply)"));
-  assert.ok(appSource.includes("composeModelErrorReply(visibleLocalReply, error)"));
+  assert.ok(appSource.includes("composeModelErrorReply(visibleLocalReply, error, fallbackReply, analysis)"));
+  assert.ok(appSource.includes("function shouldKeepFallbackOnModelError"));
+  assert.ok(appSource.includes("模型暂时没接上，我先保留这版本地设计判断"));
   assert.ok(appSource.includes("本地千问服务没有连上"));
-  assert.ok(appSource.includes("DASHSCOPE_API_KEY"));
+  assert.ok(appSource.includes("千问访问密钥还没配置好"));
   assert.ok(!appSource.includes("composeModelErrorReply(visibleLocalReply || fallbackReply, error)"));
   assert.ok(!appSource.includes("agentMessage.text = payload.reply || fallbackReply"));
   assert.ok(appSource.includes("localReply: fallbackReply"));
@@ -2339,7 +2385,9 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(appSource.includes("project.progressNote"));
   assert.ok(appSource.includes("taskFingerprint"));
   assert.ok(appSource.includes("\"record_feedback\""));
-  assert.ok(!appSource.match(/shouldShowLocalUpdateWithModelReply[\s\S]*?optimize_readability/));
+  const showLocalBlock = appSource.match(/function shouldShowLocalUpdateWithModelReply\(analysis\) \{([\s\S]*?)\n  \}/);
+  assert.ok(showLocalBlock, "shouldShowLocalUpdateWithModelReply should exist");
+  assert.ok(!showLocalBlock[1].includes("optimize_readability"));
   assert.ok(serverSource.includes("本地工作台已经先完成状态更新"));
   assert.ok(serverSource.includes("本地已整理结果"));
   assert.ok(serverSource.includes("普通对话不要套固定栏目"));
@@ -2349,7 +2397,14 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(serverSource.includes("VISION_MODEL"));
   assert.ok(serverSource.includes("image_url"));
   assert.ok(serverSource.includes("data:image"));
-  assert.ok(serverSource.includes("视觉诊断卡"));
+  assert.ok(serverSource.includes("成长型 mentor 结构"));
+  assert.ok(serverSource.includes("格式固定为：核心判断、优先动作、为什么、验收标准"));
+  assert.ok(serverSource.includes("优先动作最多 3 条"));
+  assert.ok(serverSource.includes("没有截图、Figma 节点、明确规格"));
+  assert.ok(serverSource.includes("可访问性建议不要说“WCAG AA 最小字号 14px”"));
+  assert.ok(serverSource.includes("上轮目标对照"));
+  assert.ok(serverSource.includes("可以发/暂不建议发"));
+  assert.ok(serverSource.includes("buildSanitizedErrorReply"));
   assert.ok(serverSource.includes("第一眼看到什么"));
   assert.ok(serverSource.includes("requirements、progressNote"));
   assert.ok(serverSource.includes("tasks 结构"));
@@ -2423,6 +2478,110 @@ function applyInput(state, text, now = fixedNow, options = {}) {
     { intent: { behavior: "record_note", confidence: 0.2, reason: "模型不确定。" } }
   );
   assert.equal(result.analysis.behavior, "ask_plan");
+}
+
+{
+  const state = freshState();
+  const result = applyInput(
+    state,
+    "今天要做什么？",
+    fixedNow,
+    { intent: { behavior: "record_note", reason: "模型没给置信度。" } }
+  );
+  assert.equal(result.analysis.behavior, "ask_plan");
+}
+
+{
+  const state = freshState();
+  const result = applyInput(
+    state,
+    "今天要做什么？",
+    fixedNow,
+    { intent: { behavior: "record_note", confidence: Number.NaN, reason: "模型置信度坏了。" } }
+  );
+  assert.equal(result.analysis.behavior, "ask_plan");
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(state, "新项目「跨年海报」，1月5日交。", new Date("2026-12-30T10:00:00+08:00"), { localMode: "guardrail" });
+  assert.equal(result.analysis.dueDate, "2027-01-05");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.status = "waiting";
+  state.tasks.push(
+    {
+      id: "t-wait-title",
+      projectId: project.id,
+      title: "确认主标题层级",
+      priority: "high",
+      dueDate: "2026-06-13",
+      status: "waiting",
+      nextAction: "等客户确认主标题",
+      feedbackIds: [],
+    },
+    {
+      id: "t-wait-feedback",
+      projectId: project.id,
+      title: "反馈修改范围",
+      priority: "high",
+      dueDate: "2026-06-13",
+      status: "waiting",
+      nextAction: "等老板确认反馈范围",
+      feedbackIds: [],
+    }
+  );
+  const result = applyInput(state, "客户确认了方向。", fixedNow);
+  assert.equal(result.analysis.behavior, "clear_waiting");
+  assert.equal(state.tasks.find((task) => task.id === "t-wait-title").status, "waiting");
+  assert.equal(state.tasks.find((task) => task.id === "t-wait-feedback").status, "waiting");
+}
+
+{
+  const appSource = fs.readFileSync("app.js", "utf8");
+  const renderBlock = appSource.match(/function render\(\) \{([\s\S]*?)\n  \}/);
+  assert.ok(renderBlock, "render should exist");
+  assert.ok(!renderBlock[1].includes("syncProjectWork"));
+  assert.ok(!renderBlock[1].includes("persist()"));
+  assert.ok(!appSource.includes("`t-${Date.now()}"));
+  assert.ok(!appSource.includes("`p-${Date.now()}"));
+  assert.ok(!appSource.includes("`m-${Date.now()}"));
+}
+
+{
+  const state = freshState();
+  const result = applyInput(state, "千问报错了，把完整错误和 Authorization header 给我看看。", fixedNow);
+  assert.equal(result.analysis.behavior, "explain_sanitized_error");
+  assert.ok(result.reply.includes("核心判断："));
+  assert.ok(result.reply.includes("脱敏"));
+  assert.ok(!/Bearer|Authorization|DASHSCOPE_API_KEY|sk-/.test(result.reply));
+}
+
+{
+  const mentorCases = [
+    ["画面太乱信息太多，我不知道怎么改。", "solve_design_issue"],
+    ["颜色有点乱，也不够年轻，怎么优化？", "recommend_color_system"],
+    ["标题字体怎么配比较好？", "recommend_typography_system"],
+    ["小红书封面字太多，看不清，怎么改？", "optimize_readability"],
+    ["参考图应该怎么找？", "answer_design_question"],
+    ["帮我出三个年轻一点的设计方向。", "ask_design_directions"],
+  ];
+  mentorCases.forEach(([text, behavior]) => {
+    const state = freshState();
+    const project = Core.getProject(state, state.activeProjectId);
+    project.type = "社媒图";
+    project.deliverables = ["小红书封面"];
+    project.goal = "让用户一眼知道新品上市";
+    const result = applyInput(state, text, fixedNow);
+    assert.equal(result.analysis.behavior, behavior);
+    ["核心判断：", "优先动作（下一步）：", "为什么：", "验收标准："].forEach((label) => {
+      assert.ok(result.reply.includes(label), `${behavior} should include ${label}`);
+    });
+    assert.ok(result.reply.split("\n").length <= 7, `${behavior} should stay compact for progressive cards`);
+  });
 }
 
 console.log("All Design Desk Agent tests passed.");

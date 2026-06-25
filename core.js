@@ -8,6 +8,12 @@
   "use strict";
 
   const STORAGE_KEY = "jingjing-workbench-state-v2";
+  // F4 持久化护栏：messages 会无限增长并逼近 localStorage ~5MB 上限。
+  // 正常存最近 MAX_PERSISTED_MESSAGES 条；写入触发配额错误时按 QUOTA_FALLBACK_MESSAGE_COUNTS
+  // 逐级裁剪并剥离附件正文后重试，宁可少存历史也不让保存整体失败丢数据。
+  const MAX_PERSISTED_MESSAGES = 200;
+  const QUOTA_FALLBACK_MESSAGE_COUNTS = [120, 60, 30, 12];
+  const MAX_ATTACHMENT_TEXT_ON_PRESSURE = 800;
   const stateBehaviors = [
     "record_feedback",
     "create_project",
@@ -318,6 +324,12 @@
     return next;
   }
 
+  function startOfDay(date) {
+    const value = new Date(date);
+    value.setHours(0, 0, 0, 0);
+    return value;
+  }
+
   function normalize(text) {
     return String(text || "").trim();
   }
@@ -372,9 +384,9 @@
   function normalizeModelIntent(intent) {
     if (!intent || typeof intent !== "object") return null;
     const behavior = normalize(intent.intent || intent.behavior);
-    const confidence = Number(intent.confidence ?? 0);
+    const confidence = Number(intent.confidence);
     if (!isKnownBehavior(behavior)) return null;
-    if (Number.isFinite(confidence) && confidence > 0 && confidence < 0.45) return null;
+    if (!Number.isFinite(confidence) || confidence <= 0 || confidence < 0.45) return null;
     return {
       schemaVersion: normalize(intent.schemaVersion || "llm-intent-v1").slice(0, 40),
       behavior,
@@ -415,8 +427,15 @@
     if (relativeDays) return formatDate(addDays(now, Number(relativeDays[1])));
     const monthDay = text.match(/(\d{1,2})[月/.-](\d{1,2})[日号]?/);
     if (monthDay) {
-      const year = now.getFullYear();
-      return `${year}-${String(monthDay[1]).padStart(2, "0")}-${String(monthDay[2]).padStart(2, "0")}`;
+      const month = Number(monthDay[1]);
+      const day = Number(monthDay[2]);
+      let year = now.getFullYear();
+      let candidate = new Date(year, month - 1, day);
+      if (candidate < startOfDay(now)) {
+        year += 1;
+        candidate = new Date(year, month - 1, day);
+      }
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
     const weekday = text.match(/(?:这周|本周|下周|周)([一二三四五六日天])/);
     if (weekday) {
@@ -505,6 +524,7 @@
 
   function detectBehavior(text, analysisBits = {}) {
     if (!text) return "empty";
+    if (isSensitiveErrorDisclosureRequest(text)) return "explain_sanitized_error";
     if (/今天.*(做什么|安排)|今日.*安排|先做什么|排一下|计划一下/.test(text)) return "ask_plan";
     if (/日报|今天总结|工作总结|周报/.test(text)) return "ask_summary";
     if (
@@ -693,9 +713,6 @@
     if (isSubjectBackgroundSeparationRequest(text, analysisBits)) {
       return "separate_subject_background";
     }
-    if (isVisualImpactRequest(text)) {
-      return "strengthen_visual_impact";
-    }
     if (isVisualPolishRequest(text, analysisBits)) {
       return "improve_visual_polish";
     }
@@ -772,6 +789,7 @@
 
   function detectGuardrailBehavior(text, analysisBits = {}) {
     if (!text) return "empty";
+    if (isSensitiveErrorDisclosureRequest(text)) return "explain_sanitized_error";
 
     if (/今天.*(做什么|安排)|今日.*安排|先做什么|排一下|计划一下/.test(text)) return "ask_plan";
     if (/日报|今天总结|工作总结|周报/.test(text)) return "ask_summary";
@@ -826,6 +844,14 @@
     const typographySystem = /字体搭配|字体怎么搭|字体怎么选|用什么字体|字号层级|字距|行距/.test(text) && !readabilityProblem;
     const visualEffect = /毛玻璃|玻璃拟态|阴影|投影|光影|金属|渐变|颗粒|噪点|发光|霓虹|立体字|材质|氛围光/.test(text);
     return readabilityProblem && designContext && asksAction && !plainFeedback && !typographySystem && !visualEffect;
+  }
+
+  function isSensitiveErrorDisclosureRequest(text) {
+    const source = normalize(text);
+    return (
+      /(完整|原始|全部|详细).*(错误|报错|异常|日志|堆栈|stack|trace)|把.*(错误|报错|异常|日志|堆栈).*(给我|发我|贴出来)|show.*(full|raw).*(error|stack|log)/i.test(source) &&
+      /(千问|DashScope|dashscope|api|API|key|Key|密钥|token|Token|Authorization|Bearer|配额|额度|账号|区域|region|上游|服务|代理|server|服务器)/i.test(source)
+    );
   }
 
   function isLogoExposureRequest(text, analysisBits = {}) {
@@ -1057,19 +1083,146 @@
     return items.map(([label, group]) => ({ id: uid("c"), projectId, label, group, done: false }));
   }
 
+  function ensureArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  function migrateProject(project) {
+    if (!project || typeof project !== "object") return null;
+    const portfolio = project.portfolio && typeof project.portfolio === "object" ? project.portfolio : {};
+    return Object.assign({}, project, {
+      name: typeof project.name === "string" ? project.name : "设计项目",
+      type: typeof project.type === "string" ? project.type : "设计项目",
+      goal: typeof project.goal === "string" ? project.goal : "",
+      deliverables: ensureArray(project.deliverables),
+      keywords: ensureArray(project.keywords),
+      risks: ensureArray(project.risks),
+      versions: ensureArray(project.versions),
+      status: typeof project.status === "string" ? project.status : "todo",
+      portfolioScore: typeof project.portfolioScore === "number" ? project.portfolioScore : 35,
+      portfolio: {
+        background: portfolio.background || "",
+        problem: portfolio.problem || "",
+        strategy: portfolio.strategy || "",
+        process: portfolio.process || "",
+        result: portfolio.result || "",
+        reflection: portfolio.reflection || "",
+        interviewScript: portfolio.interviewScript || "",
+      },
+    });
+  }
+
+  function migrateTask(task) {
+    if (!task || typeof task !== "object") return null;
+    return Object.assign({}, task, {
+      status: typeof task.status === "string" ? task.status : "todo",
+      priority: task.priority === "high" ? "high" : "normal",
+      feedbackIds: ensureArray(task.feedbackIds),
+    });
+  }
+
+  // 把读出的旧/残缺/被篡改 state 规整成可安全消费的形状；无法修复时返回 null 让上层回退种子。
+  function migrateState(parsed) {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const projects = ensureArray(parsed.projects).map(migrateProject).filter(Boolean);
+    if (!projects.length) return null;
+    const messages = ensureArray(parsed.messages).filter(
+      (message) => message && typeof message === "object" && typeof message.text === "string"
+    );
+    const tasks = ensureArray(parsed.tasks).map(migrateTask).filter(Boolean);
+    const activeProjectId =
+      typeof parsed.activeProjectId === "string" &&
+      projects.some((project) => project.id === parsed.activeProjectId)
+        ? parsed.activeProjectId
+        : projects[0].id;
+    return {
+      activeProjectId,
+      activeFilter: typeof parsed.activeFilter === "string" ? parsed.activeFilter : "all",
+      activeMode: typeof parsed.activeMode === "string" ? parsed.activeMode : "brief",
+      messages,
+      projects,
+      tasks,
+      feedback: ensureArray(parsed.feedback),
+      checklist: ensureArray(parsed.checklist),
+    };
+  }
+
   function loadState(storage) {
     if (!storage) return createSeedState();
+    let raw;
     try {
-      const raw = storage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : createSeedState();
+      raw = storage.getItem(STORAGE_KEY);
     } catch (error) {
       return createSeedState();
     }
+    if (!raw) return createSeedState();
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      return createSeedState();
+    }
+    return migrateState(parsed) || createSeedState();
   }
 
+  function isQuotaError(error) {
+    if (!error) return false;
+    return (
+      error.name === "QuotaExceededError" ||
+      error.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+      error.code === 22 ||
+      error.code === 1014
+    );
+  }
+
+  function clampMessages(messages, limit) {
+    if (!Array.isArray(messages)) return [];
+    if (messages.length <= limit) return messages;
+    return messages.slice(messages.length - limit);
+  }
+
+  function stripAttachmentText(messages, textLimit) {
+    return messages.map((message) => {
+      if (!message || !Array.isArray(message.attachments) || !message.attachments.length) {
+        return message;
+      }
+      return Object.assign({}, message, {
+        attachments: message.attachments.map((attachment) => {
+          if (attachment && typeof attachment.text === "string" && attachment.text.length > textLimit) {
+            return Object.assign({}, attachment, {
+              text: attachment.text.slice(0, textLimit),
+              truncated: true,
+            });
+          }
+          return attachment;
+        }),
+      });
+    });
+  }
+
+  function buildPersistPayload(state, messageLimit, stripText) {
+    let messages = clampMessages(state.messages, messageLimit);
+    if (stripText) messages = stripAttachmentText(messages, MAX_ATTACHMENT_TEXT_ON_PRESSURE);
+    return Object.assign({}, state, { messages });
+  }
+
+  // 返回是否成功写入。配额超限时逐级裁剪历史并剥离附件正文后重试，非配额错误（如禁用存储）立即放弃且不抛出。
   function saveState(storage, state) {
-    if (!storage) return;
-    storage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (!storage || !state) return false;
+    const attempts = [{ limit: MAX_PERSISTED_MESSAGES, strip: false }];
+    for (const count of QUOTA_FALLBACK_MESSAGE_COUNTS) {
+      attempts.push({ limit: count, strip: true });
+    }
+    for (const attempt of attempts) {
+      try {
+        const payload = buildPersistPayload(state, attempt.limit, attempt.strip);
+        storage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        return true;
+      } catch (error) {
+        if (!isQuotaError(error)) return false;
+      }
+    }
+    return false;
   }
 
   function getProject(state, id) {
@@ -1307,78 +1460,94 @@
     return { state, reply, analysis };
   }
 
+  // —— 行为登记单一来源（D3）——
+  // COMMAND_BEHAVIORS：在 applyInput 中短路、由 applyCommandBehavior 直接处理的命令行为。
+  // 命令行为一律不走自动建任务（各自决定是否建任务），故任务抑制集按构造 = 命令行为 ∪ 少数纯状态更新行为。
+  // 这样新增命令行为只需改 COMMAND_BEHAVIORS（isCommandBehavior 与任务抑制自动同步），
+  // 命令行为漏登记任务抑制的静默漂移在结构上不可能发生；剩余唯一手工同步点是在 applyCommandBehavior 补一条分支。
+  const COMMAND_BEHAVIORS = [
+    "ask_plan",
+    "ask_summary",
+    "organize_meeting_notes",
+    "decompose_brief",
+    "plan_design_concepts",
+    "plan_reference_research",
+    "generate_image_prompt_brief",
+    "ask_review",
+    "ask_checklist",
+    "ask_portfolio",
+    "project_retrospective",
+    "record_project_outcome",
+    "generate_growth_profile",
+    "explain_sanitized_error",
+    "ask_confirmation_message",
+    "request_missing_assets",
+    "clarify_vague_feedback",
+    "align_stakeholder_feedback",
+    "synthesize_feedback_batch",
+    "handle_scope_change",
+    "answer_design_question",
+    "audit_asset_license",
+    "ask_design_directions",
+    "compare_design_options",
+    "triage_overload",
+    "negotiate_deadline_scope",
+    "report_progress_status",
+    "estimate_design_workload",
+    "prepare_feedback_request",
+    "refine_copywriting",
+    "optimize_action_path",
+    "organize_information_hierarchy",
+    "optimize_readability",
+    "simulate_design_defense",
+    "prepare_design_presentation",
+    "handle_negative_feedback",
+    "diagnose_ambiguous_issue",
+    "integrate_composite_assets",
+    "fix_asset_quality",
+    "guide_design_software_operation",
+    "negotiate_reference_similarity",
+    "analyze_reference",
+    "unify_series_visual_system",
+    "organize_delivery_files",
+    "prepare_design_handoff",
+    "guide_print_prepress",
+    "recommend_platform_specs",
+    "adapt_multi_format",
+    "check_brand_consistency",
+    "optimize_logo_exposure",
+    "optimize_alignment_spacing",
+    "balance_visual_density",
+    "separate_subject_background",
+    "strengthen_visual_impact",
+    "improve_visual_polish",
+    "guide_visual_effect",
+    "recommend_layout_structure",
+    "recommend_typography_system",
+    "recommend_color_system",
+    "translate_style_keyword",
+    "solve_design_issue",
+    "cancel_task",
+    "complete_checklist",
+    "snooze_task",
+    "summarize_version_changes",
+    "clear_waiting",
+    "mark_feedback_handled",
+    "update_project_name",
+    "update_project_type",
+    "update_project_specs",
+  ];
+  const COMMAND_BEHAVIOR_SET = new Set(COMMAND_BEHAVIORS);
+  // 纯状态更新行为：不短路命令路由，但同样不该触发自动建任务。
+  const TASK_SUPPRESSED_BEHAVIORS = new Set([
+    ...COMMAND_BEHAVIORS,
+    "update_brief",
+    "update_deadline",
+    "record_version",
+  ]);
+
   function isCommandBehavior(behavior) {
-    return [
-      "ask_plan",
-      "ask_summary",
-      "organize_meeting_notes",
-      "decompose_brief",
-      "plan_design_concepts",
-      "plan_reference_research",
-      "generate_image_prompt_brief",
-      "ask_review",
-      "ask_checklist",
-      "ask_portfolio",
-      "project_retrospective",
-      "record_project_outcome",
-      "generate_growth_profile",
-      "ask_confirmation_message",
-      "request_missing_assets",
-      "clarify_vague_feedback",
-      "align_stakeholder_feedback",
-      "synthesize_feedback_batch",
-      "handle_scope_change",
-      "answer_design_question",
-      "audit_asset_license",
-      "ask_design_directions",
-      "compare_design_options",
-      "triage_overload",
-      "negotiate_deadline_scope",
-      "report_progress_status",
-      "estimate_design_workload",
-      "prepare_feedback_request",
-      "refine_copywriting",
-      "optimize_action_path",
-      "organize_information_hierarchy",
-      "optimize_readability",
-      "simulate_design_defense",
-      "prepare_design_presentation",
-      "handle_negative_feedback",
-      "diagnose_ambiguous_issue",
-      "integrate_composite_assets",
-      "fix_asset_quality",
-      "guide_design_software_operation",
-      "negotiate_reference_similarity",
-      "analyze_reference",
-      "unify_series_visual_system",
-      "organize_delivery_files",
-      "prepare_design_handoff",
-      "guide_print_prepress",
-      "recommend_platform_specs",
-      "adapt_multi_format",
-      "check_brand_consistency",
-      "optimize_logo_exposure",
-      "optimize_alignment_spacing",
-      "balance_visual_density",
-      "separate_subject_background",
-      "strengthen_visual_impact",
-      "improve_visual_polish",
-      "guide_visual_effect",
-      "recommend_layout_structure",
-      "recommend_typography_system",
-      "recommend_color_system",
-      "translate_style_keyword",
-      "solve_design_issue",
-      "cancel_task",
-      "complete_checklist",
-      "snooze_task",
-      "summarize_version_changes",
-      "clear_waiting",
-      "mark_feedback_handled",
-      "update_project_name",
-      "update_project_type",
-      "update_project_specs",
-    ].includes(behavior);
+    return COMMAND_BEHAVIOR_SET.has(behavior);
   }
 
   function applyCommandBehavior(state, project, analysis, now) {
@@ -1399,6 +1568,7 @@
     if (analysis.behavior === "project_retrospective") return generateProjectRetrospective(state, project, analysis, now);
     if (analysis.behavior === "record_project_outcome") return recordProjectOutcome(state, project, analysis, now);
     if (analysis.behavior === "generate_growth_profile") return generateGrowthProfile(state, analysis, now);
+    if (analysis.behavior === "explain_sanitized_error") return explainSanitizedError();
     if (analysis.behavior === "request_missing_assets") return requestMissingAssets(state, project, analysis, now);
     if (analysis.behavior === "clarify_vague_feedback") return clarifyVagueFeedback(state, project, analysis, now);
     if (analysis.behavior === "ask_confirmation_message") return generateConfirmationMessage(state, project, analysis.text);
@@ -1477,6 +1647,148 @@
     return lines.join("\n");
   }
 
+  function buildDesignMentorReply(rawReply, project, analysis) {
+    const rawLines = String(rawReply || "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const firstLine = rawLines[0] || `设计判断：${project.name}`;
+    const actions = pickMentorActions(rawLines, analysis).slice(0, 3);
+    const why = pickMentorWhy(rawLines, analysis);
+    const check = pickMentorCheck(rawLines, project, analysis);
+    return [
+      `核心判断：${firstLine}。先抓最影响质量的主矛盾，不要一次把整页推倒重来。`,
+      "优先动作（下一步）：",
+      ...actions.map((item, index) => `${index + 1}. ${item}`),
+      `为什么：${why}`,
+      `验收标准：${check}`,
+    ].join("\n");
+  }
+
+  function explainSanitizedError() {
+    return [
+      "核心判断：完整上游错误可能包含密钥、账号、配额或区域信息，不能原样展示。",
+      "优先动作（下一步）：",
+      "1. 只看脱敏后的错误类别：未配置、未授权、超时、额度/区域限制、返回格式异常。",
+      "2. 检查是否通过服务入口打开，并确认环境变量和访问 token 已配置。",
+      "3. 如果要转发排查，先打码密钥、授权头、账号 ID、区域信息和堆栈明细。",
+      "为什么：解决问题需要的是错误类别和发生位置，不是原始敏感内容。",
+      "验收标准：转发文本里不出现密钥、授权头、账号、区域细节或堆栈明细。",
+    ].join("\n");
+  }
+
+  function pickMentorActions(lines, analysis) {
+    const numbered = lines
+      .filter((line) => /^\d+[.、]\s*/.test(line))
+      .map((line) => line.replace(/^\d+[.、]\s*/, "").trim());
+    const bullets = lines
+      .filter((line) => /^[-•]\s*/.test(line))
+      .map((line) => line.replace(/^[-•]\s*/, "").trim());
+    const direct = lines
+      .filter((line) => /主色|标题|字号|手机预览|明度|留白|对比|主标题|视觉关键词|方向\s*1|先用|先把|复制当前稿|减色稿|收敛稿|可读性修正版|确认话术|出血|CMYK|转曲|印刷/.test(line))
+      .map((line) => line.replace(/^[-•]\s*/, "").replace(/^\d+[.、]\s*/, "").trim());
+    const fallback = {
+      solve_design_issue: ["先把主标题、主体图、行动信息排出顺序。", "删掉不服务目标的装饰和重复信息。", "缩小预览，确认第一眼能读到重点。"],
+      answer_design_question: ["先明确目标用户和使用场景。", "用黑白稿排出信息层级，再加颜色和风格。", "把下一步落到一张 15 分钟小稿里。"],
+      ask_design_directions: ["先做 2 张小稿，不要一开始精修。", "每个方向只测试一种策略差异。", "用主信息是否更快被看懂来选方向。"],
+      optimize_readability: ["先用手机预览或真实尺寸看一眼。", "把字号收成主标题、利益点、说明三档。", "提高文字和背景的明度对比。"],
+      recommend_typography_system: ["只保留 1 个字体家族、2 种字重、3 档字号。", "主标题最大，正文回到清楚字重。", "同组文字靠近，不同组用间距拉开。"],
+      recommend_color_system: ["只保留 1 个主色、1 个辅助色、1 个强调色。", "先修明度对比，再决定要不要换风格。", "强调色只给核心信息和行动点。"],
+    }[analysis.behavior] || ["先抓主信息。", "再统一视觉变量。", "最后做真实尺寸预览。"];
+    const ordered = analysis.behavior === "recommend_color_system"
+      ? direct
+          .filter((line) => /明度|减色|强调色|主色/.test(line))
+          .sort((a, b) => colorActionPriority(b) - colorActionPriority(a))
+          .concat(numbered, bullets, direct, fallback)
+      : analysis.behavior === "optimize_readability"
+        ? direct.filter((line) => /可读性修正版|手机预览|字号|明度/.test(line)).concat(numbered, bullets, direct, fallback)
+        : analysis.behavior === "answer_design_question" && /客户|反馈|改来改去|确认/.test(analysis.text)
+          ? direct.filter((line) => /确认话术|冲突反馈|优先级/.test(line)).concat(numbered, bullets, direct, fallback)
+        : analysis.behavior === "ask_design_directions"
+          ? direct.filter((line) => /方向\s*1|视觉关键词|移动端预览|小稿/.test(line)).concat(numbered, bullets, direct, fallback)
+        : numbered.concat(bullets, direct, fallback);
+    return Array.from(new Set(ordered))
+      .filter((line) => line.length >= 6 && !/不要这样做|优先排查|具体做法|字号层级|颜色比例|方案\s*\d/.test(line))
+      .slice(0, 3);
+  }
+
+  function colorActionPriority(line) {
+    if (/明度|减色/.test(line)) return 3;
+    if (/强调色/.test(line)) return 2;
+    if (/主色/.test(line)) return 1;
+    return 0;
+  }
+
+  function pickMentorWhy(lines, analysis) {
+    if (analysis.behavior === "optimize_readability" && /字太多|文字太多|信息.*多|看不清|读不清/.test(analysis.text)) {
+      return "阅读密度问题：字数、行距、分组和留白没有给眼睛停顿；先降密度，再谈风格。";
+    }
+    if (analysis.behavior === "recommend_typography_system" && /字距|行距/.test(analysis.text)) {
+      return "调字距前先判断是字太挤还是行太长；行距先服务阅读：多行标题可以紧一点，正文和说明要松一点。";
+    }
+    if (analysis.behavior === "recommend_color_system" && /太暗|不够亮|太灰|太脏|不够年轻|颜色乱|配色乱/.test(analysis.text)) {
+      return "修色顺序：先修明度和对比，再做减色；如果要年轻感，只保留一个跳色或强调色给核心信息。";
+    }
+    const candidates = lines
+      .filter((line) => /先判断|判断标准|阅读密度问题|明度对比|字号\/层级|可读性|目标|层级|主次|高级感|配色系统|字体系统/.test(line))
+      .sort((a, b) => mentorWhyPriority(b, analysis) - mentorWhyPriority(a, analysis));
+    if (candidates.length) {
+      return candidates[0]
+        .replace(/^先判断[:：]?/, "")
+        .replace(/^判断标准[:：]?/, "")
+        .trim();
+    }
+    if (analysis.behavior === "recommend_color_system") return "颜色要先帮助用户读懂重点；颜色越多，主次越容易被稀释。";
+    if (analysis.behavior === "recommend_typography_system") return "字体系统的作用是稳定层级；字体越多，新手越难控制质感。";
+    if (analysis.behavior === "optimize_readability") return "可读性不是单纯放大文字，而是字号层级、对比、行距和真实预览一起成立。";
+    return "初级设计师最容易被装饰带走，先把目标、主次和可读性稳住，画面会自然变高级。";
+  }
+
+  function mentorWhyPriority(line, analysis) {
+    if (analysis.behavior === "optimize_readability" && /阅读密度问题|字号\/层级|明度对比/.test(line)) return 3;
+    if (/判断标准/.test(line)) return 2;
+    if (/先判断/.test(line)) return 1;
+    return 0;
+  }
+
+  function pickMentorCheck(lines, project, analysis) {
+    const candidates = lines.filter((line) => /判断标准|提交前测试|3 秒|手机预览|缩略图|可读性修正版|字体收敛稿|减色稿|移动端预览/.test(line));
+    const isSocial = /小红书|朋友圈|公众号|社媒|封面|头图|Banner/i.test(`${project.type} ${(project.deliverables || []).join("、")} ${analysis.text}`);
+    if (analysis.behavior === "recommend_typography_system" && candidates.length) {
+      return `先做一版字体收敛稿，检查字号层级和字距/行距检查：${candidates[candidates.length - 1]
+        .replace(/^判断标准[:：]?/, "")
+        .replace(/^提交前测试[:：]?/, "")
+        .trim()}`;
+    }
+    if (analysis.behavior === "recommend_color_system") {
+      return "做一版减色稿，按主色 60% / 辅助色 30% / 强调色 10% 检查；缩小后主标题和行动点仍然最先被看到。";
+    }
+    if (analysis.behavior === "optimize_readability" && /二维码|扫码/.test(analysis.text)) {
+      return "提交前测试：做一版可读性修正版后必须扫码测试，二维码周围留白、说明文字清楚、真实手机能打开正确页面。";
+    }
+    if (isSocial && !candidates.some((line) => /手机预览|移动端预览|缩略图/.test(line))) {
+      return "先做一版可读性修正版，再用手机预览 3 秒：主标题、主体和行动点都清楚，才算这一轮改对了。";
+    }
+    if (isSocial && candidates.some((line) => /手机预览|移动端预览|缩略图/.test(line))) {
+      return `先做一版可读性修正版，再检查：${candidates.find((line) => /手机预览|移动端预览|缩略图/.test(line)).replace(/^[-•]\s*/, "").trim()}`;
+    }
+    if (candidates.length) {
+      return candidates[candidates.length - 1]
+        .replace(/^判断标准[:：]?/, "")
+        .replace(/^提交前测试[:：]?/, "")
+        .trim();
+    }
+    if (analysis.behavior === "recommend_typography_system") return "做一版字体收敛稿；只看黑白稿时，字号层级、主标题、副标题和正文仍然分得清。";
+    if (analysis.behavior === "optimize_readability") return "把稿子缩到真实手机/印刷观看尺寸，3 秒内能读到主标题和行动点。";
+    if (/印刷|包装|画册|折页/.test(`${project.type} ${(project.deliverables || []).join("、")} ${analysis.text}`)) {
+      return "交付前确认出血、CMYK、图片精度和文字转曲；这些没过，不算可以交付。";
+    }
+    if (isSocial) {
+      return "先做一版可读性修正版，再用手机预览 3 秒：主标题、主体和行动点都清楚，才算这一轮改对了。";
+    }
+    return "截图缩到 25% 或手机预览 3 秒，仍能说出第一眼重点和下一步行动。";
+  }
+
   function solveDesignIssue(project, analysis) {
     const issue = analysis.designIssue || detectDesignIssue(analysis.text);
     const lines = [`设计卡点：${issue.labels.join("、")}`];
@@ -1496,7 +1808,7 @@
       lines.push("还需要补一句项目目标。目标清楚后，我才能帮你判断哪种改法更对。");
     }
     project.portfolio.process = appendSentence(project.portfolio.process, `设计卡点：${analysis.text}`);
-    return lines.join("\n");
+    return buildDesignMentorReply(lines.join("\n"), project, analysis);
   }
 
   function buildContextualDesignAdvice(project, issue, analysis) {
@@ -1562,17 +1874,20 @@
 
   function clearWaitingFromText(state, project, analysis, now) {
     const waitingTasks = state.tasks.filter((task) => task.projectId === project.id && task.status === "waiting");
-    waitingTasks.forEach((task) => {
+    const shouldClearAll = /全部|所有|都(确认|好了|通过|收到)|全都/.test(analysis.text);
+    const matchedTask = bestMatchingTask(waitingTasks, analysis.text);
+    const targetTasks = shouldClearAll ? waitingTasks : [matchedTask || (waitingTasks.length === 1 ? waitingTasks[0] : null)].filter(Boolean);
+    targetTasks.forEach((task) => {
       task.status = "done";
       task.nextAction = "已确认";
     });
-    if (project.status === "waiting") project.status = "designing";
-    project.risks = project.risks.filter((risk) => !/等待|确认/.test(risk));
+    if (targetTasks.length === waitingTasks.length && project.status === "waiting") project.status = "designing";
+    if (targetTasks.length === waitingTasks.length) project.risks = project.risks.filter((risk) => !/等待|确认/.test(risk));
     const versionHint = /(方向|方案|稿|版本|视觉)/.test(analysis.text);
     if (versionHint) recordVersion(project, analysis, now);
-    return waitingTasks.length
-      ? `确认已收到：${waitingTasks.map((task) => task.title).join("、")}\n我已把等待事项标记完成，项目回到设计推进状态。`
-      : "确认已收到。我已记录这次确认，当前项目没有待确认任务。";
+    if (!waitingTasks.length) return "确认已收到。我已记录这次确认，当前项目没有待确认任务。";
+    if (!targetTasks.length) return "确认已收到。因为没有明确指向哪条待确认任务，我先不自动完成任务。";
+    return `确认已收到：${targetTasks.map((task) => task.title).join("、")}\n我已把明确匹配的等待事项标记完成。`;
   }
 
   function markFeedbackHandled(state, project, analysis) {
@@ -3054,7 +3369,7 @@
     }
     lines.push("下一步：先复制当前稿做一版“字体收敛稿”，只保留 1 个字体家族、2 种字重、3 档字号。");
     project.portfolio.process = appendSentence(project.portfolio.process, `字体系统整理：${analysis.text}`);
-    return lines.join("\n");
+    return buildDesignMentorReply(lines.join("\n"), project, analysis);
   }
 
   function buildTypographySystems(project, text) {
@@ -3181,7 +3496,7 @@
     }
     lines.push("下一步：先复制当前稿做一版“减色稿”，只保留 1 个主色、1 个辅助色、1 个强调色，再看画面是否清楚。");
     project.portfolio.process = appendSentence(project.portfolio.process, `配色系统整理：${analysis.text}`);
-    return lines.join("\n");
+    return buildDesignMentorReply(lines.join("\n"), project, analysis);
   }
 
   function buildColorSystems(project, text) {
@@ -4269,90 +4584,22 @@
   }
 
   function shouldCreateTask(analysis) {
-    if (
-      [
-        "ask_plan",
-        "ask_summary",
-        "organize_meeting_notes",
-        "decompose_brief",
-        "plan_design_concepts",
-        "plan_reference_research",
-        "generate_image_prompt_brief",
-        "ask_review",
-        "ask_checklist",
-        "ask_portfolio",
-        "project_retrospective",
-        "record_project_outcome",
-        "generate_growth_profile",
-        "ask_confirmation_message",
-        "request_missing_assets",
-        "clarify_vague_feedback",
-        "align_stakeholder_feedback",
-        "synthesize_feedback_batch",
-        "handle_scope_change",
-        "answer_design_question",
-        "audit_asset_license",
-        "ask_design_directions",
-        "compare_design_options",
-        "triage_overload",
-        "negotiate_deadline_scope",
-        "report_progress_status",
-        "estimate_design_workload",
-        "prepare_feedback_request",
-        "refine_copywriting",
-        "optimize_action_path",
-        "organize_information_hierarchy",
-        "optimize_readability",
-        "simulate_design_defense",
-        "prepare_design_presentation",
-        "handle_negative_feedback",
-        "diagnose_ambiguous_issue",
-        "integrate_composite_assets",
-        "fix_asset_quality",
-        "guide_design_software_operation",
-        "negotiate_reference_similarity",
-        "analyze_reference",
-        "unify_series_visual_system",
-        "organize_delivery_files",
-        "prepare_design_handoff",
-        "guide_print_prepress",
-        "recommend_platform_specs",
-        "adapt_multi_format",
-        "check_brand_consistency",
-        "optimize_logo_exposure",
-        "optimize_alignment_spacing",
-        "balance_visual_density",
-        "separate_subject_background",
-        "strengthen_visual_impact",
-        "improve_visual_polish",
-        "guide_visual_effect",
-        "recommend_layout_structure",
-        "recommend_typography_system",
-        "recommend_color_system",
-        "translate_style_keyword",
-        "solve_design_issue",
-        "cancel_task",
-        "complete_checklist",
-        "snooze_task",
-        "summarize_version_changes",
-        "clear_waiting",
-        "mark_feedback_handled",
-        "update_brief",
-        "update_deadline",
-        "update_project_name",
-        "update_project_type",
-        "update_project_specs",
-        "record_version",
-      ].includes(analysis.behavior)
-    ) {
+    if (TASK_SUPPRESSED_BEHAVIORS.has(analysis.behavior)) {
       return false;
     }
     return analysis.status !== "done" || analysis.feedback || analysis.deliverables.length;
   }
 
+  // 累积文本字段（portfolio.process 等）追加一句。
+  // D4：跳过连续重复（重试/预览反复触发同一句会无去重地堆叠）并对总长封顶，
+  // 防止 portfolio.process 在项目生命周期内无界膨胀。封顶时丢最旧、保留最近的过程记录。
+  const ACCUMULATED_TEXT_CAP = 4000;
   function appendSentence(original, sentence) {
     if (!original) return sentence;
-    return `${original} ${sentence}`;
+    if (original === sentence || original.endsWith(` ${sentence}`)) return original;
+    const combined = `${original} ${sentence}`;
+    if (combined.length <= ACCUMULATED_TEXT_CAP) return combined;
+    return combined.slice(combined.length - ACCUMULATED_TEXT_CAP);
   }
 
   function applyBriefFields(project, brief) {
@@ -4379,11 +4626,14 @@
     const openTasks = state.tasks.filter((task) => task.projectId === project.id && task.status !== "done");
     if (!openTasks.length) return;
     const text = analysis.text;
-    const exact = openTasks.find((task) => task.title && text.includes(task.title.replace(/^完成|处理|推进|补齐|确认/, "").slice(0, 6)));
-    const byDraft = /首版|初稿|第一版|v1/i.test(text) && openTasks.find((task) => /首版|初稿|设计|draft/i.test(task.title));
-    const byDelivery = /交付|导出|源文件|定稿/.test(text) && openTasks.find((task) => /交付|导出|自检|源文件/.test(task.title));
-    const byFeedback = /反馈|修改|改完/.test(text) && openTasks.find((task) => /反馈|修改|处理/.test(task.title));
-    const target = exact || byDraft || byDelivery || byFeedback || openTasks[0];
+    const exact = openTasks.find((task) => {
+      const title = task.title || "";
+      const normalized = title.replace(/^(完成|处理|推进|补齐|确认)[:：]?/, "").trim();
+      return title.length >= 4 && text.includes(title) || normalized.length >= 4 && text.includes(normalized);
+    });
+    const byDraft = /首版|初稿|第一版|v1/i.test(text) && openTasks.find((task) => task.status !== "waiting" && /首版|初稿|draft/i.test(task.title));
+    const byDelivery = /交付|导出|源文件|定稿/.test(text) && openTasks.find((task) => task.status !== "waiting" && /交付|导出|自检|源文件/.test(task.title));
+    const target = exact || byDraft || byDelivery;
     if (target) target.status = "done";
   }
 
@@ -4431,6 +4681,7 @@
   }
 
   function buildReply(analysis, project) {
+    if (analysis.feedback) return buildPlainFeedbackReply(analysis, project);
     const lines = [];
     if (analysis.createsProject) {
       lines.push(`已创建项目「${project.name}」，并准备好交付检查清单。`);
@@ -4446,6 +4697,84 @@
     if (analysis.missing.length) lines.push(`还需要补充：${analysis.missing.join("、")}。`);
     lines.push("我已经同步更新今日待办、风险提醒和项目归档线索。");
     return lines.join("\n");
+  }
+
+  function buildPlainFeedbackReply(analysis, project) {
+    const text = `${analysis.text} ${analysis.feedback ? `${analysis.feedback.raw} ${analysis.feedback.action}` : ""}`;
+    const actions = buildPlainFeedbackActions(text, project);
+    const question = buildPlainFeedbackQuestion(text, analysis);
+    const risk = buildPlainFeedbackRisk(text, project, analysis);
+    return [
+      `核心判断：对方说“${summarizeFeedbackPhrase(text)}”，先别理解成“多加装饰”；更可能是第一眼重点不清楚、颜色太散，或画面不够干净。`,
+      "先做这 3 步：",
+      ...actions.map((item, index) => `${index + 1}. ${item}`),
+      `需要确认：${question}`,
+      `交付风险：${risk}`,
+    ].join("\n");
+  }
+
+  function summarizeFeedbackPhrase(text) {
+    if (/太普通|普通/.test(text)) return "画面普通";
+    if (/高级|不高级/.test(text)) return "想更高级";
+    if (/太乱|乱/.test(text)) return "画面有点乱";
+    if (/看不清|字太小|读不清/.test(text)) return "看不清";
+    if (/太暗|太灰|不够亮/.test(text)) return "画面偏暗";
+    if (/年轻|活泼/.test(text)) return "想更年轻";
+    return "需要再优化";
+  }
+
+  function buildPlainFeedbackActions(text, project) {
+    const actions = [];
+    if (/太普通|普通|高级|不高级|质感|精致/.test(text)) {
+      actions.push("先把主标题或主图放大一档，让用户第一眼知道重点是什么。");
+      actions.push("把颜色收成“黑白灰 + 1 个强调色”，先删掉不必要的渐变、阴影和边框。");
+      actions.push("给主内容周围多留一点空白，元素不要贴得太满。");
+    } else if (/太乱|乱|信息多|太挤/.test(text)) {
+      actions.push("先圈出最重要的一句话或一个按钮，其他内容都降一级。");
+      actions.push("把同一类信息放在一起，不同类信息之间拉开距离。");
+      actions.push("删掉重复说明和不服务重点的装饰。");
+    } else if (/看不清|字太小|读不清|可读性/.test(text)) {
+      actions.push("先用手机或真实尺寸预览，看 3 秒内能不能读到主标题。");
+      actions.push("把文字分成大标题、中信息、小说明三档，不要出现很多随机字号。");
+      actions.push("提高文字和背景的明暗对比，复杂背景上先加干净承托区。");
+    } else if (/太暗|太灰|不够亮|年轻|活泼/.test(text)) {
+      actions.push("先提高背景和文字的明暗对比，让画面更清爽。");
+      actions.push("只保留一个跳色给标题、价格或按钮，不要到处都加亮色。");
+      actions.push("删掉压暗画面的灰蒙蒙遮罩或厚重阴影。");
+    }
+    if (!actions.length) {
+      actions.push("先明确这张图最想让用户看到什么，把它放到最显眼的位置。");
+      actions.push("统一字体、颜色和间距，先让画面干净稳定。");
+      actions.push("做一张小改版截图给对方确认，不要一上来大改整套。");
+    }
+    if (/小红书|朋友圈|公众号|社媒|封面|Banner|banner/.test(`${project.type} ${(project.deliverables || []).join("、")} ${text}`)) {
+      actions[0] = "先缩到手机预览尺寸，看 3 秒内能不能读到主标题；读不到就先放大主标题。";
+    }
+    return Array.from(new Set(actions)).slice(0, 3);
+  }
+
+  function buildPlainFeedbackQuestion(text, analysis = {}) {
+    const missing = Array.isArray(analysis.missing) && analysis.missing.length
+      ? `先确认${analysis.missing.slice(0, 2).join("、")}。`
+      : "";
+    const prefix = missing ? `${missing}另外，` : "";
+    if (/高级|不高级|普通|质感|精致/.test(text)) {
+      return `${prefix}问对方一句：你说的“高级”，更像“更简洁”、 “更有质感”，还是“更符合品牌规范”？`;
+    }
+    if (/年轻|活泼/.test(text)) return `${prefix}问对方一句：年轻感更偏清爽、潮酷，还是可爱活泼？先选一个方向。`;
+    if (/太乱|乱/.test(text)) return `${prefix}问对方一句：必须最先被看到的是标题、产品图，还是按钮/二维码？`;
+    if (/看不清|字太小|读不清/.test(text)) return `${prefix}问对方一句：这张图主要在手机看、电脑看，还是印刷看？不同场景字号不一样。`;
+    return `${prefix}问清楚对方最想改善的是重点、颜色、字体，还是整体风格。`;
+  }
+
+  function buildPlainFeedbackRisk(text, project, analysis) {
+    const due = analysis.dueDate || project.dueDate;
+    if (/高级|不高级|普通|质感|精致/.test(text)) {
+      return "如果没有参考图或品牌规范，直接大改很容易返工；先做 1 张小改版给对方确认。";
+    }
+    if (/看不清|字太小|读不清/.test(text)) return "如果只在电脑大屏上看，容易误判；必须用真实尺寸再检查一次。";
+    if (due && daysUntil(due) <= 1) return "时间很近，先改最影响通过的地方：标题、颜色数量、可读性，不要临时换风格。";
+    return "先做小范围修改并保留修改前后对比，方便解释为什么这样改。";
   }
 
   function createPortfolioSeed(analysis) {
@@ -4758,9 +5087,6 @@
   }
 
   function generateProjectRetrospective(state, project, analysis, now = new Date()) {
-    if (/结束|做完|完成|交付|定稿|过稿/.test(analysis.text)) {
-      project.status = "done";
-    }
     const feedbackItems = state.feedback.filter((item) => item.projectId === project.id);
     const projectTasks = state.tasks.filter((task) => task.projectId === project.id);
     const doneTasks = projectTasks.filter((task) => task.status === "done");
@@ -4792,12 +5118,6 @@
   }
 
   function recordProjectOutcome(state, project, analysis, now = new Date()) {
-    project.status = "done";
-    state.tasks
-      .filter((task) => task.projectId === project.id && task.status !== "done" && /交付|导出|源文件|定稿|反馈|确认|推进|设计/.test(task.title))
-      .forEach((task) => {
-        task.status = "done";
-      });
     const outcome = extractProjectOutcomeSummary(analysis.text, project);
     project.portfolio.result = outcome.result;
     project.portfolio.reflection = project.portfolio.reflection && !/记录项目过程/.test(project.portfolio.reflection)
@@ -4820,7 +5140,7 @@
     });
 
     const lines = [`项目收尾记录：${project.name}`];
-    lines.push(`最终状态：已完成。`);
+    lines.push(`最终状态：已记录收尾结果。`);
     lines.push(`结果摘要：${outcome.result}`);
     lines.push("现在要补齐的证据：");
     buildOutcomeEvidenceList(project, analysis.text).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
@@ -4828,7 +5148,7 @@
     lines.push(`- ${buildOutcomePortfolioLine(project, outcome)}`);
     lines.push("收尾检查：");
     buildOutcomeCloseoutChecks(project).forEach((item) => lines.push(`- ${item}`));
-    lines.push("小画桌已把项目标记为已完成，并新增“归档项目结果和交付证据”任务。");
+    lines.push("小画桌已新增“归档项目结果和交付证据”任务；项目状态不会仅因预览收尾记录而自动变更。");
     return lines.join("\n");
   }
 
@@ -4955,21 +5275,38 @@
     const tasks = state.tasks || [];
     const tags = buildGrowthSkillTags(projects, feedbackItems);
     const gaps = buildGrowthGaps(projects, feedbackItems, tasks);
-    const portfolioGaps = buildPortfolioGaps(projects, feedbackItems);
-    const lines = ["能力成长档案"];
-    lines.push(`已记录项目：${projects.length} 个；反馈：${feedbackItems.length} 条；完成任务：${tasks.filter((task) => task.status === "done").length} 个。`);
-    lines.push("当前强项：");
-    buildGrowthStrengths(projects, feedbackItems, tags).forEach((item) => lines.push(`- ${item}`));
-    lines.push("优先补的短板：");
-    gaps.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
-    lines.push("下一步练习：");
-    buildGrowthExercises(gaps, projects, now).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
-    lines.push("作品集还缺：");
-    portfolioGaps.forEach((item) => lines.push(`- ${item}`));
-    lines.push("能力标签：");
-    lines.push(`- ${tags.length ? tags.join("、") : "需求整理、执行交付、过程记录"}`);
-    lines.push("建议：接下来每个项目都至少记录 1 条反馈、1 次版本变化、1 次交付检查和 1 句复盘结论，作品集会自然长出来。");
+    const focus = pickGrowthFocus(gaps, projects, feedbackItems);
+    const exercise = buildGrowthExercises([focus.gap], projects, now)[0];
+    const evidence = buildGrowthEvidence(projects, feedbackItems, tasks, tags);
+    const lines = [
+      `核心判断：你现在最值得练的不是审美本身，而是「${focus.label}」；这个能力会直接影响别人觉得你的稿子是否清楚、稳定、专业。`,
+      "优先动作（下一步）：",
+      `1. ${exercise}`,
+      `为什么：${evidence}`,
+      `验收标准：下次改稿后，你能用 1 句话说清“我改了什么、为什么这样改、它让用户更快看懂了什么”。`,
+    ];
     return lines.join("\n");
+  }
+
+  function pickGrowthFocus(gaps, projects, feedbackItems) {
+    const text = `${gaps.join(" ")} ${projects.map((project) => `${project.goal || ""} ${project.portfolio && project.portfolio.process ? project.portfolio.process : ""}`).join(" ")} ${feedbackItems.map((item) => item.action || item.raw).join(" ")}`;
+    if (/Brief|目标|受众|场景|需求/.test(text)) return { label: "需求判断", gap: gaps.find((gap) => /Brief|目标|受众|场景/.test(gap)) || "Brief 目标记录不稳定：每个项目都要写清“给谁看、在哪里看、看完做什么”。" };
+    if (/反馈|修改依据|模糊意见/.test(text)) return { label: "反馈转译", gap: gaps.find((gap) => /反馈/.test(gap)) || "反馈沉淀不足：缺少修改依据，作品集会像纯执行截图。" };
+    if (/版本|V1|V2|为什么改/.test(text)) return { label: "版本复盘", gap: gaps.find((gap) => /版本/.test(gap)) || "版本记录不足：需要记录 V1/V2 改了什么和为什么改。" };
+    if (/交付|完成|闭环|检查/.test(text)) return { label: "交付闭环", gap: gaps.find((gap) => /闭环|交付/.test(gap)) || "完成闭环记录不足：完成、等待、交付检查要及时标记。" };
+    if (/复盘|下次/.test(text)) return { label: "复盘表达", gap: gaps.find((gap) => /复盘/.test(gap)) || "复盘还不够具体：每个项目结束后写一句下次注意什么。" };
+    return { label: "信息层级表达", gap: gaps[0] || "当前基础记录比较完整，下一步重点提升案例表达和结果证明。" };
+  }
+
+  function buildGrowthEvidence(projects, feedbackItems, tasks, tags) {
+    const doneCount = tasks.filter((task) => task.status === "done").length;
+    const evidence = [];
+    if (projects.length) evidence.push(`你已经记录了 ${projects.length} 个项目`);
+    if (feedbackItems.length) evidence.push(`${feedbackItems.length} 条反馈`);
+    if (doneCount) evidence.push(`${doneCount} 个完成任务`);
+    if (tags.length) evidence.push(`可见能力标签是 ${tags.slice(0, 3).join("、")}`);
+    if (!evidence.length) return "现在记录还少，先把一个真实项目讲清楚，比泛泛看更多案例更能涨能力。";
+    return `${evidence.join("、")}；下一步要把这些记录压成清楚的设计判断，而不是继续堆过程材料。`;
   }
 
   function buildGrowthSkillTags(projects, feedbackItems) {
@@ -5161,7 +5498,6 @@
   }
 
   function negotiateDeadlineScope(state, project, analysis, now = new Date()) {
-    project.status = "waiting";
     if (!project.risks.includes("时间不足，需要确认交付范围和截止时间")) {
       project.risks.push("时间不足，需要确认交付范围和截止时间");
     }
@@ -5188,7 +5524,7 @@
     lines.push(buildDeadlineNegotiationMessage(project, recipient, tradeoff));
     lines.push("如果对方不同意延期：");
     buildDeadlineFallbacks(project, tradeoff).forEach((item, index) => lines.push(`${index + 1}. ${item}`));
-    lines.push("小画桌已把项目切到待确认，并新增“沟通延期/降范围”任务。");
+    lines.push("小画桌已新增“沟通延期/降范围”任务；项目状态保持不变，等你确认后再手动切换。");
     return lines.join("\n");
   }
 
@@ -5568,7 +5904,7 @@
     plan.checks.forEach((item, index) => lines.push(`${index + 1}. ${item}`));
     lines.push(`下一步：${plan.nextStep}`);
     project.portfolio.process = appendSentence(project.portfolio.process, `阅读体验优化：${analysis.text}`);
-    return lines.join("\n");
+    return buildDesignMentorReply(lines.join("\n"), project, analysis);
   }
 
   function buildReadabilityPlan(project, text) {
@@ -5857,7 +6193,7 @@
     lines.push(`下一步：${rules[0].nextStep}`);
     lines.push("判断标准：能不能让目标用户更快看懂，而不是只问自己好不好看。");
     project.portfolio.process = appendSentence(project.portfolio.process, `设计问题答疑：${analysis.text}`);
-    return lines.join("\n");
+    return buildDesignMentorReply(lines.join("\n"), project, analysis);
   }
 
   function buildQuestionContext(project, rules, text) {
@@ -5907,7 +6243,7 @@
       lines.push(`动手前先确认：${risks.slice(0, 3).join("、")}。`);
     }
     project.portfolio.process = appendSentence(project.portfolio.process, `方向探索：${analysis.text}`);
-    return lines.join("\n");
+    return buildDesignMentorReply(lines.join("\n"), project, analysis);
   }
 
   function planDesignConcepts(project, analysis) {
@@ -6168,7 +6504,6 @@
     const feedbackItems = collectStakeholderConflictItems(state, project, analysis);
     const people = extractStakeholders(analysis.text, feedbackItems);
     const conflict = summarizeStakeholderConflict(project, analysis.text, feedbackItems);
-    project.status = "waiting";
     if (!project.risks.includes("多方意见不一致，需要确认拍板优先级")) {
       project.risks.push("多方意见不一致，需要确认拍板优先级");
     }
@@ -6184,7 +6519,7 @@
     buildStakeholderTradeoffs(project, analysis.text, feedbackItems).forEach((item) => lines.push(`- ${item}`));
     lines.push("可以这样对齐：");
     lines.push(`- ${buildStakeholderAlignmentMessage(project, people, conflict)}`);
-    lines.push("小画桌已把项目切到待确认，并加入“确认多方意见优先级”的任务。");
+    lines.push("小画桌已加入“确认多方意见优先级”的任务；项目状态保持不变，等你确认后再切换。");
     project.portfolio.process = appendSentence(project.portfolio.process, `多方意见对齐：${analysis.text}`);
     return lines.join("\n");
   }
@@ -6606,12 +6941,13 @@
       ? feedbackItems.map((item) => `- ${item.action}`).join("\n")
       : "- 目前没有反馈记录，先按当前需求检查信息层级、风格一致性和交付规格。";
     return [
-      `提交前自检：${project.name}`,
-      "1. 第一眼是否能看懂主信息？主标题、利益点或活动主题应在 3 秒内清楚。",
-      "2. 视觉调性是否贴合关键词？避免同时追求太多情绪。",
-      "3. 平台尺寸、导出格式、字体和图片授权是否已经确认。",
-      "4. 修改依据：",
-      feedbackText,
+      `核心判断：${project.name} 暂不建议直接发客户，除非主信息、交付规格、文案错漏和素材授权都已经过一遍。`,
+      "优先动作（下一步）：",
+      "1. 先看第一眼是否能读懂主信息；主标题、利益点或活动主题应在 3 秒内清楚。",
+      "2. 再核对平台尺寸、导出格式、字体、图片授权和文件命名。",
+      "3. 最后对照修改依据，确认本轮没有漏掉关键反馈。",
+      `为什么：终稿检查不是继续发散创意，而是把客户验收风险压到最低。修改依据：${feedbackText.replace(/^[-•]\s*/, "")}`,
+      "验收标准：截图、尺寸/格式、文案终稿、素材授权和导出文件都确认后，再发客户。",
     ].join("\n");
   }
 
