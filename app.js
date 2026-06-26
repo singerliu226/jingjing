@@ -6,6 +6,7 @@
   let state = Core.loadState(storage);
   let projectFilter = state.activeFilter || "all";
   let currentView = "workbench";
+  let activeDetailStep = 0;
   let projectAnalysisTimer = 0;
   let projectAnalysisRun = 0;
   let pendingAttachments = [];
@@ -47,7 +48,41 @@
     projectRequirementsInput: document.querySelector("#project-requirements-input"),
     projectDeliverablesInput: document.querySelector("#project-deliverables-input"),
     projectProgressInput: document.querySelector("#project-progress-input"),
+    progressView: document.querySelector("#progress-view"),
+    progressSummary: document.querySelector("#progress-summary"),
+    editProjectDetailBtn: document.querySelector("#edit-project-detail-btn"),
+    detailTaskSection: document.querySelector("#detail-task-section"),
+    detailSummaryName: document.querySelector("#detail-summary-name"),
+    detailSummaryMeta: document.querySelector("#detail-summary-meta"),
+    wizardStepLabel: document.querySelector("#wizard-step-label"),
+    wizardProgressBar: document.querySelector("#wizard-progress-bar"),
+    wizardPrevBtn: document.querySelector("#wizard-prev-btn"),
+    wizardSkipBtn: document.querySelector("#wizard-skip-btn"),
+    wizardNextBtn: document.querySelector("#wizard-next-btn"),
   };
+
+  const detailSteps = [
+    {
+      isComplete: (project) => Boolean(normalize(project.name) && project.name !== "未命名设计项目"),
+      focus: () => nodes.projectNameInput,
+    },
+    {
+      isComplete: (project) => Boolean(normalize(project.goal)),
+      focus: () => nodes.projectGoalInput,
+    },
+    {
+      isComplete: (project) => Boolean(project.dueDate),
+      focus: () => nodes.projectDueInput,
+    },
+    {
+      isComplete: (project) => Boolean((project.deliverables || []).length),
+      focus: () => nodes.projectDeliverablesInput,
+    },
+    {
+      isComplete: (project) => Boolean(normalize(project.requirements) || normalize(project.progressNote)),
+      focus: () => nodes.projectRequirementsInput,
+    },
+  ];
 
   function persist() {
     Core.saveState(storage, state);
@@ -101,6 +136,98 @@
     nodes.projectRequirementsInput.value = project.requirements || "";
     nodes.projectDeliverablesInput.value = (project.deliverables || []).join("、");
     nodes.projectProgressInput.value = project.progressNote || "";
+    renderDetailWizard(project);
+  }
+
+  function renderDetailWizard(project) {
+    const completed = detailSteps.filter((step) => step.isComplete(project)).length;
+    const total = detailSteps.length;
+    const showProgress = shouldShowProgressView(project);
+    const savedStep = Number.isInteger(project.detailStep) ? project.detailStep : findFirstIncompleteDetailStep(project);
+    activeDetailStep = clamp(savedStep, 0, total - 1);
+
+    nodes.projectForm.hidden = showProgress;
+    nodes.progressView.hidden = !showProgress;
+
+    document.querySelectorAll(".wizard-step").forEach((step) => {
+      const isActive = Number(step.dataset.step) === activeDetailStep;
+      step.hidden = !isActive;
+      step.classList.toggle("is-active", isActive);
+    });
+
+    nodes.detailSummaryName.textContent = project.name || "未命名设计项目";
+    nodes.detailSummaryMeta.textContent = [
+      project.dueDate ? `DDL ${project.dueDate}` : "未设截止",
+      `${(project.deliverables || []).length} 个交付物`,
+      statusLabel(project.status),
+    ].join(" · ");
+    nodes.wizardStepLabel.textContent = `${activeDetailStep + 1}/${total}`;
+    nodes.wizardProgressBar.style.width = `${Math.max(8, (completed / total) * 100)}%`;
+    nodes.wizardPrevBtn.disabled = activeDetailStep === 0;
+    nodes.wizardNextBtn.textContent = activeDetailStep === total - 1 ? "完成" : "下一步";
+    nodes.wizardSkipBtn.hidden = detailSteps[activeDetailStep].isComplete(project);
+    nodes.saveProjectBtn.textContent = project.workflowReady ? "已整理" : completed === total ? "信息够用了" : `已填 ${completed}/${total}`;
+    nodes.progressSummary.textContent = buildProgressSummary(project);
+  }
+
+  function shouldShowProgressView(project) {
+    if (!project) return false;
+    if (project.detailMode === "collect") return false;
+    return Boolean(project.workflowReady || project.detailMode === "progress");
+  }
+
+  function buildProgressSummary(project) {
+    const taskCount = state.tasks.filter((task) => task.projectId === project.id && task.status !== "done").length;
+    const deliverables = (project.deliverables || []).join("、") || "交付物";
+    const due = project.dueDate ? `DDL ${project.dueDate}` : "还没设截止";
+    if (!taskCount) return `${due}。现在没有未完成任务，可以新增下一步或回到对话里继续拆。`;
+    return `${due}，围绕 ${deliverables} 先推进 ${taskCount} 条关键任务。`;
+  }
+
+  function findFirstIncompleteDetailStep(project) {
+    const index = detailSteps.findIndex((step) => !step.isComplete(project));
+    return index === -1 ? detailSteps.length - 1 : index;
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function moveDetailStep(delta) {
+    const project = Core.getProject(state, state.activeProjectId);
+    if (!project) return;
+    project.detailStep = clamp(activeDetailStep + delta, 0, detailSteps.length - 1);
+    persist();
+    renderProjectForm(project);
+    focusCurrentDetailStep();
+  }
+
+  function focusCurrentDetailStep() {
+    const input = detailSteps[activeDetailStep]?.focus();
+    if (input && typeof input.focus === "function") window.setTimeout(() => input.focus(), 0);
+  }
+
+  function nextDetailStep() {
+    const project = Core.getProject(state, state.activeProjectId);
+    if (!project) return;
+    if (activeDetailStep < detailSteps.length - 1) {
+      moveDetailStep(1);
+      return;
+    }
+    project.detailStep = findFirstIncompleteDetailStep(project);
+    persist();
+    renderProjectForm(project);
+    if (!isDetailCollectionComplete(project)) {
+      focusCurrentDetailStep();
+      return;
+    }
+    if (isProjectReadyForWorkflow(project)) {
+      project.detailMode = "progress";
+      persist();
+      nodes.messageInput.value = "请根据右侧项目详情，帮我安排今天先做什么。";
+      nodes.messageInput.focus();
+      analyzeProjectFromCard(project.id);
+    }
   }
 
   function renderProjects() {
@@ -154,7 +281,10 @@
 
   function renderDashboard() {
     const dashboard = Core.getDashboard(state);
-    const activeTasks = state.tasks.filter((task) => task.projectId === state.activeProjectId);
+    const project = Core.getProject(state, state.activeProjectId);
+    const canShowProjectTasks = shouldShowProgressView(project);
+    const activeTasks = state.tasks.filter((task) => task.projectId === state.activeProjectId && task.status !== "done");
+    nodes.detailTaskSection.hidden = !canShowProjectTasks;
     nodes.todayCount.textContent = activeTasks.length;
     nodes.waitingCount.textContent = dashboard.waiting.length;
     nodes.projectTaskList.replaceChildren(...withEmpty(activeTasks.map(renderProjectTaskEditor), "还没有任务。点“新增任务”，或者直接在中间告诉小画桌要做什么。"));
@@ -167,38 +297,27 @@
   function renderProjectTaskEditor(task) {
     const item = el("article", { className: `detail-task priority-${task.priority}` });
     item.append(
-      el("div", { className: "detail-task-grid" }, [
-        el("label", {}, [
-          document.createTextNode("任务"),
-          taskInput(task, "title", task.title, "例如：完成首版包装主视觉"),
-        ]),
-        el("label", {}, [
-          document.createTextNode("截止"),
-          taskInput(task, "dueDate", task.dueDate || "", "", "date"),
-        ]),
-        el("label", {}, [
-          document.createTextNode("状态"),
-          taskSelect(task, "status", task.status),
-        ]),
-        el("label", {}, [
-          document.createTextNode("优先级"),
-          taskSelect(task, "priority", task.priority || "normal", [
-            ["high", "高"],
-            ["normal", "普通"],
-          ]),
-        ]),
-      ]),
-      el("label", { className: "task-detail-label" }, [
-        document.createTextNode("细节 / 下一步"),
-        taskTextarea(task, "nextAction", task.nextAction || "", "写清楚要改哪里、等谁确认、交付时注意什么"),
-      ]),
-      el("div", { className: "detail-task-actions" }, [
+      el("div", { className: "detail-task-top" }, [
+        taskInput(task, "title", task.title, "例如：完成首版包装主视觉"),
         el("button", {
           className: "mini-action is-done",
           type: "button",
           textContent: task.status === "done" ? "已完成" : "完成",
           onclick: () => completeTask(task.id),
         }),
+      ]),
+      el("div", { className: "detail-task-meta" }, [
+        taskInput(task, "dueDate", task.dueDate || "", "", "date"),
+        taskSelect(task, "status", task.status),
+        taskSelect(task, "priority", task.priority || "normal", [
+          ["high", "高"],
+          ["normal", "普通"],
+        ]),
+      ]),
+      el("label", { className: "task-detail-label" }, [
+        taskTextarea(task, "nextAction", task.nextAction || "", "写清楚要改哪里、等谁确认、交付时注意什么"),
+      ]),
+      el("div", { className: "detail-task-actions" }, [
         el("button", {
           className: "mini-action",
           type: "button",
@@ -968,6 +1087,7 @@
       dueDate: "",
       status: "todo",
       portfolioScore: 35,
+      workflowReady: false,
       risks: ["缺少设计目标", "缺少交付物清单", "缺少截止时间"],
       versions: [],
       portfolio: {
@@ -979,6 +1099,7 @@
         reflection: "",
         interviewScript: "",
       },
+      detailStep: 0,
     };
     state.projects.unshift(project);
     state.tasks.push({
@@ -1002,7 +1123,7 @@
       commitAndRender();
       return;
     }
-    addAgentMessage("新项目已创建。菁菁先在右侧填一点项目详情：要求、DDL、交付物和当前进度。填完以后，中间直接问我怎么做就好。");
+    addAgentMessage("新项目已创建。菁菁先按右侧一步步补项目信息；每次只填当前这一格就好。填到最后，小画桌会自动帮你整理今天怎么推进。");
   }
 
   function sortProjects() {
@@ -1060,8 +1181,11 @@
     project.requirements = nodes.projectRequirementsInput.value.trim();
     project.deliverables = splitList(nodes.projectDeliverablesInput.value);
     project.progressNote = nodes.projectProgressInput.value.trim();
+    project.workflowReady = false;
+    project.detailMode = "collect";
     project.risks = Array.from(new Set(buildProjectRisks(project).concat(preservedRisks)));
     syncProjectWork(project);
+    renderDetailWizard(project);
     renderProjectHeader(project);
     renderProjects();
     renderDashboard();
@@ -1118,13 +1242,17 @@
   function scheduleProjectAnalysis(projectId) {
     window.clearTimeout(projectAnalysisTimer);
     const project = Core.getProject(state, projectId);
-    nodes.saveProjectBtn.textContent = isProjectReadyForWorkflow(project) ? "已保存，准备整理" : "已自动保存";
-    if (!isProjectReadyForWorkflow(project)) return;
+    nodes.saveProjectBtn.textContent = isDetailCollectionComplete(project) ? "已保存，准备整理" : "已自动保存";
+    if (!isProjectReadyForWorkflow(project) || !isDetailCollectionComplete(project)) return;
     projectAnalysisTimer = window.setTimeout(() => analyzeProjectFromCard(projectId), 900);
   }
 
   function isProjectReadyForWorkflow(project) {
     return Boolean(project && project.name && project.type && (project.goal || project.requirements) && project.dueDate && project.deliverables.length);
+  }
+
+  function isDetailCollectionComplete(project) {
+    return Boolean(project && detailSteps.every((step) => step.isComplete(project)));
   }
 
   function projectWorkflowFingerprint(project) {
@@ -1155,6 +1283,7 @@
     }
     const runId = ++projectAnalysisRun;
     project.workflowFingerprint = fingerprint;
+    project.detailMode = "progress";
     nodes.saveProjectBtn.textContent = "正在整理";
     const workflow = Core.generateProjectWorkflow(project, new Date());
     applyWorkflowTasks(project, workflow);
@@ -1194,6 +1323,7 @@
       }
     });
     if (workflow.ready && project.status !== "done") project.status = "designing";
+    project.workflowReady = workflow.ready;
     syncProjectWork(project);
   }
 
@@ -1477,6 +1607,19 @@
   nodes.addTaskBtn.addEventListener("click", addProjectTask);
   nodes.deleteProjectBtn.addEventListener("click", deleteActiveProject);
   nodes.projectForm.addEventListener("input", updateActiveProjectFromForm);
+  nodes.projectForm.addEventListener("change", updateActiveProjectFromForm);
+  nodes.editProjectDetailBtn.addEventListener("click", () => {
+    const project = Core.getProject(state, state.activeProjectId);
+    if (!project) return;
+    project.detailMode = "collect";
+    persist();
+    renderProjectForm(project);
+    renderDashboard();
+    focusCurrentDetailStep();
+  });
+  nodes.wizardPrevBtn.addEventListener("click", () => moveDetailStep(-1));
+  nodes.wizardSkipBtn.addEventListener("click", () => moveDetailStep(1));
+  nodes.wizardNextBtn.addEventListener("click", nextDetailStep);
   nodes.attachButton.addEventListener("click", () => nodes.attachmentInput.click());
   nodes.attachmentInput.addEventListener("change", (event) => handleAttachmentFiles(event.target.files));
   nodes.detailToggle.addEventListener("click", openProjectDetail);

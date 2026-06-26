@@ -94,35 +94,79 @@
               <div class="rail-card-head project-detail-head">
                 <div>
                   <h3>项目详情</h3>
-                  <p>从聊天里自动补齐，菁菁只改不准的地方。</p>
+                  <p>一次只补一点点，小画桌会用这些信息来回答。</p>
                 </div>
-                <button class="context-status" id="save-project-btn" type="button">等待识别</button>
+                <span class="context-status" id="save-project-btn" aria-live="polite">等待识别</span>
               </div>
               <form class="project-form detail-form" id="project-form">
-                <label class="primary-field">项目<input id="project-name-input" type="text" /></label>
-                <div class="form-row">
-                  <label>DDL<input id="project-due-input" type="date" /></label>
-                  <label>进度
-                    <select id="project-status-input">
-                      <option value="todo">未开始</option>
-                      <option value="designing">设计中</option>
-                      <option value="waiting">待确认</option>
-                      <option value="done">已完成</option>
-                    </select>
-                  </label>
+                <div class="detail-summary" aria-live="polite">
+                  <strong id="detail-summary-name">未命名设计项目</strong>
+                  <span id="detail-summary-meta">未设截止 · 0 个交付物</span>
                 </div>
-                <label>交付物<input id="project-deliverables-input" type="text" placeholder="例如：海报、包装、公众号头图" /></label>
-                <label>设计要求<textarea id="project-requirements-input" rows="4" placeholder="小画桌会从对话里提取：使用场景、必须出现的信息、风格偏好、禁用元素..."></textarea></label>
-                <label>当前进度<textarea id="project-progress-input" rows="3" placeholder="做到哪一步了？等谁确认？下一步卡在哪里？"></textarea></label>
-                <details class="detail-more">
-                  <summary>更多项目信息</summary>
-                  <label>设计类型<input id="project-type-input" type="text" placeholder="海报 / 品牌 / 社媒图 / 包装" /></label>
-                  <label>核心目标<textarea id="project-goal-input" rows="3" placeholder="这次要解决什么？谁看？希望对方做什么？"></textarea></label>
-                </details>
+                <div class="wizard-progress" aria-label="项目信息填写进度">
+                  <span id="wizard-step-label">1/5</span>
+                  <span class="wizard-track"><span id="wizard-progress-bar"></span></span>
+                </div>
+
+                <section class="wizard-step" data-step="0">
+                  <p class="wizard-question">这是什么项目？</p>
+                  <p class="wizard-hint">先给它一个容易认的名字，类型写大概就行。</p>
+                  <label>项目名<input id="project-name-input" type="text" placeholder="例如：酒吧开业海报" /></label>
+                  <label>设计类型<input id="project-type-input" type="text" placeholder="海报 / 包装 / 社媒图 / 品牌物料" /></label>
+                </section>
+
+                <section class="wizard-step" data-step="1" hidden>
+                  <p class="wizard-question">这次最想解决什么？</p>
+                  <p class="wizard-hint">一句话就够：给谁看、希望对方看完做什么。</p>
+                  <label>核心目标<textarea id="project-goal-input" rows="5" placeholder="例如：让附近年轻人知道新酒吧开业，并愿意周末来店里。"></textarea></label>
+                </section>
+
+                <section class="wizard-step" data-step="2" hidden>
+                  <p class="wizard-question">什么时候要交？现在到哪一步？</p>
+                  <p class="wizard-hint">小画桌会按时间判断今天先做什么。</p>
+                  <div class="form-row">
+                    <label>DDL<input id="project-due-input" type="date" /></label>
+                    <label>进度
+                      <select id="project-status-input">
+                        <option value="todo">未开始</option>
+                        <option value="designing">设计中</option>
+                        <option value="waiting">待确认</option>
+                        <option value="done">已完成</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
+
+                <section class="wizard-step" data-step="3" hidden>
+                  <p class="wizard-question">最后要交哪些图？</p>
+                  <p class="wizard-hint">用顿号隔开，不确定尺寸也可以先只写物料名。</p>
+                  <label>交付物<input id="project-deliverables-input" type="text" placeholder="例如：海报、公众号头图、小红书封面" /></label>
+                </section>
+
+                <section class="wizard-step" data-step="4" hidden>
+                  <p class="wizard-question">还有哪些要求或卡点？</p>
+                  <p class="wizard-hint">老板反馈、品牌限制、必须出现的信息、现在卡住的地方，都放这里。</p>
+                  <label>设计要求<textarea id="project-requirements-input" rows="4" placeholder="例如：要年轻一点，不能太暗；必须出现开业时间、地址和二维码。"></textarea></label>
+                  <label>当前进度<textarea id="project-progress-input" rows="3" placeholder="例如：主视觉还没定，正在等老板确认文案。"></textarea></label>
+                </section>
+
+                <div class="wizard-actions">
+                  <button class="ghost-button" id="wizard-prev-btn" type="button">上一步</button>
+                  <button class="ghost-button" id="wizard-skip-btn" type="button">先跳过</button>
+                  <button class="solid-button" id="wizard-next-btn" type="button">下一步</button>
+                </div>
               </form>
-              <div class="detail-section">
+              <div class="progress-view" id="progress-view" hidden>
+                <div class="progress-hero">
+                  <span>任务进度</span>
+                  <strong>小画桌已经把项目拆成下一步了</strong>
+                  <p id="progress-summary">先处理最影响交付的事情，做完一条就点完成。</p>
+                </div>
+                <button class="ghost-button progress-edit-button" id="edit-project-detail-btn" type="button">编辑项目详情</button>
+              </div>
+              <div class="detail-section" id="detail-task-section" hidden>
                 <div class="panel-heading">
-                  <h3>下一步 <span id="today-count">0</span></h3>
+                  <h3>下一步任务 <span id="today-count">0</span></h3>
                   <button class="text-button" id="add-task-btn" type="button">添加</button>
                 </div>
                 <div class="project-task-list" id="project-task-list"></div>

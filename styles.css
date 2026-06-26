@@ -1676,6 +1676,9 @@ kbd {
 }
 
 .context-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   border: 0;
   border-radius: 999px;
@@ -1684,6 +1687,7 @@ kbd {
   color: var(--teal);
   font-size: 11px;
   font-weight: 900;
+  cursor: default;
 }
 
 .danger-text-button {
@@ -2845,6 +2849,7 @@ select:focus-visible {
   .content-grid {
     grid-template-columns: 1fr;
     gap: 14px;
+    overflow: visible;
   }
 
   .conversation-panel {
@@ -2861,7 +2866,23 @@ select:focus-visible {
   }
 
   .work-rail {
+    position: static;
+    width: auto;
+    padding: 0;
     background: var(--bg);
+    box-shadow: none;
+    overflow: visible;
+    transform: none;
+  }
+
+  body.detail-open .work-rail {
+    transform: none;
+  }
+
+  .project-detail-card {
+    height: auto;
+    max-height: none;
+    overflow: visible;
   }
 
   .detail-fab {
@@ -2898,6 +2919,293 @@ select:focus-visible {
 
   .form-row,
   .detail-task-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Focused project detail wizard */
+.project-detail-card {
+  gap: 0;
+}
+
+.project-detail-head {
+  flex: 0 0 auto;
+}
+
+.detail-form {
+  display: flex;
+  max-height: none;
+  overflow: visible;
+  flex: 0 0 auto;
+  gap: 13px;
+  margin-top: 14px;
+  padding-right: 0;
+}
+
+.detail-form[hidden],
+.progress-view[hidden],
+.detail-section[hidden] {
+  display: none !important;
+}
+
+.detail-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid #e2ebe5;
+  border-radius: 10px;
+  padding: 11px 12px;
+  background: #fbfcfa;
+}
+
+.detail-summary strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 930;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-summary span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wizard-progress {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--teal-dark);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.wizard-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7eee9;
+}
+
+#wizard-progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0b7770, #68b8aa);
+  transition: width 180ms ease;
+}
+
+.wizard-step {
+  display: flex;
+  min-height: 236px;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid #dfe9e3;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+}
+
+.wizard-step[hidden] {
+  display: none;
+}
+
+.wizard-question {
+  margin: 0;
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.wizard-hint {
+  margin: -3px 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.5;
+}
+
+.wizard-step label {
+  gap: 6px;
+}
+
+.wizard-step input,
+.wizard-step textarea,
+.wizard-step select {
+  min-height: 42px;
+  font-size: 14px;
+}
+
+.wizard-step textarea {
+  min-height: 116px;
+  max-height: 160px;
+  resize: vertical;
+}
+
+.wizard-step .form-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.wizard-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 8px;
+}
+
+.ghost-button,
+.solid-button {
+  min-height: 40px;
+  border-radius: 10px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.ghost-button {
+  border: 1px solid #dfe8e2;
+  background: #fff;
+  color: #63716b;
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: rgba(6, 125, 117, 0.28);
+  background: #f3faf7;
+  color: var(--teal-dark);
+}
+
+.ghost-button:disabled {
+  opacity: 0.42;
+}
+
+.solid-button {
+  border: 1px solid rgba(6, 125, 117, 0.22);
+  background: #0b7770;
+  color: #fff;
+}
+
+.solid-button:hover {
+  background: #086b65;
+}
+
+.progress-view {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.progress-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid rgba(6, 125, 117, 0.18);
+  border-radius: 12px;
+  padding: 14px;
+  background: linear-gradient(180deg, #f2faf7 0%, #ffffff 100%);
+}
+
+.progress-hero span {
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-weight: 920;
+}
+
+.progress-hero strong {
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.progress-hero p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.55;
+}
+
+.progress-edit-button {
+  width: 100%;
+}
+
+.detail-section {
+  min-height: 0;
+  margin-top: 14px;
+}
+
+.project-task-list {
+  gap: 8px;
+}
+
+.detail-task {
+  gap: 7px;
+  padding: 10px 10px 10px 12px;
+}
+
+.detail-task-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-task-top input {
+  min-height: 34px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.detail-task-top input:focus {
+  box-shadow: none;
+}
+
+.detail-task-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 94px 70px;
+  gap: 6px;
+}
+
+.detail-task-meta input,
+.detail-task-meta select,
+.task-detail-label textarea {
+  min-height: 30px;
+  font-size: 11px;
+}
+
+.task-detail-label {
+  margin-top: 0;
+}
+
+.task-detail-label textarea {
+  min-height: 52px;
+  max-height: 86px;
+}
+
+.detail-task-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 560px) {
+  .wizard-step {
+    min-height: 220px;
+  }
+
+  .wizard-actions,
+  .detail-task-meta {
     grid-template-columns: 1fr;
   }
 }

@@ -2303,8 +2303,13 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const stylesSource = fs.readFileSync("styles.css", "utf8");
   assert.ok(indexSource.includes("菁菁，和小画桌慢慢说"));
   assert.ok(indexSource.includes("<h3>项目详情</h3>"));
-  assert.ok(indexSource.includes("从聊天里自动补齐"));
-  assert.ok(indexSource.includes("更多项目信息"));
+  assert.ok(indexSource.includes("一次只补一点点"));
+  assert.ok(indexSource.includes("这是什么项目？"));
+  assert.ok(indexSource.includes("这次最想解决什么？"));
+  assert.ok(indexSource.includes("什么时候要交？现在到哪一步？"));
+  assert.ok(indexSource.includes("最后要交哪些图？"));
+  assert.ok(indexSource.includes("还有哪些要求或卡点？"));
+  assert.ok(!indexSource.includes("更多项目信息"));
   assert.ok(indexSource.includes("删除这个项目"));
   assert.ok(indexSource.includes("id=\"attachment-input\""));
   assert.ok(indexSource.includes("id=\"attach-button\""));
@@ -2326,7 +2331,9 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(stylesSource.includes(".project-detail-card"));
   assert.ok(stylesSource.includes(".prompt-chip"));
   assert.ok(stylesSource.includes(".context-status"));
-  assert.ok(stylesSource.includes(".detail-more"));
+  assert.ok(stylesSource.includes(".wizard-step"));
+  assert.ok(stylesSource.includes(".wizard-actions"));
+  assert.ok(stylesSource.includes(".detail-summary"));
   assert.ok(stylesSource.includes(".attachment-dock"));
   assert.ok(stylesSource.includes(".attach-button"));
   assert.ok(stylesSource.includes(".message-attachments"));
