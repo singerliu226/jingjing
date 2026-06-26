@@ -39,6 +39,14 @@
     detailToggle: document.querySelector("#detail-toggle"),
     detailFab: document.querySelector("#detail-fab"),
     railBackdrop: document.querySelector("#rail-backdrop"),
+    guideBtn: document.querySelector("#guide-btn"),
+    changelogBtn: document.querySelector("#changelog-btn"),
+    infoModal: document.querySelector("#info-modal"),
+    infoBackdrop: document.querySelector("#info-backdrop"),
+    infoClose: document.querySelector("#info-close"),
+    infoEyebrow: document.querySelector("#info-eyebrow"),
+    infoTitle: document.querySelector("#info-title"),
+    infoContent: document.querySelector("#info-content"),
     projectForm: document.querySelector("#project-form"),
     projectNameInput: document.querySelector("#project-name-input"),
     projectTypeInput: document.querySelector("#project-type-input"),
@@ -84,6 +92,53 @@
     },
   ];
 
+  const infoPanels = {
+    guide: {
+      eyebrow: "给菁菁的小小指南",
+      title: "小画桌怎么陪你画",
+      sections: [
+        {
+          title: "1. 先给事情起个名字",
+          body: "左边点“新建项目”，把这件设计活放进一个小抽屉里。海报、包装、公众号头图分开记，小画桌就不容易串台。",
+        },
+        {
+          title: "2. 右边慢慢补小纸条",
+          body: "项目详情一次只问一点点：做什么、给谁看、什么时候交、要交哪些图。不会催你写满，知道多少就先写多少。",
+        },
+        {
+          title: "3. 中间直接把话丢给我",
+          body: "老板反馈、客户要求、卡住的地方、设计截图，都可以直接发。小画桌会结合右边的小纸条回答，也会把能识别的信息悄悄补回项目里。",
+        },
+        {
+          title: "一点点小诀窍",
+          body: "不用组织得很完美。像“老板说太暗，明天下午前改”这样随手说就行，小画桌会帮你整理成能行动的下一步。",
+        },
+      ],
+    },
+    changelog: {
+      eyebrow: "小画桌的成长记录",
+      title: "最近变新了什么",
+      sections: [
+        {
+          title: "2026-06-26 · 项目详情变清爽了",
+          body: "右边不再一下子塞给你一堆表格了。现在小画桌会一步一步问，填完就自动切到任务进度。",
+        },
+        {
+          title: "2026-06-26 · 聊天更懂当前项目",
+          body: "你在项目详情里写过的目标、DDL、交付物，都会成为小画桌回答时的小抄。",
+        },
+        {
+          title: "2026-06-25 · 可以把图发给小画桌看",
+          body: "设计图、参考图、简单文件都可以上传。小画桌会试着帮你看画面问题、信息层级和修改方向。",
+        },
+        {
+          title: "2026-06-24 · 接上真正的大模型",
+          body: "小画桌不再只靠固定规则回答，会用千问来陪你拆需求、看反馈、想下一步。",
+        },
+      ],
+    },
+  };
+
   function persist() {
     Core.saveState(storage, state);
   }
@@ -125,6 +180,29 @@
 
   function closeProjectDetail() {
     document.body.classList.remove("detail-open");
+  }
+
+  function openInfoPanel(type) {
+    const panel = infoPanels[type];
+    if (!panel) return;
+    nodes.infoEyebrow.textContent = panel.eyebrow;
+    nodes.infoTitle.textContent = panel.title;
+    nodes.infoContent.replaceChildren(
+      ...panel.sections.map((section) =>
+        el("article", { className: "info-section" }, [
+          el("h3", { textContent: section.title }),
+          el("p", { textContent: section.body }),
+        ])
+      )
+    );
+    nodes.infoModal.hidden = false;
+    document.body.classList.add("info-open");
+    window.setTimeout(() => nodes.infoClose.focus(), 0);
+  }
+
+  function closeInfoPanel() {
+    nodes.infoModal.hidden = true;
+    document.body.classList.remove("info-open");
   }
 
   function renderProjectForm(project) {
@@ -1625,6 +1703,13 @@
   nodes.detailToggle.addEventListener("click", openProjectDetail);
   nodes.detailFab.addEventListener("click", openProjectDetail);
   nodes.railBackdrop.addEventListener("click", closeProjectDetail);
+  nodes.guideBtn.addEventListener("click", () => openInfoPanel("guide"));
+  nodes.changelogBtn.addEventListener("click", () => openInfoPanel("changelog"));
+  nodes.infoClose.addEventListener("click", closeInfoPanel);
+  nodes.infoBackdrop.addEventListener("click", closeInfoPanel);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !nodes.infoModal.hidden) closeInfoPanel();
+  });
 
   guardServiceEntry();
   render();

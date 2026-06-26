@@ -47,6 +47,16 @@
           <div class="project-list" id="project-list"></div>
         </section>
 
+        <section class="sidebar-bottom" aria-label="帮助与版本">
+          <button class="support-link" id="guide-btn" type="button">
+            <svg viewBox="0 0 24 24"><path d="M4 19.5V5.8A2.8 2.8 0 0 1 6.8 3H20v15H6.8A2.8 2.8 0 0 0 4 20.8"/><path d="M8 7h8M8 11h6"/></svg>
+            使用指南
+          </button>
+          <button class="support-link" id="changelog-btn" type="button">
+            <svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+            更新日志
+          </button>
+        </section>
       </aside>
 
       <main class="workspace">
@@ -183,6 +193,17 @@
     </div>
     <button class="detail-fab" id="detail-fab" type="button">项目详情</button>
     <div class="rail-backdrop" id="rail-backdrop"></div>
+    <div class="info-modal" id="info-modal" hidden>
+      <div class="info-backdrop" id="info-backdrop"></div>
+      <section class="info-panel" role="dialog" aria-modal="true" aria-labelledby="info-title">
+        <button class="info-close" id="info-close" type="button" aria-label="关闭">
+          <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <div class="info-eyebrow" id="info-eyebrow">给菁菁的小小指南</div>
+        <h2 id="info-title">小画桌怎么陪你画</h2>
+        <div class="info-content" id="info-content"></div>
+      </section>
+    </div>
 
     <template id="message-template">
       <article class="message">

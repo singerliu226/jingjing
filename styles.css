@@ -220,6 +220,8 @@ svg {
 }
 
 .sidebar-bottom {
+  display: flex;
+  flex-direction: column;
   margin-top: auto;
   flex: 0 0 auto;
   gap: 8px;
@@ -387,6 +389,128 @@ svg {
   min-height: 32px;
   border: 1px solid #e5ebe6;
   background: #fbfcfa;
+}
+
+.support-link {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #e5ebe6;
+  border-radius: var(--radius);
+  padding: 0 11px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.support-link:hover {
+  border-color: rgba(6, 125, 117, 0.22);
+  background: #f5faf7;
+  color: var(--teal-dark);
+}
+
+.support-link svg {
+  width: 17px;
+  height: 17px;
+}
+
+.info-modal[hidden] {
+  display: none;
+}
+
+.info-modal {
+  position: fixed;
+  z-index: 220;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.info-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 32, 29, 0.28);
+  backdrop-filter: blur(4px);
+}
+
+.info-panel {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: min(720px, calc(100vh - 40px));
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.info-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--muted);
+}
+
+.info-close:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.info-eyebrow {
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-weight: 920;
+}
+
+.info-panel h2 {
+  margin: 6px 40px 16px 0;
+  color: var(--ink);
+  font-size: 30px;
+  line-height: 1.15;
+}
+
+.info-content {
+  display: grid;
+  gap: 10px;
+}
+
+.info-section {
+  border: 1px solid #e5ebe6;
+  border-radius: var(--radius);
+  padding: 13px 14px;
+  background: #fbfcfa;
+}
+
+.info-section h3,
+.info-section p {
+  margin: 0;
+}
+
+.info-section h3 {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.info-section p {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.65;
 }
 
 .workspace {
