@@ -15,6 +15,22 @@
       </div>
     </div>
     <div class="app-shell">
+      <header class="mobile-app-header" aria-label="当前项目">
+        <button class="mobile-project-switch" id="mobile-project-switch" type="button" aria-label="切换项目">
+          <span class="mobile-brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M8 5.5h8l2.5 2.7v8.3l-2.5 2.7H8l-2.5-2.7V8.2L8 5.5Z"/><path d="M9 11.2h.1M15 11.2h.1M9.5 15c1.4 1 3.6 1 5 0"/></svg>
+          </span>
+          <span class="mobile-project-switch-copy">
+            <strong id="mobile-project-name">酒吧开业海报</strong>
+            <small id="mobile-project-meta">海报 · 进行中</small>
+          </span>
+          <svg class="mobile-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+        </button>
+        <button class="mobile-detail-button" id="mobile-detail-button" type="button" aria-label="打开项目详情">
+          <svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v5h5M10 12h6M10 16h6"/></svg>
+        </button>
+      </header>
+
       <aside class="sidebar" aria-label="项目与视图">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">
@@ -79,13 +95,49 @@
 
             <div class="chat-stream compact-stream" id="chat-stream" aria-live="polite"></div>
 
-            <div class="prompt-strip" aria-label="可以这样问">
-              <button class="prompt-chip" data-template="这个项目我应该先从哪里开始？" type="button">先从哪里开始？</button>
-              <button class="prompt-chip" data-template="老板说画面不够高级，我应该怎么改？" type="button">老板说不够高级</button>
-              <button class="prompt-chip" data-template="帮我把这个需求拆成今天能做的任务。" type="button">拆成今天任务</button>
-              <button class="prompt-chip" data-template="交付前我需要确认哪些尺寸和格式？" type="button">交付前确认什么？</button>
+            <div class="prompt-strip" id="prompt-strip" aria-label="可以这样问"></div>
+            <section class="mobile-stage-guide" id="mobile-stage-guide" aria-live="polite">
+              <div>
+                <span id="mobile-stage-label">开始前</span>
+                <strong id="mobile-stage-title">先把需求说清楚</strong>
+                <p id="mobile-stage-copy">不用一次想全，小画桌会陪你分三步整理。</p>
+              </div>
+              <button id="mobile-stage-action" type="button">继续</button>
+            </section>
+            <div class="mobile-review-actions" aria-label="设计评审快捷操作">
+              <button type="button" data-mobile-action="first-review">
+                <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="m7 15 3-3 3 2 3-4 2 3"/></svg>
+                看第一版
+              </button>
+              <button type="button" data-mobile-action="revision">
+                <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5"/><path d="M18 3v4h-4M20 12a8 8 0 0 1-14 5"/><path d="M6 21v-4h4"/></svg>
+                对照复评
+              </button>
+              <button type="button" data-mobile-action="handoff">
+                <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/><path d="M4 4h16v16H4z"/></svg>
+                交付检查
+              </button>
             </div>
 
+            <section class="context-bridge" id="context-bridge" aria-label="工作现场连接" aria-live="polite">
+              <div class="context-bridge-head">
+                <div class="context-bridge-status">
+                  <span class="context-bridge-dot" id="context-bridge-dot" aria-hidden="true"></span>
+                  <div>
+                    <strong id="context-bridge-title">工作现场未连接</strong>
+                    <span id="context-bridge-copy">授权一个项目文件夹，保存新稿时我会先提醒你确认。</span>
+                  </div>
+                </div>
+                <div class="context-bridge-actions">
+                  <button id="context-bridge-connect" type="button">连接文件夹</button>
+                  <button id="context-bridge-pause" type="button" hidden>暂停</button>
+                  <button id="context-bridge-sync" type="button" hidden>同步离线记录</button>
+                  <button id="context-bridge-clear" type="button" hidden>断开</button>
+                </div>
+              </div>
+              <div class="context-candidate-list" id="context-candidate-list"></div>
+              <p class="context-bridge-privacy">只读取你主动授权的目录；新版本先留在本机，确认后才进入项目。</p>
+            </section>
             <div class="attachment-dock" id="attachment-dock" aria-live="polite"></div>
             <form class="composer" id="composer">
               <input id="attachment-input" type="file" accept="image/*,.txt,.md,.csv,.json" multiple hidden />
@@ -106,7 +158,12 @@
                   <h3>项目详情</h3>
                   <p>一次只补一点点，小画桌会用这些信息来回答。</p>
                 </div>
-                <span class="context-status" id="save-project-btn" aria-live="polite">等待识别</span>
+                <div class="detail-head-actions">
+                  <span class="context-status" id="save-project-btn" aria-live="polite">等待识别</span>
+                  <button class="detail-close-button" id="detail-close-button" type="button" aria-label="关闭项目详情">
+                    <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  </button>
+                </div>
               </div>
               <form class="project-form detail-form" id="project-form">
                 <div class="detail-summary" aria-live="polite">
@@ -119,21 +176,16 @@
                 </div>
 
                 <section class="wizard-step" data-step="0">
-                  <p class="wizard-question">这是什么项目？</p>
-                  <p class="wizard-hint">先给它一个容易认的名字，类型写大概就行。</p>
+                  <p class="wizard-question">要做什么，想让谁行动？</p>
+                  <p class="wizard-hint">先说清项目和目标，不需要写成正式 brief。</p>
                   <label>项目名<input id="project-name-input" type="text" placeholder="例如：酒吧开业海报" /></label>
                   <label>设计类型<input id="project-type-input" type="text" placeholder="海报 / 包装 / 社媒图 / 品牌物料" /></label>
-                </section>
-
-                <section class="wizard-step" data-step="1" hidden>
-                  <p class="wizard-question">这次最想解决什么？</p>
-                  <p class="wizard-hint">一句话就够：给谁看、希望对方看完做什么。</p>
                   <label>核心目标<textarea id="project-goal-input" rows="5" placeholder="例如：让附近年轻人知道新酒吧开业，并愿意周末来店里。"></textarea></label>
                 </section>
 
-                <section class="wizard-step" data-step="2" hidden>
-                  <p class="wizard-question">什么时候要交？现在到哪一步？</p>
-                  <p class="wizard-hint">小画桌会按时间判断今天先做什么。</p>
+                <section class="wizard-step" data-step="1" hidden>
+                  <p class="wizard-question">要交什么，什么时候要？</p>
+                  <p class="wizard-hint">知道多少填多少；还没定的截止时间可以先空着。</p>
                   <div class="form-row">
                     <label>DDL<input id="project-due-input" type="date" /></label>
                     <label>进度
@@ -145,17 +197,12 @@
                       </select>
                     </label>
                   </div>
-                </section>
-
-                <section class="wizard-step" data-step="3" hidden>
-                  <p class="wizard-question">最后要交哪些图？</p>
-                  <p class="wizard-hint">用顿号隔开，不确定尺寸也可以先只写物料名。</p>
                   <label>交付物<input id="project-deliverables-input" type="text" placeholder="例如：海报、公众号头图、小红书封面" /></label>
                 </section>
 
-                <section class="wizard-step" data-step="4" hidden>
-                  <p class="wizard-question">还有哪些要求或卡点？</p>
-                  <p class="wizard-hint">老板反馈、品牌限制、必须出现的信息、现在卡住的地方，都放这里。</p>
+                <section class="wizard-step" data-step="2" hidden>
+                  <p class="wizard-question">有什么限制，现在卡在哪？</p>
+                  <p class="wizard-hint">没有也可以直接完成，以后想到再补。</p>
                   <label>设计要求<textarea id="project-requirements-input" rows="4" placeholder="例如：要年轻一点，不能太暗；必须出现开业时间、地址和二维码。"></textarea></label>
                   <label>当前进度<textarea id="project-progress-input" rows="3" placeholder="例如：主视觉还没定，正在等老板确认文案。"></textarea></label>
                 </section>
@@ -193,6 +240,38 @@
     </div>
     <button class="detail-fab" id="detail-fab" type="button">项目详情</button>
     <div class="rail-backdrop" id="rail-backdrop"></div>
+
+    <nav class="mobile-bottom-nav" aria-label="移动端主导航">
+      <button class="is-active" id="mobile-chat-nav" type="button">
+        <svg viewBox="0 0 24 24"><path d="M4 5h16v12H8l-4 3z"/><path d="M8 9h8M8 13h5"/></svg>
+        <span>对话</span>
+      </button>
+      <button id="mobile-projects-nav" type="button">
+        <svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/></svg>
+        <span>项目</span>
+      </button>
+    </nav>
+
+    <section class="mobile-project-sheet" id="mobile-project-sheet" aria-label="选择项目" hidden>
+      <header class="mobile-sheet-head">
+        <h2>选择项目</h2>
+        <button id="mobile-project-sheet-close" type="button" aria-label="关闭项目列表">
+          <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </header>
+      <button class="mobile-new-project" id="mobile-new-project" type="button">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        新建项目
+      </button>
+      <div class="mobile-project-filters" role="tablist" aria-label="项目筛选">
+        <button class="is-active" data-mobile-filter="all" type="button">全部</button>
+        <button data-mobile-filter="active" type="button">进行中</button>
+        <button data-mobile-filter="waiting" type="button">待确认</button>
+        <button data-mobile-filter="done" type="button">已完成</button>
+      </div>
+      <div class="mobile-project-list" id="mobile-project-list"></div>
+    </section>
+
     <div class="info-modal" id="info-modal" hidden>
       <div class="info-backdrop" id="info-backdrop"></div>
       <section class="info-panel" role="dialog" aria-modal="true" aria-labelledby="info-title">

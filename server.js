@@ -2,6 +2,39 @@ const http = require("node:http");
 const https = require("node:https");
 const fs = require("node:fs");
 const path = require("node:path");
+const { loadWechatConfig } = require("./wechat/config.js");
+const { createStore } = require("./wechat/store.js");
+const { createWechatClient } = require("./wechat/client.js");
+const { createWechatRoutes } = require("./wechat/routes.js");
+const { createContextBridge } = require("./bridge/context-bridge.js");
+const { createContextBridgeRoutes } = require("./bridge/routes.js");
+
+const ROOT = __dirname;
+
+function loadLocalEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return false;
+  const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
+  lines.forEach((line) => {
+    const clean = line.trim();
+    if (!clean || clean.startsWith("#")) return;
+    const separator = clean.indexOf("=");
+    if (separator <= 0) return;
+    const key = clean.slice(0, separator).trim();
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(key) || process.env[key] !== undefined) return;
+    let value = clean.slice(separator + 1).trim();
+    if (
+      value.length >= 2 &&
+      ((value.startsWith("\"") && value.endsWith("\"")) ||
+        (value.startsWith("'") && value.endsWith("'")))
+    ) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  });
+  return true;
+}
+
+loadLocalEnvFile(path.join(ROOT, ".env"));
 
 const PORT = Number(process.env.PORT || 4174);
 const API_KEY = process.env.DASHSCOPE_API_KEY || "";
@@ -11,7 +44,8 @@ const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 12_000_000);
 const MAX_UPSTREAM_BYTES = Number(process.env.MAX_UPSTREAM_BYTES || 1_000_000);
 const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_TIMEOUT_MS || 25_000);
 const API_TOKEN = process.env.DESIGN_DESK_API_TOKEN || "";
-const ROOT = __dirname;
+const CONTEXT_BRIDGE_STORE_FILE =
+  process.env.CONTEXT_BRIDGE_STORE_FILE || path.join(ROOT, "data", "context-bridge-events.json");
 const DEFAULT_ALLOWED_ORIGINS = [`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`, `http://[::1]:${PORT}`];
 const ALLOWED_ORIGINS = (process.env.DESIGN_DESK_ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS.join(","))
   .split(",")
@@ -120,8 +154,8 @@ function send(res, status, body, headers = {}) {
       }
     : {};
   res.writeHead(status, {
-    "Access-Control-Allow-Headers": "content-type, authorization, x-design-desk-token",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "content-type, authorization, x-design-desk-token, x-wechat-admin-token",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
     ...corsHeaders,
     ...headers,
   });
@@ -165,6 +199,15 @@ function authorizeApiRequest(req) {
   const token = String(req.headers["x-design-desk-token"] || "");
   const bearer = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
   return token === API_TOKEN || bearer === API_TOKEN;
+}
+
+function isLoopbackRequest(req) {
+  const address = String(req.socket?.remoteAddress || "").replace(/^::ffff:/, "");
+  return address === "127.0.0.1" || address === "::1";
+}
+
+function authorizeBridgeRequest(req) {
+  return API_TOKEN ? authorizeApiRequest(req) : isLoopbackRequest(req);
 }
 
 function sanitizeServerError(error, fallback) {
@@ -240,6 +283,9 @@ function buildMessages(input, attachments = []) {
   const analysis = input.analysis && typeof input.analysis === "object" ? input.analysis : {};
   const imageAttachments = attachments.filter((attachment) => attachment.kind === "image");
   const textAttachments = attachments.filter((attachment) => attachment.kind === "text");
+  const hasSelectedRegions = imageAttachments.some((attachment) => attachment.regions.length);
+  const comparisonAttachments = imageAttachments.filter((attachment) => attachment.comparisonId);
+  const hasVersionComparison = comparisonAttachments.length >= 2;
   const isDesignMentor = shouldUseDesignMentorContract(input, analysis, imageAttachments);
   const asksErrorDisclosure = analysis.behavior === "explain_sanitized_error" || isSensitiveErrorDisclosureRequest(input.message);
   const projectWorkflowInstruction =
@@ -291,6 +337,21 @@ function buildMessages(input, attachments = []) {
           "每条建议必须落到版式层级、构图、字体、色彩、留白、视觉锚点、品牌一致性、可读性或交付风险，不要空泛说高级感/美观。",
         ].join("\n")
       : "",
+    hasSelectedRegions
+      ? [
+          "用户已经在图片上圈选了区域。坐标以图片左上角为 (0,0)、右下角为 (1,1)。",
+          "优先回答圈选区域的问题，不要把注意力重新扩散到整张图；如果圈选区域本身没有明显问题，也要直接说明。",
+        ].join("\n")
+      : "",
+    hasVersionComparison
+      ? [
+          "用户正在比较两张设计图。先描述图中实际可见的差异，再解释这些差异可能带来的影响，最后才给选择或修改建议。",
+          "必须把观察与推断分开；看不出来的变化直接说无法判断，不要反向编造修改过程。",
+          comparisonAttachments[0].comparisonRelation === "alternatives"
+            ? "这两张图是并列的 A/B 方案，不是前后版本；分别说明它们更适合什么目标，不要把 B 说成 A 的改进版。"
+            : "这两张图是连续版本；按上版到新版的顺序判断改善、退步和仍未解决的问题。",
+        ].join("\n")
+      : "",
     imageAttachments.length
       ? "回复控制在 8-12 行，不使用 emoji，不使用 Markdown 表格。"
       : input.intent === "project_workflow" ? "回复控制在 6-10 行，不使用 emoji，不使用 Markdown 表格。" : "回复短一点，像一位靠谱设计前辈在旁边提醒，不使用 emoji，不使用 Markdown 表格。",
@@ -310,6 +371,8 @@ function buildMessages(input, attachments = []) {
     `风险：${(project.risks || []).join("；") || "暂无"}`,
     `今日任务数：${dashboard.todayCount || 0}`,
     `等待确认数：${dashboard.waitingCount || 0}`,
+    `最近圈选：${formatProjectRegions(project.regions)}`,
+    `最近版本比较：${formatProjectComparisons(project.comparisons)}`,
   ].join("\n");
   const attachmentText = textAttachments.length
     ? `\n\n用户上传的文本文件：\n${textAttachments.map((item) => `【${item.name}】\n${item.text}`).join("\n\n")}`
@@ -357,8 +420,34 @@ function shouldUseDesignMentorContract(input, analysis, imageAttachments) {
 
 function buildUserContent(text, imageAttachments) {
   if (!imageAttachments.length) return text;
+  const comparisonText = imageAttachments
+    .map((attachment, imageIndex) => {
+      if (!attachment.comparisonId) return "";
+      const relation = attachment.comparisonRelation === "alternatives" ? "A/B 方案" : "连续版本";
+      return `图片 ${imageIndex + 1}：${attachment.comparisonLabel || attachment.name}（${relation}）`;
+    })
+    .filter(Boolean)
+    .join("\n");
+  const selectedRegionText = imageAttachments
+    .map((attachment, imageIndex) => {
+      if (!attachment.regions.length) return "";
+      return attachment.regions
+        .map(
+          (region, regionIndex) =>
+            `图片 ${imageIndex + 1} / 圈选 ${regionIndex + 1}「${region.label || `区域 ${regionIndex + 1}`}」：x=${region.x.toFixed(3)}, y=${region.y.toFixed(3)}, width=${region.width.toFixed(3)}, height=${region.height.toFixed(3)}`
+        )
+        .join("\n");
+    })
+    .filter(Boolean)
+    .join("\n");
+  const textWithComparison = comparisonText
+    ? `${text}\n\n图片关系：\n${comparisonText}`
+    : text;
+  const textWithRegions = selectedRegionText
+    ? `${textWithComparison}\n\n请重点查看以下圈选区域（归一化坐标）：\n${selectedRegionText}`
+    : textWithComparison;
   return [
-    { type: "text", text },
+    { type: "text", text: textWithRegions },
     ...imageAttachments.map((attachment) => ({
       type: "image_url",
       image_url: { url: attachment.dataUrl },
@@ -376,7 +465,36 @@ function normalizeAttachments(attachments) {
       if (kind === "image") {
         const dataUrl = String(attachment.dataUrl || "");
         if (!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(dataUrl)) return null;
-        return { kind, name, mimeType, dataUrl };
+        const regions = (Array.isArray(attachment.regions) ? attachment.regions : [])
+          .map((region) => {
+            const x = Number(region && region.x);
+            const y = Number(region && region.y);
+            const width = Number(region && region.width);
+            const height = Number(region && region.height);
+            if (![x, y, width, height].every(Number.isFinite)) return null;
+            if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 1 || y + height > 1) return null;
+            return {
+              id: String(region.id || "").slice(0, 80),
+              label: String(region.label || "").slice(0, 80),
+              x,
+              y,
+              width,
+              height,
+            };
+          })
+          .filter(Boolean)
+          .slice(0, 6);
+        return {
+          kind,
+          name,
+          mimeType,
+          dataUrl,
+          regions,
+          versionId: String(attachment.versionId || "").slice(0, 80),
+          comparisonId: String(attachment.comparisonId || "").slice(0, 80),
+          comparisonLabel: String(attachment.comparisonLabel || "").slice(0, 40),
+          comparisonRelation: attachment.comparisonRelation === "alternatives" ? "alternatives" : attachment.comparisonId ? "revision" : "",
+        };
       }
       if (kind === "text") {
         return { kind, name, mimeType, text: String(attachment.text || "").slice(0, 12000) };
@@ -393,6 +511,34 @@ function formatProjectTasks(tasks) {
     .slice(0, 8)
     .map((task) => `${task.title || "未命名任务"}｜${task.status || "todo"}｜${task.dueDate || "未设截止"}｜${task.nextAction || "待补充"}`)
     .join("\n");
+}
+
+function formatProjectRegions(regions) {
+  if (!Array.isArray(regions) || !regions.length) return "暂无";
+  return regions
+    .slice(-6)
+    .map((region) => {
+      const x = Math.round(Number(region.x || 0) * 100);
+      const y = Math.round(Number(region.y || 0) * 100);
+      const width = Math.round(Number(region.width || 0) * 100);
+      const height = Math.round(Number(region.height || 0) * 100);
+      return `${region.versionName || "当前版本"} / ${region.label || "圈选区域"}：左 ${x}%、上 ${y}%、宽 ${width}%、高 ${height}%`;
+    })
+    .join("；");
+}
+
+function formatProjectComparisons(comparisons) {
+  if (!Array.isArray(comparisons) || !comparisons.length) return "暂无";
+  return comparisons
+    .slice(-3)
+    .map((comparison) => {
+      const relation = comparison.relation === "alternatives" ? "A/B 方案" : "连续版本";
+      const selection = comparison.selectedVersionId
+        ? `，已选 ${comparison.selectedVersionId}`
+        : "";
+      return `${relation}：${(comparison.versionIds || []).join(" vs ")}${selection}`;
+    })
+    .join("；");
 }
 
 function buildIntentMessages(input) {
@@ -624,7 +770,46 @@ async function handleIntent(req, res) {
   }
 }
 
-const server = http.createServer((req, res) => {
+async function callWechatChat(payload) {
+  if (!API_KEY && !isSensitiveErrorDisclosureRequest(payload.message) && !isFinalDeliveryCheckRequest(payload.message)) {
+    throw new Error("千问服务访问密钥未配置，请检查服务端配置。");
+  }
+  const attachments = normalizeAttachments(payload.attachments);
+  const reply = await callQwen(payload);
+  return {
+    reply,
+    model: attachments.some((attachment) => attachment.kind === "image") ? VISION_MODEL : API_KEY ? MODEL : "local-safety",
+  };
+}
+
+async function callWechatIntent(payload) {
+  if (!API_KEY) throw new Error("千问意图识别访问密钥未配置，请检查服务端配置。");
+  return { intent: await callQwenIntent(payload), model: MODEL };
+}
+
+const wechatConfig = loadWechatConfig(ROOT);
+const wechatStore = createStore(wechatConfig.storeFile);
+const wechatClient = createWechatClient(wechatConfig);
+const wechatRoutes = createWechatRoutes({
+  config: wechatConfig,
+  store: wechatStore,
+  client: wechatClient,
+  send,
+  sendJson,
+  readBody,
+  callChat: callWechatChat,
+  callIntent: callWechatIntent,
+});
+const contextBridge = createContextBridge(CONTEXT_BRIDGE_STORE_FILE);
+const contextBridgeRoutes = createContextBridgeRoutes({
+  bridge: contextBridge,
+  sendJson,
+  readBody,
+  authorize: authorizeBridgeRequest,
+});
+
+const server = http.createServer(async (req, res) => {
+  const requestUrl = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const isProtectedApi = req.url.startsWith("/api/chat") || req.url.startsWith("/api/intent");
   if (!prepareCors(req, res)) {
     send(res, 403, "Forbidden", { "Content-Type": "text/plain; charset=utf-8" });
@@ -634,6 +819,8 @@ const server = http.createServer((req, res) => {
     send(res, 204, "");
     return;
   }
+  if (await wechatRoutes.route(req, res, requestUrl)) return;
+  if (await contextBridgeRoutes(req, res, requestUrl)) return;
   if (isProtectedApi && !authorizeApiRequest(req)) {
     sendJson(res, 401, { error: "未授权的本地代理请求。" });
     return;
@@ -657,4 +844,10 @@ server.listen(PORT, () => {
   console.log(`菁菁小画桌 running at http://localhost:${PORT}`);
   console.log(`Qwen model: ${MODEL}${API_KEY ? "" : " (missing DASHSCOPE_API_KEY)"}`);
   console.log(`Qwen vision model: ${VISION_MODEL}`);
+  console.log(
+    `WeChat Mini Program: ${wechatConfig.miniDevOpenId || (wechatConfig.miniAppId && wechatConfig.miniAppSecret) ? "configured" : "not configured"}`
+  );
+  console.log(
+    `WeChat Service Account notifications: ${wechatConfig.oaAppId && wechatConfig.oaAppSecret && wechatConfig.oaTemplateId ? "configured" : "not configured"}`
+  );
 });

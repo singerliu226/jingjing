@@ -6,10 +6,12 @@
 
 如果只体验本地规则整理能力，可以直接打开 `index.html`。
 
-如果要使用千问真实对话，需要通过本地服务启动，避免把 API Key 暴露在浏览器代码里：
+如果要使用千问真实对话，先复制并填写本地环境配置。`.env` 已被 Git 忽略，API Key 不会进入前端代码或版本库：
 
 ```bash
-DASHSCOPE_API_KEY="你的阿里云百炼 API Key" node server.js
+cp .env.example .env
+# 打开 .env，填写 DASHSCOPE_API_KEY
+npm start
 ```
 
 然后访问 `http://localhost:4174`。
@@ -20,7 +22,9 @@ DASHSCOPE_API_KEY="你的阿里云百炼 API Key" node server.js
 
 完整步骤见：[docs/deploy-online.md](docs/deploy-online.md)。
 
-可选模型配置：
+现在也支持微信小程序使用，并可在用户主动绑定服务号后发送项目提醒。原网页、小程序接口和服务号回调由同一个服务同时提供，迁移步骤见：[docs/wechat-deployment.md](docs/wechat-deployment.md)。
+
+也可以临时使用启动环境变量覆盖 `.env`：
 
 ```bash
 DASHSCOPE_MODEL="qwen-plus" DASHSCOPE_API_KEY="你的阿里云百炼 API Key" node server.js
@@ -46,14 +50,19 @@ DASHSCOPE_MODEL="qwen-plus" DASHSCOPE_VISION_MODEL="qwen-vl-plus" DASHSCOPE_API_
 - 为项目整理归档草稿和面试表达。
 - 数据保存在浏览器本地 `localStorage`。
 - 通过本地代理接入阿里云千问模型，前端不会保存 API Key。
+- 小程序端数据保存在服务器，可在微信里继续项目工作流。
+- 服务号可发送临近截止、等待确认和每日计划提醒，提醒类型由用户自己开关。
 
 ## 新版本方向
 
 下一阶段不再继续堆规则，而是按 [LLM First 新版本计划](docs/llm-first-product-plan.md) 调整：让大模型优先理解用户意图，本地规则只做状态更新和安全兜底。
 
+在此基础上，产品方向继续从 Chat-first 走向 Context-first：让 Agent 在授权范围内理解设计版本、画面变化和选择过程，减少设计师把工作重新翻译成自然语言。完整路线见 [Context-first Agent 路线与 To-dos](docs/context-first-agent-roadmap.md)。
+
 ## 验证
 
 ```bash
-node tests.js
-node eval-intents.js
+npm test
+npm run bench
+npm run qa
 ```

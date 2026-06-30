@@ -1,0 +1,49 @@
+{
+  "manifestVersion": 5,
+  "id": "com.jingjing.contextbridge",
+  "name": "菁菁小画桌 · 只读现场",
+  "version": "0.1.0",
+  "main": "index.html",
+  "host": [
+    {
+      "app": "PS",
+      "minVersion": "23.3.0",
+      "apiVersion": 2
+    }
+  ],
+  "requiredPermissions": {
+    "network": {
+      "domains": [
+        "http://localhost:4174",
+        "http://127.0.0.1:4174",
+        "https://localhost:4175",
+        "https://127.0.0.1:4175"
+      ]
+    }
+  },
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "jingjingContextPanel",
+      "label": {
+        "default": "菁菁现场"
+      },
+      "minimumSize": {
+        "width": 260,
+        "height": 320
+      },
+      "preferredDockedSize": {
+        "width": 300,
+        "height": 520
+      },
+      "preferredFloatingSize": {
+        "width": 340,
+        "height": 560
+      },
+      "maximumSize": {
+        "width": 1200,
+        "height": 1200
+      }
+    }
+  ]
+}

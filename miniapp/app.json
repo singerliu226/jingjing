@@ -1,0 +1,31 @@
+{
+  "pages": [
+    "pages/workbench/index",
+    "pages/projects/index",
+    "pages/project-form/index",
+    "pages/settings/index",
+    "pages/bind/index"
+  ],
+  "window": {
+    "backgroundColor": "#ffffff",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#77827d",
+    "selectedColor": "#045e59",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/workbench/index",
+        "text": "对话"
+      },
+      {
+        "pagePath": "pages/projects/index",
+        "text": "项目"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

@@ -302,6 +302,15 @@
         },
       ],
       feedback: [],
+      contextEvents: [],
+      preferenceSignals: [],
+      designRegions: [],
+      versionComparisons: [],
+      contextSettings: {
+        captureMode: "manual",
+        allowedSources: ["manual_upload"],
+        writeBackMode: "confirm",
+      },
       checklist: [
         { id: "c-first-1", projectId: "p-first", label: "确认尺寸、用途和交付格式", done: false, group: "规格" },
         { id: "c-first-2", projectId: "p-first", label: "检查主信息层级和移动端可读性", done: false, group: "可读性" },
@@ -1097,7 +1106,14 @@
       deliverables: ensureArray(project.deliverables),
       keywords: ensureArray(project.keywords),
       risks: ensureArray(project.risks),
-      versions: ensureArray(project.versions),
+      versions: ensureArray(project.versions).map((version) => {
+        if (!version || typeof version !== "object") return null;
+        return Object.assign({}, version, {
+          id: typeof version.id === "string" ? version.id : uid("v"),
+          source: typeof version.source === "string" ? version.source : "conversation",
+          artifact: version.artifact && typeof version.artifact === "object" ? version.artifact : null,
+        });
+      }).filter(Boolean),
       status: typeof project.status === "string" ? project.status : "todo",
       portfolioScore: typeof project.portfolioScore === "number" ? project.portfolioScore : 35,
       portfolio: {
@@ -1143,8 +1159,329 @@
       projects,
       tasks,
       feedback: ensureArray(parsed.feedback),
+      contextEvents: ensureArray(parsed.contextEvents),
+      preferenceSignals: ensureArray(parsed.preferenceSignals),
+      designRegions: ensureArray(parsed.designRegions),
+      versionComparisons: ensureArray(parsed.versionComparisons),
+      contextSettings: Object.assign(
+        {
+          captureMode: "manual",
+          allowedSources: ["manual_upload"],
+          writeBackMode: "confirm",
+        },
+        parsed.contextSettings && typeof parsed.contextSettings === "object" ? parsed.contextSettings : {}
+      ),
       checklist: ensureArray(parsed.checklist),
     };
+  }
+
+  function normalizeArtifact(artifact) {
+    const value = artifact && typeof artifact === "object" ? artifact : {};
+    return {
+      attachmentId: normalize(value.attachmentId),
+      fileName: normalize(value.fileName || value.name),
+      mimeType: normalize(value.mimeType),
+      size: Number.isFinite(Number(value.size)) ? Math.max(0, Number(value.size)) : 0,
+      width: Number.isFinite(Number(value.width)) ? Math.max(0, Number(value.width)) : 0,
+      height: Number.isFinite(Number(value.height)) ? Math.max(0, Number(value.height)) : 0,
+      fingerprint: normalize(value.fingerprint),
+    };
+  }
+
+  function recordDesignVersion(state, projectId, artifact, now = new Date(), options = {}) {
+    if (!state || !Array.isArray(state.projects)) return null;
+    const project = state.projects.find((item) => item.id === projectId);
+    if (!project) return null;
+    const normalizedArtifact = normalizeArtifact(artifact);
+    if (!normalizedArtifact.attachmentId && !normalizedArtifact.fileName) return null;
+    project.versions = ensureArray(project.versions);
+    const duplicate = project.versions.find((version) => {
+      if (!version || !version.artifact) return false;
+      if (normalizedArtifact.attachmentId && version.artifact.attachmentId === normalizedArtifact.attachmentId) return true;
+      return Boolean(
+        normalizedArtifact.fingerprint &&
+        version.artifact.fingerprint &&
+        version.artifact.fingerprint === normalizedArtifact.fingerprint
+      );
+    });
+    if (duplicate) return duplicate;
+
+    const source = normalize(options.source) || "manual_upload";
+    const version = {
+      id: uid("v"),
+      name: normalize(options.name) || `V${project.versions.length + 1}`,
+      projectId: project.id,
+      createdAt: new Date(now).toISOString(),
+      changes: normalize(options.note) || `新增设计版本：${normalizedArtifact.fileName || "未命名图片"}`,
+      confirmedBy: "",
+      source,
+      artifact: normalizedArtifact,
+    };
+    project.versions.push(version);
+    state.contextEvents = ensureArray(state.contextEvents);
+    state.contextEvents.push({
+      id: uid("ctx"),
+      type: "design_version_added",
+      projectId: project.id,
+      versionId: version.id,
+      source,
+      createdAt: version.createdAt,
+      payload: {
+        attachmentId: normalizedArtifact.attachmentId,
+        fileName: normalizedArtifact.fileName,
+        versionName: version.name,
+      },
+    });
+    project.portfolio.process = appendSentence(
+      project.portfolio.process,
+      `设计版本：${version.name} - ${normalizedArtifact.fileName || "未命名图片"}`
+    );
+    return version;
+  }
+
+  function recordPreferenceSignal(state, input, now = new Date()) {
+    if (!state || !input || typeof input !== "object") return null;
+    const allowedSignals = ["keep", "closer", "reject"];
+    const signal = normalize(input.signal);
+    if (!allowedSignals.includes(signal)) return null;
+    const project = ensureArray(state.projects).find((item) => item.id === input.projectId);
+    if (!project) return null;
+    const version = ensureArray(project.versions).find((item) => item && item.id === input.versionId);
+    if (!version) return null;
+    state.preferenceSignals = ensureArray(state.preferenceSignals);
+    const existing = state.preferenceSignals.find(
+      (item) =>
+        item &&
+        item.projectId === project.id &&
+        item.versionId === version.id &&
+        item.source === (normalize(input.source) || "explicit_quick_action")
+    );
+    if (existing) {
+      const previousSignal = existing.signal;
+      existing.signal = signal;
+      existing.note = normalize(input.note);
+      existing.createdAt = new Date(now).toISOString();
+      state.contextEvents = ensureArray(state.contextEvents);
+      state.contextEvents.push({
+        id: uid("ctx"),
+        type: "preference_signal_updated",
+        projectId: project.id,
+        versionId: version.id,
+        source: existing.source,
+        createdAt: existing.createdAt,
+        payload: { previousSignal, signal },
+      });
+      return existing;
+    }
+    const preference = {
+      id: uid("pref"),
+      projectId: project.id,
+      versionId: version.id,
+      signal,
+      source: normalize(input.source) || "explicit_quick_action",
+      createdAt: new Date(now).toISOString(),
+      note: normalize(input.note),
+    };
+    state.preferenceSignals.push(preference);
+    state.contextEvents = ensureArray(state.contextEvents);
+    state.contextEvents.push({
+      id: uid("ctx"),
+      type: "preference_signal_recorded",
+      projectId: project.id,
+      versionId: version.id,
+      source: preference.source,
+      createdAt: preference.createdAt,
+      payload: { signal },
+    });
+    return preference;
+  }
+
+  function clampUnit(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return 0;
+    return Math.min(1, Math.max(0, number));
+  }
+
+  function recordDesignRegion(state, input, now = new Date()) {
+    if (!state || !input || typeof input !== "object") return null;
+    const project = ensureArray(state.projects).find((item) => item.id === input.projectId);
+    if (!project) return null;
+    const version = ensureArray(project.versions).find((item) => item && item.id === input.versionId);
+    if (!version) return null;
+    const x = clampUnit(input.x);
+    const y = clampUnit(input.y);
+    const width = Math.min(clampUnit(input.width), 1 - x);
+    const height = Math.min(clampUnit(input.height), 1 - y);
+    if (width < 0.02 || height < 0.02) return null;
+
+    state.designRegions = ensureArray(state.designRegions);
+    const versionRegionCount = state.designRegions.filter(
+      (item) => item && item.projectId === project.id && item.versionId === version.id
+    ).length;
+    const region = {
+      id: uid("region"),
+      projectId: project.id,
+      versionId: version.id,
+      label: normalize(input.label) || `区域 ${versionRegionCount + 1}`,
+      x,
+      y,
+      width,
+      height,
+      source: normalize(input.source) || "manual_drag",
+      createdAt: new Date(now).toISOString(),
+      note: normalize(input.note),
+    };
+    state.designRegions.push(region);
+    state.contextEvents = ensureArray(state.contextEvents);
+    state.contextEvents.push({
+      id: uid("ctx"),
+      type: "design_region_selected",
+      projectId: project.id,
+      versionId: version.id,
+      source: region.source,
+      createdAt: region.createdAt,
+      payload: {
+        regionId: region.id,
+        label: region.label,
+        x: region.x,
+        y: region.y,
+        width: region.width,
+        height: region.height,
+      },
+    });
+    return region;
+  }
+
+  function clearDesignRegions(state, input, now = new Date()) {
+    if (!state || !input || typeof input !== "object") return 0;
+    const projectId = normalize(input.projectId);
+    const versionId = normalize(input.versionId);
+    if (!projectId || !versionId) return 0;
+    const current = ensureArray(state.designRegions);
+    const removed = current.filter(
+      (item) => item && item.projectId === projectId && item.versionId === versionId
+    );
+    if (!removed.length) return 0;
+    state.designRegions = current.filter(
+      (item) => !item || item.projectId !== projectId || item.versionId !== versionId
+    );
+    state.contextEvents = ensureArray(state.contextEvents);
+    state.contextEvents.push({
+      id: uid("ctx"),
+      type: "design_regions_cleared",
+      projectId,
+      versionId,
+      source: normalize(input.source) || "manual_action",
+      createdAt: new Date(now).toISOString(),
+      payload: { regionIds: removed.map((item) => item.id) },
+    });
+    return removed.length;
+  }
+
+  function createVersionComparison(state, input, now = new Date()) {
+    if (!state || !input || typeof input !== "object") return null;
+    const project = ensureArray(state.projects).find((item) => item.id === input.projectId);
+    if (!project) return null;
+    const versionIds = Array.from(new Set(ensureArray(input.versionIds).map(normalize).filter(Boolean))).slice(0, 2);
+    if (versionIds.length !== 2) return null;
+    if (!versionIds.every((id) => ensureArray(project.versions).some((version) => version && version.id === id))) {
+      return null;
+    }
+    const relation = input.relation === "alternatives" ? "alternatives" : "revision";
+    state.versionComparisons = ensureArray(state.versionComparisons);
+    const pairKey = versionIds.slice().sort().join(":");
+    const existing = state.versionComparisons.find(
+      (item) =>
+        item &&
+        item.projectId === project.id &&
+        ensureArray(item.versionIds).slice().sort().join(":") === pairKey
+    );
+    const createdAt = new Date(now).toISOString();
+    if (existing) {
+      const previousRelation = existing.relation;
+      existing.versionIds = versionIds;
+      existing.relation = relation;
+      existing.updatedAt = createdAt;
+      if (previousRelation !== relation) {
+        state.contextEvents = ensureArray(state.contextEvents);
+        state.contextEvents.push({
+          id: uid("ctx"),
+          type: "version_comparison_relation_updated",
+          projectId: project.id,
+          source: "manual_action",
+          createdAt,
+          payload: {
+            comparisonId: existing.id,
+            previousRelation,
+            relation,
+            versionIds,
+          },
+        });
+      }
+      return existing;
+    }
+    const comparison = {
+      id: uid("compare"),
+      projectId: project.id,
+      versionIds,
+      relation,
+      selectedVersionId: "",
+      createdAt,
+      updatedAt: createdAt,
+    };
+    state.versionComparisons.push(comparison);
+    state.contextEvents = ensureArray(state.contextEvents);
+    state.contextEvents.push({
+      id: uid("ctx"),
+      type: "version_comparison_created",
+      projectId: project.id,
+      source: "manual_action",
+      createdAt,
+      payload: {
+        comparisonId: comparison.id,
+        relation,
+        versionIds,
+      },
+    });
+    return comparison;
+  }
+
+  function recordComparisonChoice(state, input, now = new Date()) {
+    if (!state || !input || typeof input !== "object") return null;
+    const comparison = ensureArray(state.versionComparisons).find(
+      (item) => item && item.id === input.comparisonId
+    );
+    if (!comparison || !ensureArray(comparison.versionIds).includes(input.versionId)) return null;
+    const selectedAt = new Date(now).toISOString();
+    comparison.selectedVersionId = input.versionId;
+    comparison.selectedAt = selectedAt;
+    comparison.updatedAt = selectedAt;
+    comparison.versionIds.forEach((versionId) => {
+      recordPreferenceSignal(
+        state,
+        {
+          projectId: comparison.projectId,
+          versionId,
+          signal: versionId === input.versionId ? "keep" : "reject",
+          source: "comparison_choice",
+          note: comparison.relation === "alternatives" ? "A/B 方案选择" : "版本对比选择",
+        },
+        now
+      );
+    });
+    state.contextEvents = ensureArray(state.contextEvents);
+    state.contextEvents.push({
+      id: uid("ctx"),
+      type: "version_comparison_choice_recorded",
+      projectId: comparison.projectId,
+      source: "explicit_quick_action",
+      createdAt: selectedAt,
+      payload: {
+        comparisonId: comparison.id,
+        selectedVersionId: input.versionId,
+      },
+    });
+    return comparison;
   }
 
   function loadState(storage) {
@@ -1790,7 +2127,7 @@
   }
 
   function solveDesignIssue(project, analysis) {
-    const issue = analysis.designIssue || detectDesignIssue(analysis.text);
+    const issue = analysis.designIssue || detectDesignIssue(analysis.text) || detectDesignIssue("怎么改");
     const lines = [`设计卡点：${issue.labels.join("、")}`];
     lines.push(`先别整体推倒重来，按这个顺序处理「${project.name}」：`);
     issue.actions.forEach((action, index) => {
@@ -4846,11 +5183,12 @@
 
   function generateProjectWorkflow(project, now = new Date()) {
     const missing = getMissingProjectFields(project);
-    if (missing.length) {
+    const blockingMissing = missing.filter((item) => item !== "截止时间");
+    if (blockingMissing.length) {
       return {
         ready: false,
         summary: [
-          `项目小纸条还差：${missing.join("、")}。`,
+          `项目小纸条还差：${blockingMissing.join("、")}。`,
           "先补齐这些信息，小画桌再帮菁菁排完整工作流。",
         ].join("\n"),
         tasks: [
@@ -4860,7 +5198,7 @@
             dueDate: project.dueDate || formatDate(now),
             priority: "high",
             status: "todo",
-            nextAction: `先补齐：${missing.slice(0, 3).join("、")}`,
+            nextAction: `先补齐：${blockingMissing.slice(0, 3).join("、")}`,
           },
         ],
       };
@@ -4873,7 +5211,11 @@
     const firstStep = /海报|社媒|小红书|公众号|朋友圈|Banner/i.test(`${project.type} ${deliverables}`)
       ? "先确认尺寸、安全区、主标题和移动端可读性。"
       : "先确认尺寸、使用场景、主信息和交付格式。";
-    const deadlineNote = days < 0 ? "当前截止时间已过，先确认是否需要改期。" : `距离截止还有 ${days} 天。`;
+    const deadlineNote = !dueDate
+      ? "截止时间暂未确定，可以先推进不依赖时间的部分。"
+      : days < 0
+        ? "当前截止时间已过，先确认是否需要改期。"
+        : `距离截止还有 ${days} 天。`;
 
     return {
       ready: true,
@@ -6970,6 +7312,12 @@
     createSeedState,
     loadState,
     saveState,
+    recordDesignVersion,
+    recordPreferenceSignal,
+    recordDesignRegion,
+    clearDesignRegions,
+    createVersionComparison,
+    recordComparisonChoice,
     analyzeInput,
     applyInput,
     getDashboard,

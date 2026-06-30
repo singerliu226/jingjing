@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="index.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <small>CONTEXT BRIDGE</small>
+          <h1>菁菁现场</h1>
+        </div>
+        <span id="capture-state">只读</span>
+      </header>
+
+      <section class="notice">
+        <strong>只观察，不改稿</strong>
+        <p>只发送当前文档、图层和选区元数据。原图与图层内容不会自动上传。</p>
+      </section>
+
+      <section class="document-card">
+        <span>当前文档</span>
+        <strong id="document-name">尚未打开文档</strong>
+        <p id="document-meta">打开一个 PSD 后可读取上下文</p>
+        <p id="layer-meta"></p>
+      </section>
+
+      <label>
+        当前项目 ID
+        <input id="project-id" type="text" placeholder="从小画桌项目中复制" />
+      </label>
+      <label>
+        Bridge 地址
+        <input id="bridge-url" type="text" value="http://127.0.0.1:4174" />
+      </label>
+      <label>
+        本地 Bridge 令牌
+        <input id="bridge-token" type="password" placeholder="与本地服务配置一致" />
+      </label>
+      <label class="preview-option">
+        <input id="include-preview" type="checkbox" />
+        手动发送时附带最长边 960px 的画布预览
+      </label>
+
+      <div class="actions">
+        <button id="send-context" class="primary">发送当前上下文</button>
+        <button id="toggle-capture">暂停观察</button>
+      </div>
+      <p class="status" id="status">等待连接</p>
+      <p class="platform-note">macOS 版 Photoshop 通常要求 HTTPS Bridge；HTTP 地址仅用于允许明文本地网络的环境。</p>
+    </main>
+  </body>
+</html>

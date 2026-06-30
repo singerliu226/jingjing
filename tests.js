@@ -28,6 +28,278 @@ function applyInput(state, text, now = fixedNow, options = {}) {
 
 {
   const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const version = Core.recordDesignVersion(
+    state,
+    project.id,
+    {
+      attachmentId: "att-context-first",
+      fileName: "poster-v1.png",
+      mimeType: "image/png",
+      size: 120034,
+      width: 1080,
+      height: 1440,
+    },
+    fixedNow
+  );
+  assert.ok(version);
+  assert.equal(version.name, "V1");
+  assert.equal(version.source, "manual_upload");
+  assert.equal(version.artifact.width, 1080);
+  assert.equal(project.versions.length, 1);
+  assert.equal(state.contextEvents.length, 1);
+  assert.equal(state.contextEvents[0].type, "design_version_added");
+
+  const duplicate = Core.recordDesignVersion(
+    state,
+    project.id,
+    { attachmentId: "att-context-first", fileName: "poster-v1.png" },
+    fixedNow
+  );
+  assert.equal(duplicate.id, version.id);
+  assert.equal(project.versions.length, 1);
+  assert.equal(state.contextEvents.length, 1);
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const version = Core.recordDesignVersion(
+    state,
+    project.id,
+    { attachmentId: "att-preference", fileName: "poster-v2.png" },
+    fixedNow
+  );
+  const first = Core.recordPreferenceSignal(
+    state,
+    {
+      projectId: project.id,
+      versionId: version.id,
+      signal: "closer",
+      source: "explicit_quick_action",
+    },
+    fixedNow
+  );
+  assert.ok(first);
+  assert.equal(state.preferenceSignals.length, 1);
+  assert.equal(state.preferenceSignals[0].signal, "closer");
+  assert.equal(state.contextEvents[1].type, "preference_signal_recorded");
+
+  const updated = Core.recordPreferenceSignal(
+    state,
+    {
+      projectId: project.id,
+      versionId: version.id,
+      signal: "keep",
+      source: "explicit_quick_action",
+    },
+    new Date("2026-06-11T11:00:00+08:00")
+  );
+  assert.equal(updated.id, first.id);
+  assert.equal(state.preferenceSignals.length, 1);
+  assert.equal(state.preferenceSignals[0].signal, "keep");
+  assert.equal(state.contextEvents.length, 3);
+  assert.equal(state.contextEvents[2].type, "preference_signal_updated");
+  assert.deepEqual(state.contextEvents[2].payload, { previousSignal: "closer", signal: "keep" });
+}
+
+{
+  const oldState = freshState();
+  delete oldState.contextEvents;
+  delete oldState.preferenceSignals;
+  delete oldState.contextSettings;
+  oldState.projects[0].versions.push({
+    name: "V1",
+    createdAt: fixedNow.toISOString(),
+    changes: "旧版文字版本记录",
+  });
+  const memoryStorage = {
+    getItem() {
+      return JSON.stringify(oldState);
+    },
+  };
+  const migrated = Core.loadState(memoryStorage);
+  assert.deepEqual(migrated.contextEvents, []);
+  assert.deepEqual(migrated.preferenceSignals, []);
+  assert.deepEqual(migrated.designRegions, []);
+  assert.deepEqual(migrated.versionComparisons, []);
+  assert.equal(migrated.contextSettings.captureMode, "manual");
+  assert.equal(migrated.contextSettings.writeBackMode, "confirm");
+  assert.ok(migrated.projects[0].versions[0].id);
+  assert.equal(migrated.projects[0].versions[0].source, "conversation");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const version = Core.recordDesignVersion(
+    state,
+    project.id,
+    { attachmentId: "att-region", fileName: "poster-region.png" },
+    fixedNow
+  );
+  const region = Core.recordDesignRegion(
+    state,
+    {
+      projectId: project.id,
+      versionId: version.id,
+      x: 0.12,
+      y: 0.2,
+      width: 0.42,
+      height: 0.3,
+    },
+    fixedNow
+  );
+  assert.ok(region);
+  assert.equal(region.label, "区域 1");
+  assert.equal(state.designRegions.length, 1);
+  assert.equal(state.contextEvents.at(-1).type, "design_region_selected");
+  assert.equal(state.contextEvents.at(-1).payload.regionId, region.id);
+
+  const tooSmall = Core.recordDesignRegion(
+    state,
+    {
+      projectId: project.id,
+      versionId: version.id,
+      x: 0.2,
+      y: 0.2,
+      width: 0.01,
+      height: 0.01,
+    },
+    fixedNow
+  );
+  assert.equal(tooSmall, null);
+  assert.equal(state.designRegions.length, 1);
+
+  const removed = Core.clearDesignRegions(
+    state,
+    { projectId: project.id, versionId: version.id },
+    fixedNow
+  );
+  assert.equal(removed, 1);
+  assert.equal(state.designRegions.length, 0);
+  assert.equal(state.contextEvents.at(-1).type, "design_regions_cleared");
+}
+
+{
+  const state = freshState();
+  const result = Core.applyInput(
+    state,
+    "请只看我圈出的区域 1，告诉我这里最大的问题和一个优先修改动作。",
+    fixedNow,
+    {
+      localMode: "guardrail",
+      intent: {
+        schemaVersion: "llm-intent-v1",
+        intent: "solve_design_issue",
+        confidence: 1,
+        summary: "用户请求分析刚刚圈选的设计区域。",
+        entities: {},
+        missing: [],
+        nextAction: "先判断圈选区域的最大问题，再给一个优先修改动作。",
+      },
+    }
+  );
+  assert.equal(result.analysis.behavior, "solve_design_issue");
+  assert.ok(result.reply.includes("核心判断"));
+  assert.ok(result.reply.includes("优先动作"));
+  assert.ok(result.reply.includes("验收标准"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  assert.equal(project.goal, "");
+  const result = Core.applyInput(
+    state,
+    "这是按上轮建议修改的新版。请先做上轮目标对照，逐项判断是否改善，再给一个最值得继续打磨的方向。",
+    fixedNow,
+    {
+      localMode: "guardrail",
+      intent: {
+        schemaVersion: "llm-intent-v1",
+        intent: "solve_design_issue",
+        confidence: 1,
+        summary: "用户请求评审刚刚上传的设计版本。",
+        entities: {},
+        missing: [],
+        nextAction: "先判断当前版本的最大问题，再给一个优先修改动作。",
+      },
+    }
+  );
+  assert.equal(result.analysis.behavior, "solve_design_issue");
+  assert.equal(project.goal, "");
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  const versionA = Core.recordDesignVersion(
+    state,
+    project.id,
+    { attachmentId: "att-compare-a", fileName: "poster-a.png" },
+    fixedNow
+  );
+  const versionB = Core.recordDesignVersion(
+    state,
+    project.id,
+    { attachmentId: "att-compare-b", fileName: "poster-b.png" },
+    fixedNow
+  );
+  const comparison = Core.createVersionComparison(
+    state,
+    {
+      projectId: project.id,
+      versionIds: [versionA.id, versionB.id],
+      relation: "revision",
+    },
+    fixedNow
+  );
+  assert.ok(comparison);
+  assert.equal(comparison.relation, "revision");
+  assert.equal(state.versionComparisons.length, 1);
+  assert.equal(state.contextEvents.at(-1).type, "version_comparison_created");
+
+  const alternatives = Core.createVersionComparison(
+    state,
+    {
+      projectId: project.id,
+      versionIds: [versionA.id, versionB.id],
+      relation: "alternatives",
+    },
+    new Date("2026-06-12T10:00:00+08:00")
+  );
+  assert.equal(alternatives.id, comparison.id);
+  assert.equal(alternatives.relation, "alternatives");
+  assert.equal(state.versionComparisons.length, 1);
+  assert.equal(state.contextEvents.at(-1).type, "version_comparison_relation_updated");
+
+  const choice = Core.recordComparisonChoice(
+    state,
+    {
+      comparisonId: comparison.id,
+      versionId: versionB.id,
+    },
+    new Date("2026-06-12T11:00:00+08:00")
+  );
+  assert.equal(choice.selectedVersionId, versionB.id);
+  assert.equal(
+    state.preferenceSignals.find(
+      (item) => item.versionId === versionB.id && item.source === "comparison_choice"
+    ).signal,
+    "keep"
+  );
+  assert.equal(
+    state.preferenceSignals.find(
+      (item) => item.versionId === versionA.id && item.source === "comparison_choice"
+    ).signal,
+    "reject"
+  );
+  assert.equal(state.contextEvents.at(-1).type, "version_comparison_choice_recorded");
+}
+
+{
+  const state = freshState();
   const before = state.projects.length;
   applyInput(state, "新项目「秋季新品」客户要公众号头图、朋友圈海报和小红书封面，明天交。", fixedNow);
   assert.equal(state.projects.length, before + 1);
@@ -109,6 +381,20 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(workflow.summary.includes("春季活动海报"));
   assert.ok(workflow.tasks.some((task) => task.key === "draft" && task.title.includes("朋友圈海报")));
   assert.ok(workflow.tasks.every((task) => task.dueDate === "2026-06-14"));
+}
+
+{
+  const state = freshState();
+  const project = Core.getProject(state, state.activeProjectId);
+  project.name = "截止时间待定的海报";
+  project.type = "海报";
+  project.dueDate = "";
+  project.goal = "让用户知道活动信息。";
+  project.deliverables = ["活动海报"];
+  project.risks = ["缺少截止时间"];
+  const workflow = Core.generateProjectWorkflow(project, fixedNow);
+  assert.equal(workflow.ready, true);
+  assert.ok(workflow.summary.includes("截止时间暂未确定"));
 }
 
 {
@@ -2304,11 +2590,9 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(indexSource.includes("菁菁，和小画桌慢慢说"));
   assert.ok(indexSource.includes("<h3>项目详情</h3>"));
   assert.ok(indexSource.includes("一次只补一点点"));
-  assert.ok(indexSource.includes("这是什么项目？"));
-  assert.ok(indexSource.includes("这次最想解决什么？"));
-  assert.ok(indexSource.includes("什么时候要交？现在到哪一步？"));
-  assert.ok(indexSource.includes("最后要交哪些图？"));
-  assert.ok(indexSource.includes("还有哪些要求或卡点？"));
+  assert.ok(indexSource.includes("要做什么，想让谁行动？"));
+  assert.ok(indexSource.includes("要交什么，什么时候要？"));
+  assert.ok(indexSource.includes("有什么限制，现在卡在哪？"));
   assert.ok(!indexSource.includes("更多项目信息"));
   assert.ok(indexSource.includes("删除这个项目"));
   assert.ok(indexSource.includes("id=\"attachment-input\""));
@@ -2319,7 +2603,7 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(indexSource.includes("id=\"detail-fab\""));
   assert.ok(indexSource.includes("id=\"rail-backdrop\""));
   assert.ok(indexSource.includes("id=\"project-task-list\""));
-  assert.ok(indexSource.includes("prompt-chip"));
+  assert.ok(indexSource.includes("id=\"prompt-strip\""));
   assert.ok(!indexSource.includes("id=\"daily-summary-btn\""));
   assert.ok(!indexSource.includes("id=\"review-btn\""));
   assert.ok(!indexSource.includes("id=\"checklist-btn\""));
@@ -2379,9 +2663,19 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(!appSource.includes("composeModelErrorReply(visibleLocalReply || fallbackReply, error)"));
   assert.ok(!appSource.includes("agentMessage.text = payload.reply || fallbackReply"));
   assert.ok(appSource.includes("localReply: fallbackReply"));
-  assert.ok(appSource.includes("applyProjectAutofill(clean, modelIntent"));
+  assert.ok(appSource.includes("applyProjectAutofill(clean, effectiveIntent"));
   assert.ok(appSource.includes("pendingAttachments"));
   assert.ok(appSource.includes("readAttachmentFile(file)"));
+  assert.ok(appSource.includes("function createRegionCaptureLayer"));
+  assert.ok(appSource.includes("function buildRegionContextAttachments"));
+  assert.ok(appSource.includes("contextRegionIds"));
+  assert.ok(appSource.includes("event.clipboardData?.items"));
+  assert.ok(appSource.includes("用户请求分析刚刚圈选的设计区域"));
+  assert.ok(appSource.includes("用户请求评审刚刚上传的设计版本"));
+  assert.ok(appSource.includes("function renderActiveVersionComparison"));
+  assert.ok(appSource.includes("function buildComparisonContextAttachments"));
+  assert.ok(appSource.includes("function hydratePersistedImagePreviews"));
+  assert.ok(appSource.includes("indexedDB.open(IMAGE_PREVIEW_DB_NAME"));
   assert.ok(appSource.includes("buildProjectAutofill(message, modelIntent, analysis)"));
   assert.ok(appSource.includes("buildFallbackRequirement"));
   assert.ok(appSource.includes("菁菁想做"));
@@ -2404,6 +2698,10 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(serverSource.includes("VISION_MODEL"));
   assert.ok(serverSource.includes("image_url"));
   assert.ok(serverSource.includes("data:image"));
+  assert.ok(serverSource.includes("请重点查看以下圈选区域"));
+  assert.ok(serverSource.includes("formatProjectRegions"));
+  assert.ok(serverSource.includes("用户正在比较两张设计图"));
+  assert.ok(serverSource.includes("formatProjectComparisons"));
   assert.ok(serverSource.includes("成长型 mentor 结构"));
   assert.ok(serverSource.includes("格式固定为：核心判断、优先动作、为什么、验收标准"));
   assert.ok(serverSource.includes("优先动作最多 3 条"));
@@ -2412,6 +2710,8 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   assert.ok(serverSource.includes("上轮目标对照"));
   assert.ok(serverSource.includes("可以发/暂不建议发"));
   assert.ok(serverSource.includes("buildSanitizedErrorReply"));
+  assert.ok(serverSource.includes("function loadLocalEnvFile"));
+  assert.ok(serverSource.includes("loadLocalEnvFile(path.join(ROOT, \".env\"))"));
   assert.ok(serverSource.includes("第一眼看到什么"));
   assert.ok(serverSource.includes("requirements、progressNote"));
   assert.ok(serverSource.includes("tasks 结构"));

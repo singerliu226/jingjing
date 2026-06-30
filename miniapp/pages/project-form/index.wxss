@@ -1,0 +1,112 @@
+.form-page {
+  min-height: 100vh;
+  padding: calc(env(safe-area-inset-top) + 32rpx) 32rpx 40rpx;
+  box-sizing: border-box;
+  background: #f4f6f5;
+}
+
+.form-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  border-bottom: 3rpx solid #17201d;
+  padding: 8rpx 2rpx 26rpx;
+}
+
+.step {
+  color: #05665e;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+
+.title {
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 42rpx;
+  font-weight: 800;
+}
+
+.hint {
+  color: #68756f;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.progress {
+  height: 8rpx;
+  margin-top: 12rpx;
+  overflow: hidden;
+  border-radius: 0;
+  background: #d8dedb;
+}
+
+.progress-value {
+  height: 100%;
+  background: #d8ea59;
+  border-right: 3rpx solid #17201d;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 28rpx;
+  margin-top: 24rpx;
+  border: 2rpx solid #d8dedb;
+  border-left: 8rpx solid #087f72;
+  border-radius: 4rpx;
+  padding: 30rpx 28rpx;
+  background: #fff;
+  box-shadow: 8rpx 8rpx 0 rgba(23, 32, 29, 0.05);
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  color: #52605a;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+input,
+textarea,
+.picker-value {
+  width: 100%;
+  border: 2rpx solid #cbd3cf;
+  border-radius: 4rpx;
+  padding: 20rpx;
+  box-sizing: border-box;
+  background: #f8f9f8;
+  color: #17201d;
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+textarea {
+  min-height: 190rpx;
+  line-height: 1.55;
+}
+
+.form-actions {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+
+.form-actions button {
+  min-height: 88rpx;
+  font-size: 26rpx;
+  font-weight: 800;
+  border-radius: 4rpx;
+}
+
+.secondary {
+  border: 2rpx solid #17201d;
+  background: #fff;
+  color: #52605a;
+}
+
+.primary {
+  background: #087f72;
+  color: #fff;
+}

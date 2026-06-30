@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests.js && node eval-intents.js",
+    "test": "node tests.js && node eval-intents.js && node tests-wechat.js && node tests-context-bridge.js",
+    "test:wechat": "node tests-wechat.js",
     "bench": "node eval-design-mentor-bench.js",
     "qa": "node qa-tests.js"
   },

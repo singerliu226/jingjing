@@ -1,0 +1,82 @@
+<view class="form-page safe-page">
+  <view class="form-head">
+    <text class="step">{{step + 1}} / 3</text>
+    <text class="title">{{titles[step]}}</text>
+    <text class="hint">{{hints[step]}}</text>
+    <view class="progress">
+      <view class="progress-value" style="width: {{(step + 1) * 33.333}}%"></view>
+    </view>
+  </view>
+
+  <view wx:if="{{step === 0}}" class="form-section">
+    <label>
+      <text>项目名</text>
+      <input value="{{form.name}}" data-field="name" bindinput="onField" placeholder="例如：酒吧开业海报" />
+    </label>
+    <label>
+      <text>设计类型</text>
+      <input value="{{form.type}}" data-field="type" bindinput="onField" placeholder="海报 / 包装 / 社媒图" />
+    </label>
+    <label>
+      <text>核心目标</text>
+      <textarea
+        value="{{form.goal}}"
+        data-field="goal"
+        bindinput="onField"
+        placeholder="给谁看，希望对方看完做什么？"
+      />
+    </label>
+  </view>
+
+  <view wx:if="{{step === 1}}" class="form-section">
+    <label>
+      <text>交付物</text>
+      <input
+        value="{{form.deliverablesText}}"
+        data-field="deliverablesText"
+        bindinput="onField"
+        placeholder="门店海报、小红书封面"
+      />
+    </label>
+    <label>
+      <text>截止时间（可稍后补）</text>
+      <picker mode="date" value="{{form.dueDate}}" bindchange="onDueDate">
+        <view class="picker-value">{{form.dueDate || '暂未确定'}}</view>
+      </picker>
+    </label>
+    <label>
+      <text>当前进度</text>
+      <picker range="{{statusLabels}}" value="{{statusIndex}}" bindchange="onStatus">
+        <view class="picker-value">{{statusLabels[statusIndex]}}</view>
+      </picker>
+    </label>
+  </view>
+
+  <view wx:if="{{step === 2}}" class="form-section">
+    <label>
+      <text>设计要求或限制</text>
+      <textarea
+        value="{{form.requirements}}"
+        data-field="requirements"
+        bindinput="onField"
+        placeholder="品牌色、必须出现的信息、不能做什么"
+      />
+    </label>
+    <label>
+      <text>现在卡在哪里</text>
+      <textarea
+        value="{{form.progressNote}}"
+        data-field="progressNote"
+        bindinput="onField"
+        placeholder="例如：文案确认了，但主视觉没方向"
+      />
+    </label>
+  </view>
+
+  <view class="form-actions">
+    <button class="secondary" bindtap="previous" disabled="{{step === 0}}">上一步</button>
+    <button class="primary" bindtap="next" loading="{{saving}}">
+      {{step === 2 ? '完成并生成下一步' : '下一步'}}
+    </button>
+  </view>
+</view>

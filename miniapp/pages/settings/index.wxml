@@ -1,0 +1,58 @@
+<view class="settings-page safe-page">
+  <view class="head">
+    <text class="title">服务号提醒</text>
+    <text class="subtitle">只在项目需要行动时提醒，不发营销消息。</text>
+  </view>
+
+  <view class="binding-card">
+    <view>
+      <text class="card-title">{{serviceAccountBound ? '服务号已绑定' : '先绑定服务号'}}</text>
+      <text class="card-copy">
+        {{serviceAccountBound ? '提醒会从服务号发出，点击可回到对应项目。' : '小程序和服务号身份不同，需要完成一次微信网页授权。'}}
+      </text>
+    </view>
+    <button wx:if="{{!serviceAccountBound}}" class="primary" bindtap="bindServiceAccount">
+      去绑定
+    </button>
+    <button wx:else class="secondary" bindtap="sendTest" loading="{{testing}}">
+      发测试提醒
+    </button>
+  </view>
+
+  <view class="settings-list">
+    <view class="setting-row">
+      <view>
+        <text class="setting-title">截止前提醒</text>
+        <text class="setting-copy">项目进入截止前 24 小时提醒一次。</text>
+      </view>
+      <switch checked="{{preferences.dueSoon}}" data-field="dueSoon" bindchange="toggle" color="#067d75" />
+    </view>
+    <view class="setting-row">
+      <view>
+        <text class="setting-title">等待确认提醒</text>
+        <text class="setting-copy">有任务卡在客户或老板确认时提醒。</text>
+      </view>
+      <switch checked="{{preferences.waiting}}" data-field="waiting" bindchange="toggle" color="#067d75" />
+    </view>
+    <view class="setting-row">
+      <view>
+        <text class="setting-title">每日一步</text>
+        <text class="setting-copy">每天只提醒当前最该推进的一步。</text>
+      </view>
+      <switch checked="{{preferences.dailyPlan}}" data-field="dailyPlan" bindchange="toggle" color="#067d75" />
+    </view>
+    <view wx:if="{{preferences.dailyPlan}}" class="setting-row">
+      <view>
+        <text class="setting-title">提醒时间</text>
+        <text class="setting-copy">每天 {{preferences.dailyHour}}:00</text>
+      </view>
+      <picker range="{{hours}}" value="{{preferences.dailyHour}}" bindchange="changeHour">
+        <view class="hour-picker">{{preferences.dailyHour}}:00</view>
+      </picker>
+    </view>
+  </view>
+
+  <view class="notice">
+    服务号模板消息需要认证服务号和已审核模板。关闭某类提醒后，新的同类提醒不会再入队。
+  </view>
+</view>

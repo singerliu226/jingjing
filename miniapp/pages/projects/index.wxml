@@ -1,0 +1,40 @@
+<view class="projects-page safe-page">
+  <view class="projects-head">
+    <view>
+      <text class="title">项目</text>
+      <text class="subtitle">每件设计活分开记，反馈不串台。</text>
+    </view>
+    <button class="settings" bindtap="openSettings">提醒</button>
+  </view>
+
+  <button class="new-project" bindtap="createProject">＋ 新建项目</button>
+
+  <view class="filters">
+    <button
+      wx:for="{{filters}}"
+      wx:key="value"
+      class="{{filter === item.value ? 'active' : ''}}"
+      data-value="{{item.value}}"
+      bindtap="setFilter"
+    >
+      {{item.label}}
+    </button>
+  </view>
+
+  <view class="project-list">
+    <button
+      wx:for="{{projects}}"
+      wx:key="id"
+      class="project-row {{item.id === activeProjectId ? 'selected' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="selectProject"
+    >
+      <view class="status-dot status-{{item.status}}"></view>
+      <view class="project-copy">
+        <text class="project-name">{{item.name}}</text>
+        <text class="project-meta">{{item.type}} · {{item.dueLabel}}</text>
+      </view>
+      <text class="check">{{item.id === activeProjectId ? '✓' : ''}}</text>
+    </button>
+  </view>
+</view>

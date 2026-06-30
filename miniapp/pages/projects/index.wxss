@@ -1,0 +1,155 @@
+.projects-page {
+  min-height: 100vh;
+  padding: calc(env(safe-area-inset-top) + 34rpx) 30rpx 40rpx;
+  box-sizing: border-box;
+  background: #f8f9f8;
+}
+
+.projects-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.projects-head > view {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.title {
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 50rpx;
+  font-weight: 800;
+}
+
+.subtitle {
+  color: #68756f;
+  font-size: 24rpx;
+}
+
+.settings {
+  min-height: 68rpx;
+  margin: 0;
+  border: 2rpx solid #17201d;
+  border-radius: 4rpx;
+  background: #fff;
+  color: #17201d;
+  font-size: 24rpx;
+}
+
+.new-project {
+  width: 100%;
+  min-height: 88rpx;
+  margin-top: 30rpx;
+  border-radius: 4rpx;
+  background: #087f72;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 24rpx;
+  border-bottom: 2rpx solid #17201d;
+}
+
+.filters button {
+  min-width: 0;
+  min-height: 72rpx;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: #68756f;
+  font-size: 22rpx;
+}
+
+.filters button:last-child {
+  border-right: 0;
+}
+
+.filters .active {
+  background: #087f72;
+  color: #fff;
+}
+
+.project-list {
+  margin-top: 20rpx;
+  border-top: 1rpx solid #d8dedb;
+}
+
+.project-row {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 116rpx;
+  grid-template-columns: 16rpx minmax(0, 1fr) 50rpx;
+  align-items: center;
+  gap: 18rpx;
+  margin: 0;
+  border-bottom: 1rpx solid #e5ebe7;
+  border-radius: 0;
+  padding: 18rpx 16rpx 18rpx 24rpx;
+  background: transparent;
+  text-align: left;
+}
+
+.project-row.selected {
+  border-left: 8rpx solid #e65f45;
+  background: #fff;
+}
+
+.status-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #8b9892;
+}
+
+.status-designing {
+  background: #087f72;
+}
+
+.status-waiting {
+  background: #d89d31;
+}
+
+.status-done {
+  background: #82a034;
+}
+
+.project-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7rpx;
+}
+
+.project-name,
+.project-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-name {
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.project-meta {
+  color: #68756f;
+  font-size: 22rpx;
+}
+
+.check {
+  color: #087f72;
+  font-size: 30rpx;
+  font-weight: 800;
+  text-align: center;
+}

@@ -1,0 +1,120 @@
+.settings-page {
+  min-height: 100vh;
+  padding: calc(env(safe-area-inset-top) + 40rpx) 30rpx 50rpx;
+  box-sizing: border-box;
+  background: #f8f9f8;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.title {
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 50rpx;
+  font-weight: 800;
+}
+
+.subtitle,
+.card-copy,
+.setting-copy {
+  color: #68756f;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.binding-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20rpx;
+  margin-top: 30rpx;
+  padding: 28rpx;
+  border: 2rpx solid #087f72;
+  border-top: 8rpx solid #e65f45;
+  border-radius: 4rpx;
+  background: #fff;
+  box-shadow: 8rpx 8rpx 0 rgba(8, 127, 114, 0.08);
+}
+
+.binding-card > view {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.card-title,
+.setting-title {
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.primary,
+.secondary {
+  min-height: 72rpx;
+  margin: 0;
+  padding: 0 20rpx;
+  font-size: 23rpx;
+  font-weight: 800;
+  border-radius: 4rpx;
+}
+
+.primary {
+  background: #087f72;
+  color: #fff;
+}
+
+.secondary {
+  border: 2rpx solid #087f72;
+  background: #fff;
+  color: #045e59;
+}
+
+.settings-list {
+  margin-top: 24rpx;
+  border-top: 2rpx solid #17201d;
+  background: #fff;
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24rpx;
+  min-height: 116rpx;
+  padding: 20rpx 24rpx;
+  border-bottom: 2rpx solid #e2e6e4;
+}
+
+.setting-row:last-child {
+  border-bottom: 0;
+}
+
+.setting-row > view {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.hour-picker {
+  min-width: 116rpx;
+  border: 2rpx solid #17201d;
+  border-radius: 4rpx;
+  padding: 16rpx;
+  color: #05665e;
+  font-size: 25rpx;
+  font-weight: 800;
+  text-align: center;
+}
+
+.notice {
+  margin-top: 26rpx;
+  color: #7a8781;
+  font-size: 22rpx;
+  line-height: 1.6;
+}

@@ -83,11 +83,15 @@ record("首屏信息架构：左项目、中对话、右项目详情", () => {
   assert.ok(html.includes("aria-label=\"项目详情\""));
   assert.ok(html.includes("id=\"service-gate\""));
   assert.ok(html.includes("id=\"detail-toggle\""));
+  assert.ok(html.includes("id=\"detail-close-button\""));
   assert.ok(html.includes("id=\"detail-fab\""));
   assert.ok(html.includes("id=\"rail-backdrop\""));
   assert.ok(app.includes("guardServiceEntry"));
   assert.ok(app.includes("openProjectDetail"));
+  assert.ok(app.includes("closeProjectDetail"));
   assert.ok(css.includes("body.detail-open .work-rail"));
+  assert.ok(css.includes("grid-template-columns: minmax(0, 1fr) auto"));
+  assert.ok(css.includes(".project-list::-webkit-scrollbar"));
   assert.ok(!html.includes("日报"));
   assert.ok(!html.includes("知识库"));
 });
@@ -96,11 +100,50 @@ record("对话输入：支持回车发送、提示词、上传入口", () => {
   const html = read("index.html");
   const app = read("app.js");
   assert.ok(html.includes("id=\"message-input\""));
-  assert.ok(html.includes("prompt-chip"));
+  assert.ok(html.includes("id=\"prompt-strip\""));
+  assert.ok(app.includes("className: \"prompt-chip\""));
   assert.ok(html.includes("id=\"attachment-input\""));
   assert.ok(html.includes("accept=\"image/*,.txt,.md,.csv,.json\""));
   assert.ok(app.includes("event.key === \"Enter\" && !event.shiftKey"));
   assert.ok(app.includes("handleAttachmentFiles"));
+});
+
+record("成长闭环：快捷入口覆盖首版、复评、交付判断和单项练习", () => {
+  const html = read("index.html");
+  const app = read("app.js");
+  const css = read("styles.css");
+  assert.ok(html.includes("id=\"prompt-strip\""));
+  assert.ok(app.includes("buildFirstReviewPrompt"));
+  assert.ok(app.includes("buildRevisionPrompt"));
+  assert.ok(app.includes("上轮目标对照"));
+  assert.ok(app.includes("只给我一个本周练习"));
+  assert.ok(app.includes("先明确判断这个版本现在能不能发给客户"));
+  assert.ok(css.includes(".answer-practice"));
+  assert.ok(css.includes(".answer-verdict"));
+});
+
+record("移动端：项目切换、评审动作、底部导航和详情入口完整", () => {
+  const html = read("index.html");
+  const app = read("app.js");
+  const css = read("styles.css");
+  [
+    "mobile-app-header",
+    "mobile-project-switch",
+    "mobile-detail-button",
+    "mobile-review-actions",
+    "mobile-bottom-nav",
+    "mobile-project-sheet",
+    "mobile-project-list",
+  ].forEach((token) => assert.ok(html.includes(token), `${token} missing`));
+  assert.ok(app.includes("renderMobileProjects"));
+  assert.ok(app.includes("openMobileProjectSheet"));
+  assert.ok(app.includes("runMobileReviewAction"));
+  assert.ok(app.includes("renderMobileStageGuide"));
+  assert.ok(app.includes("finishProjectDetails"));
+  assert.ok(css.includes("height: 100dvh"));
+  assert.ok(css.includes(".mobile-project-row"));
+  assert.ok(css.includes(".mobile-bottom-nav"));
+  assert.ok(css.includes(".mobile-stage-guide"));
 });
 
 record("项目详情：可编辑、可自动回填、可删除", () => {

@@ -1,0 +1,16 @@
+{
+  "description": "菁菁小画桌微信小程序",
+  "packOptions": {
+    "ignore": []
+  },
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "postcss": true,
+    "minified": true
+  },
+  "compileType": "miniprogram",
+  "appid": "touristappid",
+  "projectname": "jingjing-design-desk",
+  "miniprogramRoot": "./"
+}

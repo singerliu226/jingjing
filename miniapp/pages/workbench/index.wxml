@@ -1,0 +1,65 @@
+<view class="page safe-page">
+  <view class="topbar">
+    <button class="project-switch" bindtap="openProjects">
+      <view class="brand-mark" aria-hidden="true">
+        <view class="mark-front"></view>
+        <view class="mark-back"></view>
+      </view>
+      <view class="project-copy">
+        <text class="project-name">{{project.name || '菁菁小画桌'}}</text>
+        <text class="project-meta">{{project.type || '设计项目'}} · {{projectStatus}}</text>
+      </view>
+      <text class="chevron">⌄</text>
+    </button>
+    <button class="icon-button" bindtap="openSettings" aria-label="提醒设置">提醒</button>
+  </view>
+
+  <view wx:if="{{stage}}" class="stage-card">
+    <view class="stage-copy">
+      <text class="stage-label">{{stage.label}}</text>
+      <text class="stage-title">{{stage.title}}</text>
+      <text class="stage-description">{{stage.copy}}</text>
+    </view>
+    <button class="stage-action" bindtap="handleStageAction">{{stage.actionText}}</button>
+    <button wx:if="{{stage.secondaryAction}}" class="stage-secondary" bindtap="handleSecondaryAction">
+      {{stage.secondaryText}}
+    </button>
+  </view>
+
+  <scroll-view class="conversation" scroll-y scroll-into-view="{{scrollIntoView}}">
+    <view
+      wx:for="{{messages}}"
+      wx:key="id"
+      id="message-{{item.id}}"
+      class="message {{item.role === 'user' ? 'message-user' : 'message-agent'}}"
+    >
+      <view class="avatar">{{item.role === 'user' ? '你' : '画'}}</view>
+      <view class="message-main">
+        <text class="message-meta">{{item.role === 'user' ? '菁菁' : '小画桌'}}</text>
+        <image
+          wx:if="{{item.imagePath}}"
+          class="message-image"
+          src="{{item.imagePath}}"
+          mode="aspectFill"
+        />
+        <text class="message-text">{{item.text}}</text>
+      </view>
+    </view>
+    <view wx:if="{{!messages.length}}" class="empty">
+      先从上面的当前步骤开始。每次只做一件事，不用一次想完整个项目。
+    </view>
+  </scroll-view>
+
+  <view class="composer">
+    <button class="attach" bindtap="chooseGeneralImage" aria-label="上传图片">＋</button>
+    <textarea
+      class="composer-input"
+      value="{{input}}"
+      bindinput="onInput"
+      auto-height
+      maxlength="1200"
+      placeholder="说说卡在哪里，或发一张图"
+    />
+    <button class="send" bindtap="sendText" loading="{{sending}}" disabled="{{sending}}">发送</button>
+  </view>
+</view>

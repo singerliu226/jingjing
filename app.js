@@ -10,8 +10,29 @@
   let projectAnalysisTimer = 0;
   let projectAnalysisRun = 0;
   let pendingAttachments = [];
+  let activeAnnotationTarget = "";
+  let activeComparisonId = "";
+  let imagePreviewDbPromise = null;
+  let bridgeDirectoryHandle = null;
+  let bridgeScanTimer = 0;
+  let bridgeScanning = false;
+  let bridgeCandidates = [];
+  let bridgeKnownFiles = new Map();
+  let bridgeLastError = "";
+  let bridgeQueuedCount = 0;
   const transientAttachmentPreviews = new Map();
   const MODEL_REQUEST_TIMEOUT_MS = 30_000;
+  const IMAGE_PREVIEW_DB_NAME = "jingjing-design-context-v1";
+  const IMAGE_PREVIEW_STORE = "imagePreviews";
+  const CONTEXT_SETTINGS_STORE = "contextSettings";
+  const CONTEXT_QUEUE_STORE = "contextBridgeQueue";
+  const CONTEXT_DIRECTORY_KEY = "authorizedDirectory";
+  const CONTEXT_FILE_INDEX_KEY = "authorizedDirectoryIndex";
+  const CONTEXT_SCAN_INTERVAL_MS = 5_000;
+  const CONTEXT_MAX_FILES = 300;
+  const CONTEXT_MAX_DEPTH = 3;
+  const CONTEXT_HASH_LIMIT_BYTES = 64 * 1024 * 1024;
+  const CONTEXT_FILE_PATTERN = /\.(png|jpe?g|webp|psd|ai|pdf)$/i;
 
   const nodes = {
     workbenchView: document.querySelector("#workbench-view"),
@@ -23,6 +44,32 @@
     attachmentInput: document.querySelector("#attachment-input"),
     attachButton: document.querySelector("#attach-button"),
     attachmentDock: document.querySelector("#attachment-dock"),
+    contextBridge: document.querySelector("#context-bridge"),
+    contextBridgeDot: document.querySelector("#context-bridge-dot"),
+    contextBridgeTitle: document.querySelector("#context-bridge-title"),
+    contextBridgeCopy: document.querySelector("#context-bridge-copy"),
+    contextBridgeConnect: document.querySelector("#context-bridge-connect"),
+    contextBridgePause: document.querySelector("#context-bridge-pause"),
+    contextBridgeSync: document.querySelector("#context-bridge-sync"),
+    contextBridgeClear: document.querySelector("#context-bridge-clear"),
+    contextCandidateList: document.querySelector("#context-candidate-list"),
+    promptStrip: document.querySelector("#prompt-strip"),
+    mobileProjectName: document.querySelector("#mobile-project-name"),
+    mobileProjectMeta: document.querySelector("#mobile-project-meta"),
+    mobileProjectSwitch: document.querySelector("#mobile-project-switch"),
+    mobileDetailButton: document.querySelector("#mobile-detail-button"),
+    mobileChatNav: document.querySelector("#mobile-chat-nav"),
+    mobileProjectsNav: document.querySelector("#mobile-projects-nav"),
+    mobileProjectSheet: document.querySelector("#mobile-project-sheet"),
+    mobileProjectSheetClose: document.querySelector("#mobile-project-sheet-close"),
+    mobileNewProject: document.querySelector("#mobile-new-project"),
+    mobileProjectList: document.querySelector("#mobile-project-list"),
+    mobileStageGuide: document.querySelector("#mobile-stage-guide"),
+    mobileStageLabel: document.querySelector("#mobile-stage-label"),
+    mobileStageTitle: document.querySelector("#mobile-stage-title"),
+    mobileStageCopy: document.querySelector("#mobile-stage-copy"),
+    mobileStageAction: document.querySelector("#mobile-stage-action"),
+    mobileReviewActions: document.querySelector(".mobile-review-actions"),
     activeProjectName: document.querySelector("#active-project-name"),
     activeProjectType: document.querySelector("#active-project-type"),
     projectTaskList: document.querySelector("#project-task-list"),
@@ -37,6 +84,7 @@
     addTaskBtn: document.querySelector("#add-task-btn"),
     deleteProjectBtn: document.querySelector("#delete-project-btn"),
     detailToggle: document.querySelector("#detail-toggle"),
+    detailCloseButton: document.querySelector("#detail-close-button"),
     detailFab: document.querySelector("#detail-fab"),
     railBackdrop: document.querySelector("#rail-backdrop"),
     guideBtn: document.querySelector("#guide-btn"),
@@ -71,16 +119,10 @@
 
   const detailSteps = [
     {
-      isComplete: (project) => Boolean(normalize(project.name) && project.name !== "未命名设计项目"),
-      focus: () => nodes.projectNameInput,
-    },
-    {
-      isComplete: (project) => Boolean(normalize(project.goal)),
-      focus: () => nodes.projectGoalInput,
-    },
-    {
-      isComplete: (project) => Boolean(project.dueDate),
-      focus: () => nodes.projectDueInput,
+      isComplete: (project) =>
+        Boolean(normalize(project.name) && project.name !== "未命名设计项目" && normalize(project.goal)),
+      focus: (project) =>
+        !normalize(project.name) || project.name === "未命名设计项目" ? nodes.projectNameInput : nodes.projectGoalInput,
     },
     {
       isComplete: (project) => Boolean((project.deliverables || []).length),
@@ -99,19 +141,19 @@
       sections: [
         {
           title: "1. 先给事情起个名字",
-          body: "左边点“新建项目”，把这件设计活放进一个小抽屉里。海报、包装、公众号头图分开记，小画桌就不容易串台。",
+          body: "点“新建项目”，把每件设计活分开记。小画桌会自动带你进入项目需求，不用自己找入口。",
         },
         {
-          title: "2. 右边慢慢补小纸条",
-          body: "项目详情一次只问一点点：做什么、给谁看、什么时候交、要交哪些图。不会催你写满，知道多少就先写多少。",
+          title: "2. 用三步说清需求",
+          body: "只回答三件事：做什么、交什么、有什么限制。截止时间还没定也能先开始，以后想到再补。",
         },
         {
-          title: "3. 中间直接把话丢给我",
-          body: "老板反馈、客户要求、卡住的地方、设计截图，都可以直接发。小画桌会结合右边的小纸条回答，也会把能识别的信息悄悄补回项目里。",
+          title: "3. 每次只看当前一步",
+          body: "首页只保留现在最该做的动作。做到首版时上传图片，修改后对照复评，最后再做交付检查。",
         },
         {
-          title: "一点点小诀窍",
-          body: "不用组织得很完美。像“老板说太暗，明天下午前改”这样随手说就行，小画桌会帮你整理成能行动的下一步。",
+          title: "4. 完成后留一个判断",
+          body: "不用写长复盘。说说最满意和最卡的地方，小画桌会帮你留下一个做对的判断和一个下次练习。",
         },
       ],
     },
@@ -120,8 +162,16 @@
       title: "最近变新了什么",
       sections: [
         {
-          title: "2026-06-26 · 项目详情变清爽了",
-          body: "右边不再一下子塞给你一堆表格了。现在小画桌会一步一步问，填完就自动切到任务进度。",
+          title: "2026-06-30 · 手机上也能舒服地用了",
+          body: "项目切换、聊天和项目详情重新排过了。手机打开时只看眼前这件事，不会被一整桌表单挤住。",
+        },
+        {
+          title: "2026-06-30 · 小画桌开始记得每一版",
+          body: "上传或粘贴设计图后会自动留下版本。你可以圈出想聊的地方、并排比较两版，也能用“保留”“更接近”“方向不对”快速告诉我你的判断。",
+        },
+        {
+          title: "2026-06-29 · 完整工作流更简单了",
+          body: "项目需求从五步收成三步；首页只显示当前任务，首版、复评、交付和复盘会按顺序出现。",
         },
         {
           title: "2026-06-26 · 聊天更懂当前项目",
@@ -147,10 +197,15 @@
     const active = Core.getProject(state, state.activeProjectId);
     if (!active) return;
     renderProjectHeader(active);
+    renderMobileHeader(active);
     renderProjectForm(active);
     renderProjects();
+    renderMobileProjects();
     renderMessages();
+    renderQuickPrompts(active);
     renderDashboard();
+    renderMobileStageGuide(active);
+    renderContextBridge();
   }
 
   function commitAndRender() {
@@ -161,6 +216,145 @@
   function renderProjectHeader(project) {
     nodes.activeProjectName.textContent = project.name;
     nodes.activeProjectType.textContent = `${project.type} · ${statusLabel(project.status)}`;
+  }
+
+  function renderMobileHeader(project) {
+    if (!nodes.mobileProjectName || !nodes.mobileProjectMeta) return;
+    nodes.mobileProjectName.textContent = project.name;
+    nodes.mobileProjectMeta.textContent = [
+      project.type,
+      project.dueDate ? formatMobileDueDate(project.dueDate) : statusLabel(project.status),
+    ].join(" · ");
+  }
+
+  function renderMobileStageGuide(project) {
+    if (!nodes.mobileStageGuide) return;
+    const projectMessages = state.messages.filter((message) => message.projectId === project.id);
+    const hasImageRound = projectMessages.some((message) =>
+      (message.attachments || []).some((attachment) => attachment.kind === "image")
+    );
+    const hasHandoffCheck = projectMessages.some((message) =>
+      /交付检查|能不能发给客户|能否交付/.test(message.text || "")
+    );
+    const workflowTasks = state.tasks.filter(
+      (task) => task.projectId === project.id && !/^补齐项目(详情|小纸条)/.test(task.title)
+    );
+    const activeTask = workflowTasks.find((task) => task.status !== "done");
+    const doneCount = workflowTasks.filter((task) => task.status === "done").length;
+    const isDone = project.status === "done" || (project.workflowReady && workflowTasks.length && !activeTask);
+
+    let stage = {
+      label: "开始前",
+      title: "先把需求说清楚",
+      copy: "只要三步：做什么、交什么、有什么限制。",
+      action: "补项目需求",
+      actionType: "setup",
+      reviewActions: [],
+    };
+
+    if (isDone) {
+      stage = {
+        label: "项目完成",
+        title: "趁记得，留下一个判断",
+        copy: "不用写长复盘，只记这次做对了什么、下次先注意什么。",
+        action: "做个小复盘",
+        actionType: "reflect",
+        reviewActions: [],
+      };
+    } else if (project.workflowReady && activeTask && /^(交付前|自检与导出)/.test(activeTask.title)) {
+      stage = {
+        label: `当前一步 · ${doneCount + 1}/${workflowTasks.length}`,
+        title: "交付前最后确认",
+        copy: hasHandoffCheck
+          ? "确认问题都处理完，再把最终文件发出去。"
+          : "先判断现在能不能发，再检查格式、命名和源文件。",
+        action: hasHandoffCheck ? "已经交付" : "开始交付检查",
+        actionType: hasHandoffCheck ? "complete-task" : "handoff",
+        taskId: activeTask.id,
+        reviewActions: [],
+      };
+    } else if (project.workflowReady && activeTask && /首版|设计/.test(activeTask.title)) {
+      stage = {
+        label: hasImageRound ? "修改与复评" : `当前一步 · ${doneCount + 1}/${workflowTasks.length}`,
+        title: hasImageRound ? "先确认这轮有没有变好" : activeTask.title,
+        copy: hasImageRound
+          ? "对照上轮目标判断；确认方向对了，再进入交付。"
+          : activeTask.nextAction || "先完成首版，再让我帮你看最大问题。",
+        action: hasImageRound ? "这一轮改好了" : "上传首版",
+        actionType: hasImageRound ? "complete-task" : "first-review",
+        taskId: activeTask.id,
+        reviewActions: hasImageRound ? ["revision"] : [],
+      };
+    } else if (project.workflowReady && activeTask) {
+      stage = {
+        label: `当前一步${workflowTasks.length ? ` · ${doneCount + 1}/${workflowTasks.length}` : ""}`,
+        title: activeTask.title,
+        copy: activeTask.nextAction || "先完成这一小步，再继续往下。",
+        action: "这一步做完了",
+        actionType: "complete-task",
+        taskId: activeTask.id,
+        reviewActions: [],
+      };
+    }
+
+    nodes.mobileStageLabel.textContent = stage.label;
+    nodes.mobileStageTitle.textContent = stage.title;
+    nodes.mobileStageCopy.textContent = stage.copy;
+    nodes.mobileStageAction.textContent = stage.action;
+    nodes.mobileStageAction.dataset.action = stage.actionType;
+    nodes.mobileStageAction.dataset.taskId = stage.taskId || "";
+    const reviewActions = stage.reviewActions || [];
+    document.querySelectorAll("[data-mobile-action]").forEach((button) => {
+      button.hidden = !reviewActions.includes(button.dataset.mobileAction);
+    });
+    nodes.mobileReviewActions.style.gridTemplateColumns = `repeat(${Math.max(reviewActions.length, 1)}, minmax(0, 1fr))`;
+    nodes.mobileReviewActions.hidden = !reviewActions.length;
+  }
+
+  function handleMobileStageAction() {
+    const action = nodes.mobileStageAction.dataset.action;
+    if (action === "setup") {
+      const project = Core.getProject(state, state.activeProjectId);
+      if (project && !project.workflowReady) {
+        project.detailMode = "collect";
+        persist();
+        renderProjectForm(project);
+      }
+      openProjectDetail();
+      focusCurrentDetailStep();
+      return;
+    }
+    if (action === "complete-task") {
+      completeTask(nodes.mobileStageAction.dataset.taskId);
+      return;
+    }
+    if (action === "revision") {
+      runMobileReviewAction("revision");
+      return;
+    }
+    if (action === "first-review") {
+      runMobileReviewAction("first-review");
+      return;
+    }
+    if (action === "handoff") {
+      runMobileReviewAction("handoff");
+      return;
+    }
+    if (action === "reflect") {
+      nodes.messageInput.value =
+        "帮我做一次很短的项目复盘：先问我这次最满意和最卡的各是什么，再帮我总结一个做对的判断和一个下次练习。";
+      nodes.messageInput.focus();
+    }
+  }
+
+  function formatMobileDueDate(value) {
+    const due = new Date(`${value}T23:59:59`);
+    if (Number.isNaN(due.getTime())) return statusLabel("designing");
+    const days = Math.ceil((due.getTime() - Date.now()) / 86_400_000);
+    if (days < 0) return `已逾期 ${Math.abs(days)} 天`;
+    if (days === 0) return "今天截止";
+    if (days === 1) return "明天截止";
+    return `${days} 天后截止`;
   }
 
   function guardServiceEntry() {
@@ -243,7 +437,9 @@
     nodes.wizardProgressBar.style.width = `${Math.max(8, (completed / total) * 100)}%`;
     nodes.wizardPrevBtn.disabled = activeDetailStep === 0;
     nodes.wizardNextBtn.textContent = activeDetailStep === total - 1 ? "完成" : "下一步";
-    nodes.wizardSkipBtn.hidden = detailSteps[activeDetailStep].isComplete(project);
+    nodes.wizardSkipBtn.textContent = activeDetailStep === total - 1 ? "暂时没有" : "先跳过";
+    nodes.wizardSkipBtn.hidden =
+      activeDetailStep < total - 1 || detailSteps[activeDetailStep].isComplete(project);
     nodes.saveProjectBtn.textContent = project.workflowReady ? "已整理" : completed === total ? "信息够用了" : `已填 ${completed}/${total}`;
     nodes.progressSummary.textContent = buildProgressSummary(project);
   }
@@ -255,7 +451,12 @@
   }
 
   function buildProgressSummary(project) {
-    const taskCount = state.tasks.filter((task) => task.projectId === project.id && task.status !== "done").length;
+    const taskCount = state.tasks.filter(
+      (task) =>
+        task.projectId === project.id &&
+        task.status !== "done" &&
+        !/^补齐项目(详情|小纸条)/.test(task.title)
+    ).length;
     const deliverables = (project.deliverables || []).join("、") || "交付物";
     const due = project.dueDate ? `DDL ${project.dueDate}` : "还没设截止";
     if (!taskCount) return `${due}。现在没有未完成任务，可以新增下一步或回到对话里继续拆。`;
@@ -281,7 +482,8 @@
   }
 
   function focusCurrentDetailStep() {
-    const input = detailSteps[activeDetailStep]?.focus();
+    const project = Core.getProject(state, state.activeProjectId);
+    const input = detailSteps[activeDetailStep]?.focus(project);
     if (input && typeof input.focus === "function") window.setTimeout(() => input.focus(), 0);
   }
 
@@ -289,23 +491,41 @@
     const project = Core.getProject(state, state.activeProjectId);
     if (!project) return;
     if (activeDetailStep < detailSteps.length - 1) {
+      if (!detailSteps[activeDetailStep].isComplete(project)) {
+        nodes.saveProjectBtn.textContent =
+          activeDetailStep === 0 ? "先补项目名和目标" : "至少写一个交付物";
+        focusCurrentDetailStep();
+        return;
+      }
       moveDetailStep(1);
       return;
     }
-    project.detailStep = findFirstIncompleteDetailStep(project);
-    persist();
-    renderProjectForm(project);
-    if (!isDetailCollectionComplete(project)) {
+    finishProjectDetails(project);
+  }
+
+  function skipDetailStep() {
+    if (activeDetailStep < detailSteps.length - 1) {
+      moveDetailStep(1);
+      return;
+    }
+    const project = Core.getProject(state, state.activeProjectId);
+    if (project) finishProjectDetails(project);
+  }
+
+  function finishProjectDetails(project) {
+    if (!isProjectReadyForWorkflow(project)) {
+      project.detailStep = findFirstIncompleteDetailStep(project);
+      nodes.saveProjectBtn.textContent = "还差目标和交付物";
+      persist();
+      renderProjectForm(project);
       focusCurrentDetailStep();
       return;
     }
-    if (isProjectReadyForWorkflow(project)) {
-      project.detailMode = "progress";
-      persist();
-      nodes.messageInput.value = "请根据右侧项目详情，帮我安排今天先做什么。";
-      nodes.messageInput.focus();
-      analyzeProjectFromCard(project.id);
-    }
+    project.detailMode = "progress";
+    project.detailStep = detailSteps.length - 1;
+    persist();
+    closeProjectDetail();
+    analyzeProjectFromCard(project.id);
   }
 
   function renderProjects() {
@@ -334,11 +554,78 @@
     );
   }
 
+  function renderMobileProjects() {
+    if (!nodes.mobileProjectList) return;
+    const projects = state.projects.filter((project) => filterProject(project, projectFilter));
+    nodes.mobileProjectList.replaceChildren(
+      ...withEmpty(
+        projects.map((project) => {
+          const isActive = project.id === state.activeProjectId;
+          const button = el("button", {
+            className: `mobile-project-row ${isActive ? "is-active" : ""}`,
+            type: "button",
+            onclick: () => {
+              state.activeProjectId = project.id;
+              closeMobileProjectSheet();
+              commitAndRender();
+            },
+          });
+          button.append(
+            el("span", { className: `status-dot status-${project.status}` }),
+            el("span", { className: "mobile-project-row-copy" }, [
+              el("strong", { textContent: project.name }),
+              el("small", {
+                textContent: `${project.type} · ${project.dueDate ? formatMobileDueDate(project.dueDate) : statusLabel(project.status)}`,
+              }),
+            ]),
+            el("span", {
+              className: "mobile-project-selected",
+              textContent: isActive ? "✓" : "",
+              "aria-hidden": "true",
+            })
+          );
+          return button;
+        }),
+        "这个筛选里还没有项目。"
+      )
+    );
+    document.querySelectorAll("[data-mobile-filter]").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.mobileFilter === projectFilter);
+    });
+  }
+
+  function openMobileProjectSheet() {
+    nodes.mobileProjectSheet.hidden = false;
+    document.body.classList.add("mobile-projects-open");
+    nodes.mobileChatNav.classList.remove("is-active");
+    nodes.mobileProjectsNav.classList.add("is-active");
+    renderMobileProjects();
+  }
+
+  function closeMobileProjectSheet() {
+    nodes.mobileProjectSheet.hidden = true;
+    document.body.classList.remove("mobile-projects-open");
+    nodes.mobileProjectsNav.classList.remove("is-active");
+    nodes.mobileChatNav.classList.add("is-active");
+  }
+
+  function runMobileReviewAction(action) {
+    if (action === "first-review") {
+      nodes.messageInput.value = buildFirstReviewPrompt();
+      nodes.attachmentInput.click();
+    } else if (action === "revision") {
+      nodes.messageInput.value = buildRevisionPrompt();
+      nodes.attachmentInput.click();
+    } else if (action === "handoff") {
+      nodes.messageInput.value = "交付检查：请先明确判断这个版本现在能不能发给客户，再给不超过 3 项最关键的检查。";
+      nodes.messageInput.focus();
+    }
+  }
+
   function renderMessages() {
     const activeId = state.activeProjectId;
     const visible = state.messages.filter((message) => message.projectId === activeId);
-    nodes.chatStream.replaceChildren(
-      ...visible.map((message) => {
+    const rendered = visible.map((message) => {
         const wrapper = el("article", { className: `message message-${message.role}` });
         wrapper.append(
           el("div", { className: "avatar", textContent: message.role === "agent" ? "D" : "你" }),
@@ -349,19 +636,60 @@
             }),
             renderMessageBubble(message),
             renderMessageAttachments(message),
+            renderAttachmentPreferenceActions(message),
           ])
         );
         return wrapper;
-      })
-    );
+      });
+    const comparison = renderActiveVersionComparison(activeId);
+    if (comparison) rendered.push(comparison);
+    nodes.chatStream.replaceChildren(...rendered);
     nodes.chatStream.scrollTop = nodes.chatStream.scrollHeight;
+  }
+
+  function renderQuickPrompts(project) {
+    const messages = state.messages.filter((message) => message.projectId === project.id);
+    const hasDesignRound = messages.some(
+      (message) =>
+        (message.attachments || []).some((attachment) => attachment.kind === "image") ||
+        /上轮目标对照|核心判断|第一眼看到什么/.test(message.text || "")
+    );
+    const prompts = hasDesignRound
+      ? [
+          ["对照上版复评", buildRevisionPrompt()],
+          ["只看最大问题", "先别给我很多建议，只判断现在画面最大的一个问题，并告诉我为什么。"],
+          ["交付前能发吗", "请先明确判断这个版本现在能不能发给客户，再给不超过 3 项交付前检查。"],
+          ["给我一个练习", "结合这个项目，只给我一个本周练习，说明为什么练，以及怎样算练到位。"],
+        ]
+      : [
+          ["先从哪里开始", "结合右侧项目详情，告诉我现在最该先做哪一步，以及为什么。"],
+          ["帮我看第一版", buildFirstReviewPrompt()],
+          ["拆成今天任务", "帮我把这个项目拆成今天能完成的任务，先保留最关键的 3 项。"],
+          ["给我一个练习", "结合这个项目，只给我一个本周练习，说明为什么练，以及怎样算练到位。"],
+        ];
+
+    nodes.promptStrip.replaceChildren(
+      ...prompts.map(([label, template]) =>
+        el("button", {
+          className: "prompt-chip",
+          type: "button",
+          textContent: label,
+          onclick: () => fillQuickTemplate(template),
+        })
+      )
+    );
   }
 
   function renderDashboard() {
     const dashboard = Core.getDashboard(state);
     const project = Core.getProject(state, state.activeProjectId);
     const canShowProjectTasks = shouldShowProgressView(project);
-    const activeTasks = state.tasks.filter((task) => task.projectId === state.activeProjectId && task.status !== "done");
+    const activeTasks = state.tasks.filter(
+      (task) =>
+        task.projectId === state.activeProjectId &&
+        task.status !== "done" &&
+        !/^补齐项目(详情|小纸条)/.test(task.title)
+    );
     nodes.detailTaskSection.hidden = !canShowProjectTasks;
     nodes.todayCount.textContent = activeTasks.length;
     nodes.waitingCount.textContent = dashboard.waiting.length;
@@ -504,13 +832,368 @@
       attachments.map((attachment) => {
         const preview = previews.find((item) => item.id === attachment.id);
         if (attachment.kind === "image" && preview && preview.dataUrl) {
-          return el("figure", { className: "message-attachment image-attachment" }, [
-            el("img", { src: preview.dataUrl, alt: attachment.name }),
-            el("figcaption", { textContent: attachment.name }),
-          ]);
+          return renderImageAttachment(message, attachment, preview);
         }
         return el("span", { className: "message-attachment file-attachment", textContent: attachment.name });
       })
+    );
+  }
+
+  function renderImageAttachment(message, attachment, preview) {
+    const versionId = attachment.designVersionId || "";
+    const targetKey = `${message.id}:${attachment.id}`;
+    const regions = (state.designRegions || []).filter(
+      (region) => region.projectId === message.projectId && region.versionId === versionId
+    );
+    const stage = el("div", { className: "image-annotation-stage" }, [
+      el("img", { src: preview.dataUrl, alt: attachment.name }),
+    ]);
+    regions.forEach((region, index) => {
+      const marker = el("div", {
+        className: "image-region-marker",
+        title: region.label || `区域 ${index + 1}`,
+      });
+      marker.style.left = `${region.x * 100}%`;
+      marker.style.top = `${region.y * 100}%`;
+      marker.style.width = `${region.width * 100}%`;
+      marker.style.height = `${region.height * 100}%`;
+      marker.append(el("span", { textContent: String(index + 1) }));
+      stage.append(marker);
+    });
+    if (versionId && activeAnnotationTarget === targetKey) {
+      stage.append(createRegionCaptureLayer(message, attachment, targetKey));
+    }
+
+    const toolbar = el("div", { className: "image-annotation-toolbar" }, [
+      el("button", {
+        type: "button",
+        className: activeAnnotationTarget === targetKey ? "is-active" : "",
+        textContent: activeAnnotationTarget === targetKey ? "拖动圈出区域" : "圈一下这里",
+        onclick: () => {
+          activeAnnotationTarget = activeAnnotationTarget === targetKey ? "" : targetKey;
+          renderMessages();
+        },
+      }),
+    ]);
+    if (regions.length) {
+      toolbar.append(
+        el("span", { textContent: `已圈 ${regions.length} 处` }),
+        el("button", {
+          type: "button",
+          textContent: "清除",
+          onclick: () => {
+            const removed = Core.clearDesignRegions(
+              state,
+              {
+                projectId: message.projectId,
+                versionId,
+                source: "manual_action",
+              },
+              new Date()
+            );
+            if (!removed) return;
+            activeAnnotationTarget = "";
+            commitAndRender();
+          },
+        })
+      );
+    }
+    const previousVersion = findPreviousImageVersion(message.projectId, versionId);
+    if (previousVersion) {
+      toolbar.append(
+        el("button", {
+          type: "button",
+          textContent: "对比上一版",
+          onclick: () => {
+            const comparison = Core.createVersionComparison(
+              state,
+              {
+                projectId: message.projectId,
+                versionIds: [previousVersion.id, versionId],
+                relation: "revision",
+              },
+              new Date()
+            );
+            if (!comparison) return;
+            activeComparisonId = comparison.id;
+            commitAndRender();
+          },
+        })
+      );
+    }
+
+    return el("figure", { className: "message-attachment image-attachment" }, [
+      stage,
+      el("figcaption", {
+        textContent: attachment.versionName
+          ? `${attachment.versionName} · ${attachment.name}`
+          : attachment.name,
+      }),
+      versionId ? toolbar : null,
+    ]);
+  }
+
+  function findPreviousImageVersion(projectId, versionId) {
+    const project = Core.getProject(state, projectId);
+    const imageVersions = (project.versions || []).filter(
+      (version) => version && version.artifact && version.artifact.attachmentId
+    );
+    const index = imageVersions.findIndex((version) => version.id === versionId);
+    if (index <= 0) return null;
+    return getVersionPreviewContext(projectId, imageVersions[index - 1].id)
+      ? imageVersions[index - 1]
+      : null;
+  }
+
+  function getVersionPreviewContext(projectId, versionId) {
+    const message = state.messages.find(
+      (item) =>
+        item.projectId === projectId &&
+        (item.attachments || []).some(
+          (attachment) => attachment.kind === "image" && attachment.designVersionId === versionId
+        )
+    );
+    if (!message) return null;
+    const attachment = (message.attachments || []).find(
+      (item) => item.kind === "image" && item.designVersionId === versionId
+    );
+    const preview = (transientAttachmentPreviews.get(message.id) || []).find(
+      (item) => item.id === attachment?.id
+    );
+    if (!attachment || !preview || !preview.dataUrl) return null;
+    return { message, attachment, preview };
+  }
+
+  function getActiveVersionComparison(projectId) {
+    const comparisons = (state.versionComparisons || []).filter(
+      (comparison) => comparison && comparison.projectId === projectId
+    );
+    if (!comparisons.length) return null;
+    return comparisons.find((comparison) => comparison.id === activeComparisonId) || comparisons[comparisons.length - 1];
+  }
+
+  function renderActiveVersionComparison(projectId) {
+    const comparison = getActiveVersionComparison(projectId);
+    if (!comparison) return null;
+    const contexts = comparison.versionIds.map((versionId) =>
+      getVersionPreviewContext(projectId, versionId)
+    );
+    if (contexts.some((context) => !context)) return null;
+    const isAlternatives = comparison.relation === "alternatives";
+    const project = Core.getProject(state, projectId);
+    const versions = comparison.versionIds.map((versionId) =>
+      (project.versions || []).find((version) => version.id === versionId)
+    );
+    const labels = isAlternatives
+      ? ["方案 A", "方案 B"]
+      : versions.map((version, index) => (version && version.name) || `版本 ${index + 1}`);
+    const card = el("article", { className: "version-comparison-card", ariaLabel: "版本对比" });
+    const relationControls = el("div", { className: "comparison-relation-controls" }, [
+      el("button", {
+        type: "button",
+        className: isAlternatives ? "" : "is-active",
+        textContent: "连续修改",
+        onclick: () => updateComparisonRelation(comparison, "revision"),
+      }),
+      el("button", {
+        type: "button",
+        className: isAlternatives ? "is-active" : "",
+        textContent: "A/B 方案",
+        onclick: () => updateComparisonRelation(comparison, "alternatives"),
+      }),
+    ]);
+    const grid = el(
+      "div",
+      { className: "version-comparison-grid" },
+      contexts.map((context, index) => {
+        const selected = comparison.selectedVersionId === comparison.versionIds[index];
+        return el("figure", { className: selected ? "is-selected" : "" }, [
+          el("div", { className: "comparison-label", textContent: labels[index] }),
+          el("img", { src: context.preview.dataUrl, alt: `${labels[index]} · ${context.attachment.name}` }),
+          el("figcaption", { textContent: context.attachment.name }),
+          el("button", {
+            type: "button",
+            className: selected ? "is-selected" : "",
+            textContent: selected ? "已选择" : `选择${isAlternatives ? index === 0 ? " A" : " B" : ` ${labels[index]}`}`,
+            onclick: () => {
+              const updated = Core.recordComparisonChoice(
+                state,
+                {
+                  comparisonId: comparison.id,
+                  versionId: comparison.versionIds[index],
+                },
+                new Date()
+              );
+              if (updated) commitAndRender();
+            },
+          }),
+        ]);
+      })
+    );
+    const askButton = el("button", {
+      type: "button",
+      className: "comparison-ask-button",
+      textContent: "让小画桌比较",
+      onclick: () => {
+        activeComparisonId = comparison.id;
+        nodes.messageInput.value = isAlternatives
+          ? "请比较 A/B 两个方案。先只描述可见差异，再分别说明更适合的目标，最后给出选择建议。"
+          : "请对比这两个版本。先只描述可见变化，再判断哪些改善、哪些退步，最后给一个最值得继续调整的方向。";
+        nodes.messageInput.focus();
+      },
+    });
+    card.append(
+      el("div", { className: "version-comparison-head" }, [
+        el("div", {}, [
+          el("strong", { textContent: isAlternatives ? "A/B 方案比较" : "版本前后对比" }),
+          el("span", {
+            textContent: isAlternatives
+              ? "两个方向并列，不代表先后修改。"
+              : "左边是上版，右边是新版。",
+          }),
+        ]),
+        relationControls,
+      ]),
+      grid,
+      askButton
+    );
+    return card;
+  }
+
+  function updateComparisonRelation(comparison, relation) {
+    const updated = Core.createVersionComparison(
+      state,
+      {
+        projectId: comparison.projectId,
+        versionIds: comparison.versionIds,
+        relation,
+      },
+      new Date()
+    );
+    if (!updated) return;
+    activeComparisonId = updated.id;
+    commitAndRender();
+  }
+
+  function createRegionCaptureLayer(message, attachment, targetKey) {
+    const layer = el("div", {
+      className: "image-region-capture",
+      ariaLabel: "在图片上拖动以圈选区域",
+    });
+    let drag = null;
+    const updateDraft = (event) => {
+      if (!drag) return;
+      const rect = layer.getBoundingClientRect();
+      const x = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+      const y = clamp((event.clientY - rect.top) / rect.height, 0, 1);
+      const left = Math.min(drag.startX, x);
+      const top = Math.min(drag.startY, y);
+      drag.draft.style.left = `${left * 100}%`;
+      drag.draft.style.top = `${top * 100}%`;
+      drag.draft.style.width = `${Math.abs(x - drag.startX) * 100}%`;
+      drag.draft.style.height = `${Math.abs(y - drag.startY) * 100}%`;
+      drag.endX = x;
+      drag.endY = y;
+    };
+    layer.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      const rect = layer.getBoundingClientRect();
+      const draft = el("div", { className: "image-region-draft" });
+      drag = {
+        startX: clamp((event.clientX - rect.left) / rect.width, 0, 1),
+        startY: clamp((event.clientY - rect.top) / rect.height, 0, 1),
+        endX: 0,
+        endY: 0,
+        draft,
+      };
+      drag.endX = drag.startX;
+      drag.endY = drag.startY;
+      layer.append(draft);
+      layer.setPointerCapture(event.pointerId);
+      updateDraft(event);
+    });
+    layer.addEventListener("pointermove", updateDraft);
+    layer.addEventListener("pointerup", (event) => {
+      if (!drag) return;
+      updateDraft(event);
+      const x = Math.min(drag.startX, drag.endX);
+      const y = Math.min(drag.startY, drag.endY);
+      const width = Math.abs(drag.endX - drag.startX);
+      const height = Math.abs(drag.endY - drag.startY);
+      const region = Core.recordDesignRegion(
+        state,
+        {
+          projectId: message.projectId,
+          versionId: attachment.designVersionId,
+          x,
+          y,
+          width,
+          height,
+          source: "manual_drag",
+        },
+        new Date()
+      );
+      drag = null;
+      activeAnnotationTarget = "";
+      if (!region) {
+        renderMessages();
+        return;
+      }
+      if (!normalize(nodes.messageInput.value)) {
+        nodes.messageInput.value = `请只看我圈出的${region.label}，告诉我这里最大的问题、为什么，以及应该怎么改。`;
+      }
+      commitAndRender();
+      nodes.messageInput.focus();
+    });
+    layer.addEventListener("pointercancel", () => {
+      drag = null;
+      activeAnnotationTarget = targetKey;
+      renderMessages();
+    });
+    return layer;
+  }
+
+  function renderAttachmentPreferenceActions(message) {
+    if (!message || message.role !== "user") return el("div", { className: "version-feedback is-empty" });
+    const imageAttachments = (message.attachments || []).filter(
+      (attachment) => attachment.kind === "image" && attachment.designVersionId
+    );
+    if (!imageAttachments.length) return el("div", { className: "version-feedback is-empty" });
+    const labels = [
+      ["keep", "保留这个"],
+      ["closer", "更接近了"],
+      ["reject", "方向不对"],
+    ];
+    return el(
+      "div",
+      { className: "version-feedback", "aria-label": "记录这个版本的感觉" },
+      imageAttachments.map((attachment) =>
+        el("div", { className: "version-feedback-row" }, [
+          el("span", { textContent: `${attachment.versionName || "这版"}的感觉` }),
+          ...labels.map(([signal, label]) =>
+            el("button", {
+              type: "button",
+              className: attachment.preferenceSignal === signal ? "is-active" : "",
+              textContent: label,
+              onclick: () => {
+                const preference = Core.recordPreferenceSignal(
+                  state,
+                  {
+                    projectId: message.projectId,
+                    versionId: attachment.designVersionId,
+                    signal,
+                    source: "explicit_quick_action",
+                  },
+                  new Date()
+                );
+                if (!preference) return;
+                attachment.preferenceSignal = signal;
+                commitAndRender();
+              },
+            })
+          ),
+        ])
+      )
     );
   }
 
@@ -542,6 +1225,133 @@
     );
   }
 
+  function openImagePreviewDb() {
+    if (!window.indexedDB) return Promise.resolve(null);
+    if (imagePreviewDbPromise) return imagePreviewDbPromise;
+    imagePreviewDbPromise = new Promise((resolve, reject) => {
+      const request = window.indexedDB.open(IMAGE_PREVIEW_DB_NAME, 2);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(IMAGE_PREVIEW_STORE)) {
+          db.createObjectStore(IMAGE_PREVIEW_STORE, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(CONTEXT_SETTINGS_STORE)) {
+          db.createObjectStore(CONTEXT_SETTINGS_STORE, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(CONTEXT_QUEUE_STORE)) {
+          db.createObjectStore(CONTEXT_QUEUE_STORE, { keyPath: "id" });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("本地图片预览库打开失败。"));
+    });
+    return imagePreviewDbPromise;
+  }
+
+  async function persistImagePreviews(attachments) {
+    const images = attachments.filter(
+      (attachment) => attachment.kind === "image" && attachment.id && attachment.dataUrl
+    );
+    if (!images.length) return;
+    try {
+      const db = await openImagePreviewDb();
+      if (!db) return;
+      await Promise.all(
+        images.map(
+          (attachment) =>
+            new Promise((resolve, reject) => {
+              const transaction = db.transaction(IMAGE_PREVIEW_STORE, "readwrite");
+              transaction.objectStore(IMAGE_PREVIEW_STORE).put({
+                id: attachment.id,
+                dataUrl: attachment.dataUrl,
+                mimeType: attachment.mimeType,
+                name: attachment.name,
+                updatedAt: new Date().toISOString(),
+              });
+              transaction.oncomplete = () => resolve();
+              transaction.onerror = () => reject(transaction.error || new Error("图片预览保存失败。"));
+            })
+        )
+      );
+    } catch (error) {
+      // 图片仍保留在当前会话；本地预览库不可用不应阻塞设计工作。
+    }
+  }
+
+  async function readPersistedImagePreview(attachmentId) {
+    try {
+      const db = await openImagePreviewDb();
+      if (!db) return null;
+      return await new Promise((resolve, reject) => {
+        const transaction = db.transaction(IMAGE_PREVIEW_STORE, "readonly");
+        const request = transaction.objectStore(IMAGE_PREVIEW_STORE).get(attachmentId);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error || new Error("图片预览读取失败。"));
+      });
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async function readContextStore(storeName, id) {
+    const db = await openImagePreviewDb();
+    if (!db) return null;
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, "readonly");
+      const request = transaction.objectStore(storeName).get(id);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error || new Error("本地上下文读取失败。"));
+    });
+  }
+
+  async function writeContextStore(storeName, value) {
+    const db = await openImagePreviewDb();
+    if (!db) return;
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, "readwrite");
+      transaction.objectStore(storeName).put(value);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error("本地上下文保存失败。"));
+    });
+  }
+
+  async function deleteContextStore(storeName, id) {
+    const db = await openImagePreviewDb();
+    if (!db) return;
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, "readwrite");
+      transaction.objectStore(storeName).delete(id);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error("本地上下文删除失败。"));
+    });
+  }
+
+  async function hydratePersistedImagePreviews() {
+    const imageMessages = state.messages
+      .map((message) => ({
+        message,
+        attachments: (message.attachments || []).filter(
+          (attachment) => attachment.kind === "image" && attachment.id
+        ),
+      }))
+      .filter((item) => item.attachments.length);
+    let hydrated = 0;
+    for (const item of imageMessages) {
+      const current = transientAttachmentPreviews.get(item.message.id) || [];
+      const next = current.slice();
+      for (const attachment of item.attachments) {
+        if (next.some((preview) => preview.id === attachment.id)) continue;
+        const stored = await readPersistedImagePreview(attachment.id);
+        if (!stored || !stored.dataUrl) continue;
+        next.push({ id: attachment.id, dataUrl: stored.dataUrl });
+        hydrated += 1;
+      }
+      if (next.length) transientAttachmentPreviews.set(item.message.id, next);
+    }
+    if (hydrated) renderMessages();
+    return hydrated;
+  }
+
   function uniqueTasks(tasks) {
     const seen = new Set();
     return tasks.filter((task) => {
@@ -556,6 +1366,24 @@
     if (!task) return;
     state.activeProjectId = task.projectId;
     task.status = "done";
+    const project = Core.getProject(state, task.projectId);
+    const remaining = state.tasks.filter(
+      (item) =>
+        item.projectId === task.projectId &&
+        item.status !== "done" &&
+        !/^补齐项目(详情|小纸条)/.test(item.title)
+    );
+    if (project && project.workflowReady && !remaining.length) {
+      project.status = "done";
+      state.messages.push({
+        id: uid("m"),
+        role: "agent",
+        projectId: project.id,
+        createdAt: new Date().toISOString(),
+        text: "项目完成了。\n核心判断：先别急着写长复盘，趁现在记住一个做对的判断。\n下一步：告诉我这次最满意和最卡的地方，我会帮你收成一个下次还能用的方法。",
+      });
+      closeProjectDetail();
+    }
     commitAndRender();
   }
 
@@ -684,14 +1512,60 @@
   }
 
   async function submitMessage(text) {
-    const attachmentsToSend = pendingAttachments.slice();
-    const clean = normalize(text) || (attachmentsToSend.length ? "请帮我分析这张设计图，指出主要问题和下一步怎么改。" : "");
+    const newAttachments = pendingAttachments.slice();
+    const clean = normalize(text) || (newAttachments.length ? "请帮我分析这张设计图，指出主要问题和下一步怎么改。" : "");
     if (!clean) return;
+    const comparisonContextAttachments = newAttachments.some((attachment) => attachment.kind === "image")
+      ? []
+      : buildComparisonContextAttachments(clean);
+    const regionContextAttachments =
+      newAttachments.some((attachment) => attachment.kind === "image") ||
+      comparisonContextAttachments.length
+        ? []
+        : buildRegionContextAttachments();
+    const attachmentsToSend = newAttachments
+      .concat(comparisonContextAttachments)
+      .concat(regionContextAttachments);
     const modelIntent = await askQwenIntent(clean);
+    const isGuidedImageReview =
+      newAttachments.some((attachment) => attachment.kind === "image") &&
+      [buildFirstReviewPrompt(), buildRevisionPrompt()].includes(clean);
+    const isGuidedRegionReview =
+      regionContextAttachments.length && /^请只看我圈出的/.test(clean);
+    const isGuidedComparison =
+      comparisonContextAttachments.length === 2 &&
+      /^(请对比这两个版本|请比较 A\/B 两个方案)/.test(clean);
+    const effectiveIntent = isGuidedComparison
+      ? {
+          schemaVersion: "llm-intent-v1",
+          intent: "compare_design_options",
+          confidence: 1,
+          summary: "用户请求比较两个设计版本或方案。",
+          entities: {},
+          missing: [],
+          nextAction: "先描述可见差异，再判断目标适配与取舍。",
+        }
+      : isGuidedImageReview || isGuidedRegionReview
+        ? {
+            schemaVersion: "llm-intent-v1",
+            intent: "solve_design_issue",
+            confidence: 1,
+            summary: isGuidedRegionReview
+              ? "用户请求分析刚刚圈选的设计区域。"
+              : "用户请求评审刚刚上传的设计版本。",
+            entities: {},
+            missing: [],
+            nextAction: isGuidedRegionReview
+              ? "先判断圈选区域的最大问题，再给一个优先修改动作。"
+              : "先判断当前版本的最大问题，再给一个优先修改动作。",
+          }
+        : modelIntent;
     const previousMessageCount = state.messages.length;
-    const result = Core.applyInput(state, clean, new Date(), { intent: modelIntent, localMode: "guardrail" });
-    attachFilesToUserMessage(previousMessageCount, attachmentsToSend);
-    applyProjectAutofill(clean, modelIntent, result ? result.analysis : null);
+    const result = Core.applyInput(state, clean, new Date(), { intent: effectiveIntent, localMode: "guardrail" });
+    attachFilesToUserMessage(previousMessageCount, newAttachments);
+    attachRegionContextToUserMessage(previousMessageCount, regionContextAttachments);
+    attachComparisonContextToUserMessage(previousMessageCount, comparisonContextAttachments);
+    applyProjectAutofill(clean, effectiveIntent, result ? result.analysis : null);
     nodes.messageInput.value = "";
     pendingAttachments = [];
     renderAttachmentDock();
@@ -700,24 +1574,124 @@
     await askQwen(clean, previousMessageCount, result ? result.analysis : null, attachmentsToSend);
   }
 
+  function buildComparisonContextAttachments(message) {
+    if (!/^(请对比这两个版本|请比较 A\/B 两个方案)/.test(message)) return [];
+    const comparison = getActiveVersionComparison(state.activeProjectId);
+    if (!comparison) return [];
+    const contexts = comparison.versionIds.map((versionId) =>
+      getVersionPreviewContext(state.activeProjectId, versionId)
+    );
+    if (contexts.some((context) => !context)) return [];
+    const isAlternatives = comparison.relation === "alternatives";
+    return contexts.map((context, index) => ({
+      id: `comparison-${context.attachment.id}`,
+      kind: "image",
+      name: context.attachment.name,
+      mimeType: context.attachment.mimeType,
+      size: context.attachment.size,
+      dataUrl: context.preview.dataUrl,
+      contextOnly: true,
+      versionId: comparison.versionIds[index],
+      comparisonId: comparison.id,
+      comparisonLabel: isAlternatives ? (index === 0 ? "A" : "B") : context.attachment.versionName,
+      comparisonRelation: comparison.relation,
+      regions: [],
+    }));
+  }
+
+  function buildRegionContextAttachments() {
+    const regions = (state.designRegions || []).filter((region) => region.projectId === state.activeProjectId);
+    const latest = regions[regions.length - 1];
+    if (!latest) return [];
+    const message = state.messages.find(
+      (item) =>
+        item.projectId === state.activeProjectId &&
+        (item.attachments || []).some((attachment) => attachment.designVersionId === latest.versionId)
+    );
+    if (!message) return [];
+    const attachment = (message.attachments || []).find(
+      (item) => item.kind === "image" && item.designVersionId === latest.versionId
+    );
+    const preview = (transientAttachmentPreviews.get(message.id) || []).find(
+      (item) => item.id === attachment?.id
+    );
+    if (!attachment || !preview || !preview.dataUrl) return [];
+    return [
+      {
+        id: `context-${attachment.id}`,
+        kind: "image",
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+        dataUrl: preview.dataUrl,
+        contextOnly: true,
+        regions: regions.filter((region) => region.versionId === latest.versionId).slice(-6),
+      },
+    ];
+  }
+
+  function attachRegionContextToUserMessage(messageIndex, attachments) {
+    const regionIds = attachments.flatMap((attachment) =>
+      (attachment.regions || []).map((region) => region.id).filter(Boolean)
+    );
+    if (!regionIds.length) return;
+    const message = state.messages[messageIndex];
+    if (message) message.contextRegionIds = regionIds;
+  }
+
+  function attachComparisonContextToUserMessage(messageIndex, attachments) {
+    const comparisonIds = Array.from(
+      new Set(attachments.map((attachment) => attachment.comparisonId).filter(Boolean))
+    );
+    if (!comparisonIds.length) return;
+    const message = state.messages[messageIndex];
+    if (message) message.contextComparisonIds = comparisonIds;
+  }
+
   function attachFilesToUserMessage(messageIndex, attachments) {
     if (!attachments.length) return;
     const message = state.messages[messageIndex];
     if (!message) return;
-    message.attachments = attachments.map(({ id, kind, name, mimeType, size, text }) => ({
-      id,
-      kind,
-      name,
-      mimeType,
-      size,
-      text: kind === "text" ? text : "",
-    }));
+    message.attachments = attachments.map(
+      ({ id, kind, name, mimeType, size, text, width, height, fingerprint, contextSource }) => {
+      const version =
+        kind === "image"
+          ? Core.recordDesignVersion(
+              state,
+              message.projectId,
+              {
+                attachmentId: id,
+                fileName: name,
+                mimeType,
+                size,
+                width,
+                height,
+                fingerprint,
+              },
+              new Date(message.createdAt),
+              { source: contextSource || "manual_upload" }
+            )
+          : null;
+      return {
+        id,
+        kind,
+        name,
+        mimeType,
+        size,
+        text: kind === "text" ? text : "",
+        designVersionId: version ? version.id : "",
+        versionName: version ? version.name : "",
+        preferenceSignal: "",
+      };
+      }
+    );
     transientAttachmentPreviews.set(
       message.id,
       attachments
         .filter((attachment) => attachment.kind === "image")
         .map((attachment) => ({ id: attachment.id, dataUrl: attachment.dataUrl }))
     );
+    persistImagePreviews(attachments);
   }
 
   function applyProjectAutofill(message, modelIntent, analysis) {
@@ -970,6 +1944,11 @@
             size: attachment.size,
             dataUrl: attachment.kind === "image" ? attachment.dataUrl : "",
             text: attachment.kind === "text" ? attachment.text : "",
+            regions: attachment.kind === "image" ? attachment.regions || [] : [],
+            versionId: attachment.kind === "image" ? attachment.versionId || "" : "",
+            comparisonId: attachment.kind === "image" ? attachment.comparisonId || "" : "",
+            comparisonLabel: attachment.kind === "image" ? attachment.comparisonLabel || "" : "",
+            comparisonRelation: attachment.kind === "image" ? attachment.comparisonRelation || "" : "",
           })),
           project,
           dashboard: {
@@ -1090,6 +2069,7 @@
     Promise.all(nextFiles.map(readAttachmentFile))
       .then((attachments) => {
         pendingAttachments = pendingAttachments.concat(attachments.filter(Boolean)).slice(0, 4);
+        suggestImageReviewPrompt(attachments);
         renderAttachmentDock();
       })
       .catch((error) => {
@@ -1098,6 +2078,602 @@
       .finally(() => {
         nodes.attachmentInput.value = "";
       });
+  }
+
+  function suggestImageReviewPrompt(attachments) {
+    if (normalize(nodes.messageInput.value)) return;
+    if (!attachments.some((attachment) => attachment && attachment.kind === "image")) return;
+    nodes.messageInput.value = hasPreviousImageRound() ? buildRevisionPrompt() : buildFirstReviewPrompt();
+  }
+
+  function hasPreviousImageRound() {
+    return state.messages
+      .filter((message) => message.projectId === state.activeProjectId)
+      .some((message) => (message.attachments || []).some((attachment) => attachment.kind === "image"));
+  }
+
+  function buildFirstReviewPrompt() {
+    return "这是第一版。请先说第一眼看到什么，再指出一个最大问题、一个优先动作和验收标准。";
+  }
+
+  function buildRevisionPrompt() {
+    return "这是按上轮建议修改的新版。请先做上轮目标对照，逐项判断是否改善，再给一个最值得继续打磨的方向。";
+  }
+
+  function getFolderBridgeSettings() {
+    if (!state.contextSettings || typeof state.contextSettings !== "object") state.contextSettings = {};
+    if (!state.contextSettings.folderBridge || typeof state.contextSettings.folderBridge !== "object") {
+      state.contextSettings.folderBridge = {
+        connected: false,
+        directoryName: "",
+        paused: false,
+        lastScanAt: "",
+      };
+    }
+    return state.contextSettings.folderBridge;
+  }
+
+  function bridgeEventLabel(type) {
+    return {
+      file_created: "发现新文件",
+      file_saved: "检测到新保存",
+      file_renamed: "检测到重命名",
+      file_exported: "检测到新导出",
+      document_opened: "Photoshop 打开了文档",
+      document_saved: "Photoshop 保存了文档",
+      document_closed: "Photoshop 关闭了文档",
+      selection_changed: "Photoshop 切换了选区",
+      active_document_changed: "Photoshop 切换了文档",
+    }[type] || "检测到工作现场变化";
+  }
+
+  function bridgeSourceLabel(source) {
+    return {
+      browser_folder: "授权文件夹",
+      photoshop: "Photoshop",
+      illustrator: "Illustrator",
+      figma: "Figma",
+      generated_tool: "生成工具",
+    }[source] || "外部工具";
+  }
+
+  function renderContextBridge() {
+    if (!nodes.contextBridge) return;
+    const settings = getFolderBridgeSettings();
+    const supported = typeof window.showDirectoryPicker === "function";
+    const connected = Boolean(bridgeDirectoryHandle && settings.connected);
+    nodes.contextBridge.classList.toggle("is-connected", connected);
+    nodes.contextBridge.classList.toggle("is-paused", connected && settings.paused);
+    nodes.contextBridge.classList.toggle("has-error", Boolean(bridgeLastError));
+    nodes.contextBridgeConnect.hidden = connected;
+    nodes.contextBridgePause.hidden = !connected;
+    nodes.contextBridgeClear.hidden = !connected;
+    nodes.contextBridgeSync.hidden = bridgeQueuedCount === 0;
+    nodes.contextBridgeSync.textContent = bridgeQueuedCount ? `同步 ${bridgeQueuedCount} 条` : "同步离线记录";
+    nodes.contextBridgePause.textContent = settings.paused ? "继续" : "暂停";
+    if (!supported) {
+      nodes.contextBridgeTitle.textContent = "当前浏览器不支持文件夹监听";
+      nodes.contextBridgeCopy.textContent = "仍可直接粘贴截图或点回形针上传，不影响版本评审。";
+      nodes.contextBridgeConnect.disabled = true;
+    } else if (bridgeLastError) {
+      nodes.contextBridgeTitle.textContent = "工作现场连接需要处理";
+      nodes.contextBridgeCopy.textContent = bridgeLastError;
+      nodes.contextBridgeConnect.disabled = false;
+    } else if (!connected) {
+      nodes.contextBridgeTitle.textContent = "工作现场未连接";
+      nodes.contextBridgeCopy.textContent = "授权一个项目文件夹，保存新稿时我会先提醒你确认。";
+      nodes.contextBridgeConnect.disabled = false;
+    } else if (settings.paused) {
+      nodes.contextBridgeTitle.textContent = `${settings.directoryName || "项目文件夹"} · 已暂停`;
+      nodes.contextBridgeCopy.textContent = "暂停期间不会读取目录，也不会产生新候选。";
+    } else {
+      nodes.contextBridgeTitle.textContent = `${settings.directoryName || "项目文件夹"} · 正在留意新版本`;
+      nodes.contextBridgeCopy.textContent = settings.lastScanAt
+        ? `最近检查 ${formatBridgeTime(settings.lastScanAt)}；只读，发现后等你确认。`
+        : "已获得只读权限，正在建立文件基线。";
+    }
+    renderContextCandidates();
+  }
+
+  function formatBridgeTime(value) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "刚刚";
+    return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function renderContextCandidates() {
+    if (!nodes.contextCandidateList) return;
+    const pending = bridgeCandidates.filter((candidate) => candidate && candidate.event?.status !== "dismissed");
+    nodes.contextCandidateList.replaceChildren(
+      ...pending.slice(0, 8).map((candidate) => {
+        const event = candidate.event;
+        const artifact = event.artifact || {};
+        const documentContext = event.document || {};
+        const name = artifact.name || documentContext.name || "未命名文档";
+        const card = el("article", { className: "context-candidate" });
+        if (artifact.previewDataUrl) {
+          card.append(el("img", { className: "context-candidate-preview", src: artifact.previewDataUrl, alt: name }));
+        } else {
+          card.append(el("div", { className: "context-candidate-file", textContent: extensionBadge(name) }));
+        }
+        card.append(
+          el("div", { className: "context-candidate-copy" }, [
+            el("span", { textContent: `${bridgeSourceLabel(event.source)} · ${bridgeEventLabel(event.type)}` }),
+            el("strong", { textContent: name }),
+            el("small", {
+              textContent: documentContext.activeLayerNames?.length
+                ? `当前图层：${documentContext.activeLayerNames.slice(0, 2).join("、")}`
+                : artifact.relativePath || "等待你决定是否收进当前项目",
+            }),
+          ]),
+          el("div", { className: "context-candidate-actions" }, [
+            el("button", {
+              type: "button",
+              className: "is-primary",
+              textContent: "收进当前项目",
+              onclick: () => importContextCandidate(candidate),
+            }),
+            el("button", {
+              type: "button",
+              textContent: "忽略",
+              onclick: () => dismissContextCandidate(candidate),
+            }),
+          ])
+        );
+        return card;
+      })
+    );
+  }
+
+  function extensionBadge(name) {
+    const match = String(name || "").match(/\.([a-z0-9]+)$/i);
+    return match ? match[1].toUpperCase().slice(0, 4) : "DOC";
+  }
+
+  async function chooseContextDirectory() {
+    if (typeof window.showDirectoryPicker !== "function") return;
+    try {
+      const handle = await window.showDirectoryPicker({ id: "jingjing-project-folder", mode: "read" });
+      bridgeDirectoryHandle = handle;
+      bridgeKnownFiles = new Map();
+      bridgeCandidates = bridgeCandidates.filter((candidate) => candidate.event?.source !== "browser_folder");
+      bridgeLastError = "";
+      const settings = getFolderBridgeSettings();
+      settings.connected = true;
+      settings.directoryName = handle.name || "项目文件夹";
+      settings.paused = false;
+      settings.lastScanAt = "";
+      persist();
+      await writeContextStore(CONTEXT_SETTINGS_STORE, { id: CONTEXT_DIRECTORY_KEY, handle });
+      await deleteContextStore(CONTEXT_SETTINGS_STORE, CONTEXT_FILE_INDEX_KEY);
+      renderContextBridge();
+      await scanContextDirectory({ establishBaseline: true });
+      startContextBridgeTimer();
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      bridgeLastError = error?.name === "NotAllowedError" ? "文件夹权限没有开启；重新连接时选择“允许”。" : "文件夹暂时连接不上。";
+      renderContextBridge();
+    }
+  }
+
+  async function restoreContextDirectory() {
+    if (typeof window.showDirectoryPicker !== "function") {
+      renderContextBridge();
+      return;
+    }
+    try {
+      const stored = await readContextStore(CONTEXT_SETTINGS_STORE, CONTEXT_DIRECTORY_KEY);
+      const index = await readContextStore(CONTEXT_SETTINGS_STORE, CONTEXT_FILE_INDEX_KEY);
+      if (!stored?.handle) {
+        renderContextBridge();
+        return;
+      }
+      const permission = await stored.handle.queryPermission({ mode: "read" });
+      bridgeDirectoryHandle = stored.handle;
+      const settings = getFolderBridgeSettings();
+      settings.directoryName = stored.handle.name || settings.directoryName || "项目文件夹";
+      settings.connected = permission === "granted";
+      bridgeKnownFiles = new Map(
+        Array.isArray(index?.files) ? index.files.map((item) => [item.relativePath, item]) : []
+      );
+      if (permission === "granted") {
+        bridgeLastError = "";
+        if (!settings.paused) {
+          await scanContextDirectory({ establishBaseline: bridgeKnownFiles.size === 0 });
+          startContextBridgeTimer();
+        }
+      } else {
+        bridgeLastError = "浏览器重启后需要你再次确认文件夹权限。";
+      }
+      persist();
+      renderContextBridge();
+    } catch (error) {
+      bridgeLastError = "上次授权的文件夹已经不可用，可以重新连接。";
+      renderContextBridge();
+    }
+  }
+
+  function startContextBridgeTimer() {
+    window.clearInterval(bridgeScanTimer);
+    if (getFolderBridgeSettings().paused) return;
+    bridgeScanTimer = window.setInterval(() => {
+      if (!document.hidden) {
+        if (bridgeDirectoryHandle) scanContextDirectory();
+        pollRemoteBridgeEvents();
+      }
+    }, CONTEXT_SCAN_INTERVAL_MS);
+  }
+
+  async function collectContextFiles(directoryHandle, prefix = "", depth = 0, output = []) {
+    if (depth > CONTEXT_MAX_DEPTH || output.length >= CONTEXT_MAX_FILES) return output;
+    for await (const [name, handle] of directoryHandle.entries()) {
+      if (output.length >= CONTEXT_MAX_FILES) break;
+      if (name.startsWith(".") || name === "node_modules") continue;
+      const relativePath = prefix ? `${prefix}/${name}` : name;
+      if (handle.kind === "directory") {
+        await collectContextFiles(handle, relativePath, depth + 1, output);
+      } else if (CONTEXT_FILE_PATTERN.test(name)) {
+        const file = await handle.getFile();
+        output.push({
+          file,
+          name: file.name,
+          relativePath,
+          size: file.size,
+          lastModified: file.lastModified,
+          mimeType: file.type || mimeTypeFromName(file.name),
+        });
+      }
+    }
+    return output;
+  }
+
+  function mimeTypeFromName(name) {
+    const extension = String(name || "").split(".").pop().toLowerCase();
+    return {
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      webp: "image/webp",
+      psd: "image/vnd.adobe.photoshop",
+      ai: "application/postscript",
+      pdf: "application/pdf",
+    }[extension] || "application/octet-stream";
+  }
+
+  async function fingerprintContextFile(file) {
+    if (window.crypto?.subtle && file.size <= CONTEXT_HASH_LIMIT_BYTES) {
+      const digest = await window.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+      const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      return { fingerprint: `sha256:${hex}`, fingerprintMode: "sha256" };
+    }
+    return { fingerprint: `metadata:${file.size}:${file.lastModified}`, fingerprintMode: "metadata" };
+  }
+
+  async function createLowResolutionPreview(file) {
+    if (!/^image\/(?:png|jpeg|webp)$/i.test(file.type || mimeTypeFromName(file.name))) return null;
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise((resolve, reject) => {
+        const element = new Image();
+        element.onload = () => resolve(element);
+        element.onerror = () => reject(new Error("预览生成失败。"));
+        element.src = objectUrl;
+      });
+      const scale = Math.min(1, 960 / Math.max(image.naturalWidth, image.naturalHeight));
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(image, 0, 0, width, height);
+      return {
+        dataUrl: canvas.toDataURL("image/jpeg", 0.82),
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      };
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  function inferNewFileEventType(item, previousFiles, deletedFiles) {
+    const renamedFrom = deletedFiles.find(
+      (candidate) => candidate.size === item.size && candidate.lastModified === item.lastModified
+    );
+    if (renamedFrom) return { type: "file_renamed", renamedFrom: renamedFrom.relativePath };
+    const baseName = item.name.replace(/\.[^.]+$/, "").toLowerCase();
+    const hasSource = Array.from(previousFiles.values()).some((candidate) => {
+      const candidateBase = candidate.name.replace(/\.[^.]+$/, "").toLowerCase();
+      return candidateBase === baseName && /\.(psd|ai)$/i.test(candidate.name);
+    });
+    if (hasSource && /\.(png|jpe?g|webp|pdf)$/i.test(item.name)) return { type: "file_exported", renamedFrom: "" };
+    return { type: "file_created", renamedFrom: "" };
+  }
+
+  async function scanContextDirectory(options = {}) {
+    if (!bridgeDirectoryHandle || bridgeScanning || getFolderBridgeSettings().paused) return;
+    bridgeScanning = true;
+    try {
+      const permission = await bridgeDirectoryHandle.queryPermission({ mode: "read" });
+      if (permission !== "granted") {
+        getFolderBridgeSettings().connected = false;
+        bridgeLastError = "文件夹读取权限已失效，重新连接后才会继续。";
+        return;
+      }
+      const files = await collectContextFiles(bridgeDirectoryHandle);
+      const nextMap = new Map(files.map((item) => [item.relativePath, item]));
+      if (options.establishBaseline || bridgeKnownFiles.size === 0) {
+        bridgeKnownFiles = nextMap;
+      } else {
+        const deletedFiles = Array.from(bridgeKnownFiles.values()).filter(
+          (item) => !nextMap.has(item.relativePath)
+        );
+        for (const item of files) {
+          const previous = bridgeKnownFiles.get(item.relativePath);
+          if (previous && previous.size === item.size && previous.lastModified === item.lastModified) continue;
+          const inferred = previous
+            ? { type: "file_saved", renamedFrom: "" }
+            : inferNewFileEventType(item, bridgeKnownFiles, deletedFiles);
+          const fingerprint = await fingerprintContextFile(item.file);
+          if (previous?.fingerprint && previous.fingerprint === fingerprint.fingerprint) continue;
+          const preview = await createLowResolutionPreview(item.file).catch(() => null);
+          const event = {
+            id: uid("bridge"),
+            schemaVersion: "context-event-v1",
+            source: "browser_folder",
+            type: inferred.type,
+            projectId: state.activeProjectId,
+            createdAt: new Date().toISOString(),
+            status: "pending",
+            dedupeKey: ["browser_folder", state.activeProjectId, inferred.type, item.relativePath, fingerprint.fingerprint].join(":"),
+            artifact: {
+              id: uid("artifact"),
+              name: item.name,
+              relativePath: item.relativePath,
+              mimeType: item.mimeType,
+              size: item.size,
+              lastModified: item.lastModified,
+              ...fingerprint,
+              width: preview?.width || 0,
+              height: preview?.height || 0,
+              previewDataUrl: preview?.dataUrl || "",
+              renamedFrom: inferred.renamedFrom,
+            },
+            document: {},
+          };
+          bridgeCandidates.unshift({ event, file: item.file });
+          await postBridgeEvent(event);
+        }
+        bridgeKnownFiles = nextMap;
+      }
+      await writeContextStore(CONTEXT_SETTINGS_STORE, {
+        id: CONTEXT_FILE_INDEX_KEY,
+        files: Array.from(bridgeKnownFiles.values()).map(
+          ({ name, relativePath, size, lastModified, mimeType, fingerprint = "", fingerprintMode = "" }) => ({
+            name,
+            relativePath,
+            size,
+            lastModified,
+            mimeType,
+            fingerprint,
+            fingerprintMode,
+          })
+        ),
+        updatedAt: new Date().toISOString(),
+      });
+      const settings = getFolderBridgeSettings();
+      settings.connected = true;
+      settings.lastScanAt = new Date().toISOString();
+      bridgeLastError = "";
+      persist();
+    } catch (error) {
+      bridgeLastError =
+        error?.name === "NotAllowedError"
+          ? "文件夹读取权限已失效，重新授权后才会继续。"
+          : "这次没有读完文件夹，稍后会自动重试。";
+    } finally {
+      bridgeScanning = false;
+      renderContextBridge();
+    }
+  }
+
+  async function postBridgeEvent(event) {
+    try {
+      const { response, payload } = await fetchJsonWithTimeout(
+        `${getApiBase()}/api/context-bridge/events`,
+        { method: "POST", headers: getApiHeaders(), body: JSON.stringify(event) },
+        8_000
+      );
+      if (!response.ok) throw new Error(payload.error || "Bridge 暂时不可用。");
+      await deleteContextStore(CONTEXT_QUEUE_STORE, event.id);
+      await refreshBridgeQueueStatus();
+      return payload.event || event;
+    } catch (error) {
+      await writeContextStore(CONTEXT_QUEUE_STORE, { id: event.id, event, queuedAt: new Date().toISOString() });
+      await refreshBridgeQueueStatus();
+      return null;
+    }
+  }
+
+  async function readAllContextStore(storeName) {
+    const db = await openImagePreviewDb();
+    if (!db) return [];
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, "readonly");
+      const request = transaction.objectStore(storeName).getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error || new Error("本地队列读取失败。"));
+    });
+  }
+
+  async function flushBridgeQueue() {
+    if (!navigator.onLine) return;
+    const queued = await readAllContextStore(CONTEXT_QUEUE_STORE).catch(() => []);
+    for (const item of queued.slice(0, 20)) {
+      try {
+        const { response } = await fetchJsonWithTimeout(
+          `${getApiBase()}/api/context-bridge/events`,
+          { method: "POST", headers: getApiHeaders(), body: JSON.stringify(item.event) },
+          8_000
+        );
+        if (response.ok) await deleteContextStore(CONTEXT_QUEUE_STORE, item.id);
+      } catch (error) {
+        break;
+      }
+    }
+    await refreshBridgeQueueStatus();
+  }
+
+  async function refreshBridgeQueueStatus() {
+    const queued = await readAllContextStore(CONTEXT_QUEUE_STORE).catch(() => []);
+    bridgeQueuedCount = queued.length;
+    renderContextBridge();
+  }
+
+  async function pollRemoteBridgeEvents() {
+    try {
+      const query = new URLSearchParams({ status: "pending", limit: "20" });
+      const { response, payload } = await fetchJsonWithTimeout(
+        `${getApiBase()}/api/context-bridge/events?${query}`,
+        { headers: getApiHeaders() },
+        8_000
+      );
+      if (!response.ok || !Array.isArray(payload.events)) return;
+      const existingIds = new Set(bridgeCandidates.map((candidate) => candidate.event?.id));
+      payload.events
+        .filter((event) => !event.projectId || event.projectId === state.activeProjectId)
+        .forEach((event) => {
+        if (!existingIds.has(event.id)) bridgeCandidates.push({ event, file: null });
+        });
+      renderContextCandidates();
+    } catch (error) {
+      // Bridge 轮询失败时保留本地候选，下一轮自动重试。
+    }
+  }
+
+  async function setBridgeEventAction(eventId, action) {
+    try {
+      await fetchJsonWithTimeout(
+        `${getApiBase()}/api/context-bridge/events/${encodeURIComponent(eventId)}/action`,
+        { method: "POST", headers: getApiHeaders(), body: JSON.stringify({ action }) },
+        8_000
+      );
+    } catch (error) {
+      // 本地状态优先；服务恢复后旧候选仍可再次处理。
+    }
+  }
+
+  async function importContextCandidate(candidate) {
+    const event = candidate.event;
+    const artifact = event.artifact || {};
+    if (artifact.previewDataUrl) {
+      const attachment = {
+        id: artifact.id || uid("att"),
+        kind: "image",
+        name: artifact.name || "工作现场预览.jpg",
+        mimeType: artifact.mimeType || "image/jpeg",
+        size: artifact.size || 0,
+        dataUrl: artifact.previewDataUrl,
+        width: artifact.width || 0,
+        height: artifact.height || 0,
+        fingerprint: artifact.fingerprint || "",
+        contextSource: event.source,
+      };
+      const messageIndex = state.messages.length;
+      state.messages.push({
+        id: uid("m"),
+        role: "user",
+        projectId: state.activeProjectId,
+        createdAt: new Date().toISOString(),
+        text: `已从${bridgeSourceLabel(event.source)}收进候选版本：${attachment.name}`,
+      });
+      attachFilesToUserMessage(messageIndex, [attachment]);
+    } else {
+      const version = Core.recordDesignVersion(
+        state,
+        state.activeProjectId,
+        {
+          attachmentId: artifact.id || uid("artifact"),
+          fileName: artifact.name || event.document?.name || "外部工具文档",
+          mimeType: artifact.mimeType || "",
+          size: artifact.size || 0,
+          width: artifact.width || event.document?.width || 0,
+          height: artifact.height || event.document?.height || 0,
+          fingerprint: artifact.fingerprint || "",
+        },
+        new Date(event.createdAt || Date.now()),
+        { source: event.source }
+      );
+      state.messages.push({
+        id: uid("m"),
+        role: "agent",
+        projectId: state.activeProjectId,
+        createdAt: new Date().toISOString(),
+        text: version
+          ? `已把 ${artifact.name || event.document?.name || "这个文档"} 记为 ${version.name}。目前只有文档和图层上下文，没有上传原图。`
+          : "这个工作现场事件已经记录过了。",
+      });
+    }
+    event.status = "imported";
+    bridgeCandidates = bridgeCandidates.filter((item) => item.event?.id !== event.id);
+    await setBridgeEventAction(event.id, "import");
+    commitAndRender();
+  }
+
+  async function dismissContextCandidate(candidate) {
+    candidate.event.status = "dismissed";
+    bridgeCandidates = bridgeCandidates.filter((item) => item.event?.id !== candidate.event.id);
+    await setBridgeEventAction(candidate.event.id, "dismiss");
+    renderContextBridge();
+  }
+
+  async function toggleContextBridgePause() {
+    const settings = getFolderBridgeSettings();
+    settings.paused = !settings.paused;
+    window.clearInterval(bridgeScanTimer);
+    persist();
+    renderContextBridge();
+    try {
+      await fetchJsonWithTimeout(
+        `${getApiBase()}/api/context-bridge/control`,
+        {
+          method: "POST",
+          headers: getApiHeaders(),
+          body: JSON.stringify({ action: settings.paused ? "pause" : "resume" }),
+        },
+        8_000
+      );
+    } catch (error) {
+      // 浏览器端暂停仍然生效。
+    }
+    if (!settings.paused) {
+      await scanContextDirectory();
+      startContextBridgeTimer();
+    }
+  }
+
+  async function disconnectContextBridge() {
+    const confirmed = window.confirm("断开后会清除小画桌保存的文件夹句柄、指纹和离线队列，不会删除你的设计文件。继续吗？");
+    if (!confirmed) return;
+    window.clearInterval(bridgeScanTimer);
+    bridgeDirectoryHandle = null;
+    bridgeKnownFiles = new Map();
+    bridgeCandidates = bridgeCandidates.filter((candidate) => candidate.event?.source !== "browser_folder");
+    bridgeQueuedCount = 0;
+    bridgeLastError = "";
+    const settings = getFolderBridgeSettings();
+    settings.connected = false;
+    settings.directoryName = "";
+    settings.paused = false;
+    settings.lastScanAt = "";
+    await Promise.all([
+      deleteContextStore(CONTEXT_SETTINGS_STORE, CONTEXT_DIRECTORY_KEY),
+      deleteContextStore(CONTEXT_SETTINGS_STORE, CONTEXT_FILE_INDEX_KEY),
+    ]);
+    const queued = await readAllContextStore(CONTEXT_QUEUE_STORE).catch(() => []);
+    await Promise.all(queued.map((item) => deleteContextStore(CONTEXT_QUEUE_STORE, item.id)));
+    persist();
+    renderContextBridge();
   }
 
   function readAttachmentFile(file) {
@@ -1117,7 +2693,19 @@
           mimeType: file.type || (isImage ? "image/png" : "text/plain"),
           size: file.size,
         };
-        if (isImage) resolve({ ...base, dataUrl: String(reader.result || "") });
+        if (isImage) {
+          const dataUrl = String(reader.result || "");
+          const image = new Image();
+          image.onload = () =>
+            resolve({
+              ...base,
+              dataUrl,
+              width: Number(image.naturalWidth) || 0,
+              height: Number(image.naturalHeight) || 0,
+            });
+          image.onerror = () => resolve({ ...base, dataUrl, width: 0, height: 0 });
+          image.src = dataUrl;
+        }
         else resolve({ ...base, text: String(reader.result || "").slice(0, 12000) });
       };
       if (isImage) reader.readAsDataURL(file);
@@ -1201,7 +2789,9 @@
       commitAndRender();
       return;
     }
-    addAgentMessage("新项目已创建。菁菁先按右侧一步步补项目信息；每次只填当前这一格就好。填到最后，小画桌会自动帮你整理今天怎么推进。");
+    addAgentMessage("新项目建好了。先用三步把需求理清：做什么、交什么、有什么限制。填完后，我只告诉你当前最该做的一步。");
+    openProjectDetail();
+    focusCurrentDetailStep();
   }
 
   function sortProjects() {
@@ -1295,9 +2885,9 @@
       return true;
     });
     if (!task) return;
-    const hasBaseInfo = project.goal && project.deliverables.length && project.dueDate;
+    const hasBaseInfo = project.goal && project.deliverables.length;
     task.status = hasBaseInfo ? "done" : "todo";
-    task.nextAction = hasBaseInfo ? "可以开始设计或记录下一条反馈" : "先在右侧写清楚要求、DDL、交付物和当前进度";
+    task.nextAction = hasBaseInfo ? "可以开始设计或记录下一条反馈" : "先补项目目标和交付物";
   }
 
   function syncProjectWork(project) {
@@ -1320,13 +2910,21 @@
   function scheduleProjectAnalysis(projectId) {
     window.clearTimeout(projectAnalysisTimer);
     const project = Core.getProject(state, projectId);
-    nodes.saveProjectBtn.textContent = isDetailCollectionComplete(project) ? "已保存，准备整理" : "已自动保存";
-    if (!isProjectReadyForWorkflow(project) || !isDetailCollectionComplete(project)) return;
+    nodes.saveProjectBtn.textContent = "已自动保存";
+    if (!project || project.detailMode === "collect") return;
+    if (!isProjectReadyForWorkflow(project)) return;
     projectAnalysisTimer = window.setTimeout(() => analyzeProjectFromCard(projectId), 900);
   }
 
   function isProjectReadyForWorkflow(project) {
-    return Boolean(project && project.name && project.type && (project.goal || project.requirements) && project.dueDate && project.deliverables.length);
+    return Boolean(
+      project &&
+        project.name &&
+        project.name !== "未命名设计项目" &&
+        project.type &&
+        (project.goal || project.requirements) &&
+        project.deliverables.length
+    );
   }
 
   function isDetailCollectionComplete(project) {
@@ -1355,7 +2953,7 @@
     const project = Core.getProject(state, projectId);
     if (!project || !isProjectReadyForWorkflow(project)) return;
     const fingerprint = projectWorkflowFingerprint(project);
-    if (project.workflowFingerprint === fingerprint) {
+    if (project.workflowFingerprint === fingerprint && project.workflowReady) {
       nodes.saveProjectBtn.textContent = "已整理工作流";
       return;
     }
@@ -1378,6 +2976,17 @@
   }
 
   function applyWorkflowTasks(project, workflow) {
+    if (workflow.ready) {
+      state.tasks
+        .filter(
+          (task) =>
+            task.projectId === project.id &&
+            (task.title.startsWith("补齐项目小纸条") || task.title.startsWith("补齐项目详情"))
+        )
+        .forEach((task) => {
+          task.status = "done";
+        });
+    }
     workflow.tasks.forEach((item) => {
       const taskId = `${project.id}-workflow-${item.key}`;
       const existing = state.tasks.find((task) => task.id === taskId);
@@ -1465,6 +3074,32 @@
           action: item.action,
           handled: item.handled,
         })),
+      regions: (state.designRegions || [])
+        .filter((region) => region.projectId === project.id)
+        .slice(-8)
+        .map((region) => {
+          const version = (project.versions || []).find((item) => item.id === region.versionId);
+          return {
+            id: region.id,
+            versionId: region.versionId,
+            versionName: version ? version.name : "",
+            label: region.label,
+            x: region.x,
+            y: region.y,
+            width: region.width,
+            height: region.height,
+            note: region.note,
+          };
+        }),
+      comparisons: (state.versionComparisons || [])
+        .filter((comparison) => comparison.projectId === project.id)
+        .slice(-5)
+        .map((comparison) => ({
+          id: comparison.id,
+          versionIds: comparison.versionIds,
+          relation: comparison.relation,
+          selectedVersionId: comparison.selectedVersionId,
+        })),
     };
   }
 
@@ -1549,6 +3184,20 @@
       if (/^(核心判断|最大问题|第一眼看到什么|项目判断|设计判断|上轮目标对照)[:：]/.test(line)) {
         pushCurrent();
         blocks.push({ type: "focus", title: line.replace(/[:：].*$/, ""), lines: [line.replace(/^.*?[:：]\s*/, "")].filter(Boolean) });
+        return;
+      }
+      if (/^(交付判断|能否交付|能不能发|是否可以发)[:：]/.test(line) || /^(可以发客户|暂不建议发客户|不建议发客户)[。！!]?$/.test(line)) {
+        pushCurrent();
+        blocks.push({
+          type: /暂不建议|不建议/.test(line) ? "alert" : "verdict",
+          title: "交付判断",
+          lines: [line.replace(/^.*?[:：]\s*/, "")].filter(Boolean),
+        });
+        return;
+      }
+      if (/^(本周练习|下一次练习|这次练习|最小练习)[:：]/.test(line)) {
+        pushCurrent();
+        blocks.push({ type: "practice", title: line.replace(/[:：].*$/, ""), lines: [line.replace(/^.*?[:：]\s*/, "")].filter(Boolean) });
         return;
       }
       if (/^(为什么|判断依据|设计理由)[:：]/.test(line)) {
@@ -1666,6 +3315,16 @@
     }
   });
 
+  nodes.messageInput.addEventListener("paste", (event) => {
+    const imageFiles = Array.from(event.clipboardData?.items || [])
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter(Boolean);
+    if (!imageFiles.length) return;
+    event.preventDefault();
+    handleAttachmentFiles(imageFiles);
+  });
+
   document.querySelectorAll(".filter-tab").forEach((button) => {
     button.addEventListener("click", () => {
       document.querySelectorAll(".filter-tab").forEach((item) => item.classList.remove("is-active"));
@@ -1674,10 +3333,6 @@
       state.activeFilter = projectFilter;
       renderProjects();
     });
-  });
-
-  document.querySelectorAll(".prompt-chip").forEach((button) => {
-    button.addEventListener("click", () => fillQuickTemplate(button.dataset.template));
   });
 
   nodes.newProjectBtn.addEventListener("click", createNewProject);
@@ -1696,12 +3351,59 @@
     focusCurrentDetailStep();
   });
   nodes.wizardPrevBtn.addEventListener("click", () => moveDetailStep(-1));
-  nodes.wizardSkipBtn.addEventListener("click", () => moveDetailStep(1));
+  nodes.wizardSkipBtn.addEventListener("click", skipDetailStep);
   nodes.wizardNextBtn.addEventListener("click", nextDetailStep);
   nodes.attachButton.addEventListener("click", () => nodes.attachmentInput.click());
   nodes.attachmentInput.addEventListener("change", (event) => handleAttachmentFiles(event.target.files));
+  nodes.contextBridgeConnect.addEventListener("click", () => {
+    if (bridgeDirectoryHandle) {
+      bridgeDirectoryHandle
+        .requestPermission({ mode: "read" })
+        .then((permission) => {
+          if (permission !== "granted") return;
+          const settings = getFolderBridgeSettings();
+          settings.connected = true;
+          bridgeLastError = "";
+          persist();
+          scanContextDirectory({ establishBaseline: bridgeKnownFiles.size === 0 });
+          startContextBridgeTimer();
+          renderContextBridge();
+        })
+        .catch(() => {
+          bridgeLastError = "文件夹权限没有开启；也可以重新选择文件夹。";
+          renderContextBridge();
+        });
+      return;
+    }
+    chooseContextDirectory();
+  });
+  nodes.contextBridgePause.addEventListener("click", toggleContextBridgePause);
+  nodes.contextBridgeSync.addEventListener("click", flushBridgeQueue);
+  nodes.contextBridgeClear.addEventListener("click", disconnectContextBridge);
   nodes.detailToggle.addEventListener("click", openProjectDetail);
+  nodes.detailCloseButton.addEventListener("click", closeProjectDetail);
   nodes.detailFab.addEventListener("click", openProjectDetail);
+  nodes.mobileDetailButton.addEventListener("click", openProjectDetail);
+  nodes.mobileProjectSwitch.addEventListener("click", openMobileProjectSheet);
+  nodes.mobileProjectsNav.addEventListener("click", openMobileProjectSheet);
+  nodes.mobileChatNav.addEventListener("click", closeMobileProjectSheet);
+  nodes.mobileProjectSheetClose.addEventListener("click", closeMobileProjectSheet);
+  nodes.mobileNewProject.addEventListener("click", () => {
+    closeMobileProjectSheet();
+    createNewProject();
+  });
+  document.querySelectorAll("[data-mobile-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      projectFilter = button.dataset.mobileFilter;
+      state.activeFilter = projectFilter;
+      persist();
+      renderMobileProjects();
+    });
+  });
+  document.querySelectorAll("[data-mobile-action]").forEach((button) => {
+    button.addEventListener("click", () => runMobileReviewAction(button.dataset.mobileAction));
+  });
+  nodes.mobileStageAction.addEventListener("click", handleMobileStageAction);
   nodes.railBackdrop.addEventListener("click", closeProjectDetail);
   nodes.guideBtn.addEventListener("click", () => openInfoPanel("guide"));
   nodes.changelogBtn.addEventListener("click", () => openInfoPanel("changelog"));
@@ -1710,8 +3412,23 @@
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !nodes.infoModal.hidden) closeInfoPanel();
   });
+  window.addEventListener("online", () => {
+    refreshBridgeQueueStatus();
+    pollRemoteBridgeEvents();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && !getFolderBridgeSettings().paused) {
+      if (bridgeDirectoryHandle) scanContextDirectory();
+      pollRemoteBridgeEvents();
+    }
+  });
 
   guardServiceEntry();
   render();
   renderAttachmentDock();
+  hydratePersistedImagePreviews();
+  restoreContextDirectory();
+  pollRemoteBridgeEvents();
+  refreshBridgeQueueStatus();
+  startContextBridgeTimer();
 })();

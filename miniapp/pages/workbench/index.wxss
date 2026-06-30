@@ -1,0 +1,301 @@
+.page {
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: calc(env(safe-area-inset-top) + 16rpx) 28rpx 18rpx;
+  border-bottom: 3rpx solid #17201d;
+  background: #fff;
+}
+
+.project-switch {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 18rpx;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.brand-mark {
+  position: relative;
+  width: 72rpx;
+  height: 72rpx;
+  flex: 0 0 auto;
+}
+
+.mark-front,
+.mark-back {
+  position: absolute;
+  width: 38rpx;
+  height: 38rpx;
+  border: 3rpx solid #17201d;
+  box-sizing: border-box;
+}
+
+.mark-front {
+  top: 7rpx;
+  left: 7rpx;
+  z-index: 2;
+  background: #d8ea59;
+  box-shadow: 0 0 0 6rpx #fff;
+}
+
+.mark-back {
+  right: 7rpx;
+  bottom: 7rpx;
+  background: #fff;
+}
+
+.project-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.project-name,
+.project-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-name {
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.project-meta {
+  color: #68756f;
+  font-size: 22rpx;
+}
+
+.chevron {
+  color: #68756f;
+  font-size: 30rpx;
+}
+
+.icon-button {
+  width: auto;
+  height: 76rpx;
+  margin: 0;
+  padding: 0 20rpx;
+  border: 2rpx solid #17201d;
+  border-radius: 4rpx;
+  background: #fff;
+  color: #17201d;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+
+.stage-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18rpx;
+  margin: 24rpx 28rpx 0;
+  padding: 26rpx 24rpx 24rpx;
+  border: 2rpx solid #087f72;
+  border-top: 8rpx solid #e65f45;
+  border-radius: 4rpx;
+  background: #fff;
+  box-shadow: 8rpx 8rpx 0 rgba(8, 127, 114, 0.08);
+}
+
+.stage-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5rpx;
+}
+
+.stage-label {
+  color: #05665e;
+  font-size: 20rpx;
+  font-weight: 800;
+}
+
+.stage-title {
+  overflow: hidden;
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 31rpx;
+  font-weight: 800;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-description {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #68756f;
+  font-size: 22rpx;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.stage-action {
+  min-height: 72rpx;
+  margin: 0;
+  border-radius: 4rpx;
+  padding: 0 20rpx;
+  background: #087f72;
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+
+.stage-secondary {
+  grid-column: 1 / -1;
+  min-height: 68rpx;
+  margin: 0;
+  border: 2rpx solid #087f72;
+  border-radius: 4rpx;
+  background: #fff;
+  color: #05665e;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+
+.conversation {
+  min-height: 0;
+  flex: 1;
+  padding: 34rpx 28rpx;
+  box-sizing: border-box;
+  background-color: #fafbfa;
+  background-image:
+    linear-gradient(rgba(23, 32, 29, 0.025) 2rpx, transparent 2rpx),
+    linear-gradient(90deg, rgba(23, 32, 29, 0.025) 2rpx, transparent 2rpx);
+  background-size: 44rpx 44rpx;
+}
+
+.message {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 34rpx;
+}
+
+.message-user {
+  flex-direction: row-reverse;
+}
+
+.avatar {
+  display: flex;
+  width: 60rpx;
+  height: 60rpx;
+  flex: 0 0 60rpx;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid #17201d;
+  border-radius: 4rpx;
+  background: #d8ea59;
+  color: #17201d;
+  font-size: 20rpx;
+  font-weight: 800;
+}
+
+.message-main {
+  display: flex;
+  max-width: calc(100% - 76rpx);
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.message-user .message-main {
+  align-items: flex-end;
+}
+
+.message-meta {
+  color: #8b9892;
+  font-size: 20rpx;
+}
+
+.message-text {
+  padding: 22rpx 24rpx;
+  border: 2rpx solid #d8dedb;
+  border-radius: 4rpx;
+  background: #fff;
+  font-size: 26rpx;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.message-user .avatar {
+  background: #e65f45;
+  color: #fff;
+}
+
+.message-user .message-text {
+  border-color: #17201d;
+  box-shadow: 6rpx 6rpx 0 rgba(23, 32, 29, 0.07);
+  background: #fff;
+}
+
+.message-image {
+  width: 300rpx;
+  height: 220rpx;
+  border: 2rpx solid #17201d;
+  border-radius: 4rpx;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: 76rpx minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12rpx;
+  padding: 18rpx 24rpx calc(env(safe-area-inset-bottom) + 18rpx);
+  border-top: 3rpx solid #17201d;
+  background: #fff;
+  box-shadow: 0 -10rpx 0 rgba(23, 32, 29, 0.025);
+}
+
+.attach,
+.send {
+  min-height: 76rpx;
+  margin: 0;
+  padding: 0 20rpx;
+  font-size: 22rpx;
+}
+
+.attach {
+  padding: 0;
+  border: 2rpx solid #17201d;
+  border-radius: 4rpx;
+  background: #fff;
+  color: #087f72;
+  font-size: 36rpx;
+}
+
+.send {
+  border-radius: 4rpx;
+  background: #087f72;
+  color: #fff;
+  font-weight: 800;
+}
+
+.composer-input {
+  min-height: 76rpx;
+  max-height: 180rpx;
+  padding: 18rpx 20rpx;
+  border: 2rpx solid #d8dedb;
+  border-radius: 4rpx;
+  box-sizing: border-box;
+  background: #f4f6f5;
+  font-size: 26rpx;
+  line-height: 1.45;
+}
