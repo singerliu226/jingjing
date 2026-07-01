@@ -181,15 +181,20 @@ function readBody(req) {
   });
 }
 
-function isAllowedOrigin(origin) {
+function isAllowedOrigin(origin, req) {
   if (!origin) return true;
+  try {
+    if (new URL(origin).host === req.headers.host) return true;
+  } catch {
+    return false;
+  }
   return ALLOWED_ORIGINS.includes(origin);
 }
 
 function prepareCors(req, res) {
   const origin = req.headers.origin || "";
   if (!origin) return true;
-  if (!isAllowedOrigin(origin)) return false;
+  if (!isAllowedOrigin(origin, req)) return false;
   res._corsOrigin = origin;
   return true;
 }
