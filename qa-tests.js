@@ -171,7 +171,8 @@ record("代理安全：限制来源、可选 token、超时和响应体上限", 
   const css = read("styles.css");
   assert.ok(!server.includes("\"Access-Control-Allow-Origin\": \"*\""));
   assert.ok(server.includes("DESIGN_DESK_ALLOWED_ORIGINS"));
-  assert.ok(server.includes("new URL(origin).host === req.headers.host"));
+  assert.ok(server.includes('req.headers["sec-fetch-site"] === "same-origin"'));
+  assert.ok(server.includes('req.headers["x-forwarded-host"]'));
   assert.ok(server.includes("DESIGN_DESK_API_TOKEN"));
   assert.ok(server.includes("UPSTREAM_TIMEOUT_MS"));
   assert.ok(server.includes("MAX_UPSTREAM_BYTES"));

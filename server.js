@@ -183,8 +183,24 @@ function readBody(req) {
 
 function isAllowedOrigin(origin, req) {
   if (!origin) return true;
+  if (req.headers["sec-fetch-site"] === "same-origin") return true;
   try {
-    if (new URL(origin).host === req.headers.host) return true;
+    const originUrl = new URL(origin);
+    const requestHosts = [
+      req.headers.host,
+      req.headers["x-forwarded-host"],
+      req.headers["x-original-host"],
+    ]
+      .flatMap((value) => String(value || "").split(","))
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (
+      requestHosts.some(
+        (host) => originUrl.host === host || originUrl.hostname === host.replace(/:\d+$/, "")
+      )
+    ) {
+      return true;
+    }
   } catch {
     return false;
   }
