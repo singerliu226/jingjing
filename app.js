@@ -162,6 +162,10 @@
       title: "最近变新了什么",
       sections: [
         {
+          title: "2026-07-01 · 先说话，不用先填表",
+          body: "发出文字或图片后，小画桌会先认真看，再直接给回答。项目详情可以跳过，知道多少写多少，不再拦着菁菁进入对话。",
+        },
+        {
           title: "2026-06-30 · 手机上也能舒服地用了",
           body: "项目切换、聊天和项目详情重新排过了。手机打开时只看眼前这件事，不会被一整桌表单挤住。",
         },
@@ -261,7 +265,7 @@
         actionType: "reflect",
         reviewActions: [],
       };
-    } else if (project.workflowReady && activeTask && /^(交付前|自检与导出)/.test(activeTask.title)) {
+    } else if (activeTask && /^(交付前|自检与导出)/.test(activeTask.title)) {
       stage = {
         label: `当前一步 · ${doneCount + 1}/${workflowTasks.length}`,
         title: "交付前最后确认",
@@ -273,7 +277,7 @@
         taskId: activeTask.id,
         reviewActions: [],
       };
-    } else if (project.workflowReady && activeTask && /首版|设计/.test(activeTask.title)) {
+    } else if (activeTask && /首版|设计/.test(activeTask.title)) {
       stage = {
         label: hasImageRound ? "修改与复评" : `当前一步 · ${doneCount + 1}/${workflowTasks.length}`,
         title: hasImageRound ? "先确认这轮有没有变好" : activeTask.title,
@@ -285,7 +289,7 @@
         taskId: activeTask.id,
         reviewActions: hasImageRound ? ["revision"] : [],
       };
-    } else if (project.workflowReady && activeTask) {
+    } else if (activeTask) {
       stage = {
         label: `当前一步${workflowTasks.length ? ` · ${doneCount + 1}/${workflowTasks.length}` : ""}`,
         title: activeTask.title,
@@ -491,12 +495,6 @@
     const project = Core.getProject(state, state.activeProjectId);
     if (!project) return;
     if (activeDetailStep < detailSteps.length - 1) {
-      if (!detailSteps[activeDetailStep].isComplete(project)) {
-        nodes.saveProjectBtn.textContent =
-          activeDetailStep === 0 ? "先补项目名和目标" : "至少写一个交付物";
-        focusCurrentDetailStep();
-        return;
-      }
       moveDetailStep(1);
       return;
     }
@@ -513,19 +511,11 @@
   }
 
   function finishProjectDetails(project) {
-    if (!isProjectReadyForWorkflow(project)) {
-      project.detailStep = findFirstIncompleteDetailStep(project);
-      nodes.saveProjectBtn.textContent = "还差目标和交付物";
-      persist();
-      renderProjectForm(project);
-      focusCurrentDetailStep();
-      return;
-    }
     project.detailMode = "progress";
     project.detailStep = detailSteps.length - 1;
     persist();
     closeProjectDetail();
-    analyzeProjectFromCard(project.id);
+    if (hasUsefulProjectContext(project)) analyzeProjectFromCard(project.id);
   }
 
   function renderProjects() {
@@ -626,7 +616,9 @@
     const activeId = state.activeProjectId;
     const visible = state.messages.filter((message) => message.projectId === activeId);
     const rendered = visible.map((message) => {
-        const wrapper = el("article", { className: `message message-${message.role}` });
+        const wrapper = el("article", {
+          className: `message message-${message.role}${message.pending ? " is-pending" : ""}`,
+        });
         wrapper.append(
           el("div", { className: "avatar", textContent: message.role === "agent" ? "D" : "你" }),
           el("div", { className: "message-body" }, [
@@ -1526,6 +1518,22 @@
     const attachmentsToSend = newAttachments
       .concat(comparisonContextAttachments)
       .concat(regionContextAttachments);
+    const previousMessageCount = state.messages.length;
+    const result = Core.applyInput(state, clean, new Date(), { intent: null, localMode: "guardrail" });
+    const agentMessage = state.messages[previousMessageCount + 1];
+    const fallbackReply = agentMessage && agentMessage.role === "agent" ? agentMessage.text : "";
+    attachFilesToUserMessage(previousMessageCount, newAttachments);
+    attachRegionContextToUserMessage(previousMessageCount, regionContextAttachments);
+    attachComparisonContextToUserMessage(previousMessageCount, comparisonContextAttachments);
+    if (agentMessage && agentMessage.role === "agent") {
+      agentMessage.pending = true;
+      agentMessage.text = composePendingModelReply(attachmentsToSend);
+    }
+    nodes.messageInput.value = "";
+    pendingAttachments = [];
+    renderAttachmentDock();
+    commitAndRender();
+
     const modelIntent = await askQwenIntent(clean);
     const isGuidedImageReview =
       newAttachments.some((attachment) => attachment.kind === "image") &&
@@ -1560,18 +1568,23 @@
               : "先判断当前版本的最大问题，再给一个优先修改动作。",
           }
         : modelIntent;
-    const previousMessageCount = state.messages.length;
-    const result = Core.applyInput(state, clean, new Date(), { intent: effectiveIntent, localMode: "guardrail" });
-    attachFilesToUserMessage(previousMessageCount, newAttachments);
-    attachRegionContextToUserMessage(previousMessageCount, regionContextAttachments);
-    attachComparisonContextToUserMessage(previousMessageCount, comparisonContextAttachments);
     applyProjectAutofill(clean, effectiveIntent, result ? result.analysis : null);
-    nodes.messageInput.value = "";
-    pendingAttachments = [];
-    renderAttachmentDock();
-    commitAndRender();
-    if (result && shouldKeepLocalReply(result.analysis)) return;
-    await askQwen(clean, previousMessageCount, result ? result.analysis : null, attachmentsToSend);
+    if (result && shouldKeepLocalReply(result.analysis)) {
+      if (agentMessage) {
+        agentMessage.pending = false;
+        agentMessage.text = fallbackReply;
+      }
+      commitAndRender();
+      return;
+    }
+    const modelAnalysis = effectiveIntent
+      ? {
+          behavior: effectiveIntent.behavior || effectiveIntent.intent,
+          summary: effectiveIntent.summary || result?.analysis?.summary || "",
+          missing: effectiveIntent.missing || result?.analysis?.missing || [],
+        }
+      : result?.analysis || null;
+    await askQwen(clean, previousMessageCount, modelAnalysis, attachmentsToSend, fallbackReply);
   }
 
   function buildComparisonContextAttachments(message) {
@@ -1878,8 +1891,8 @@
             riskCount: dashboard.risks.length,
           },
           recentMessages: state.messages
-            .filter((item) => item.projectId === state.activeProjectId)
-            .slice(Math.max(0, state.messages.length - 8)),
+            .filter((item) => item.projectId === state.activeProjectId && !item.pending)
+            .slice(-8),
         }),
       }, 2500);
       if (!response.ok || payload.error) return null;
@@ -1914,12 +1927,13 @@
     return localOnlyBehaviors.includes(analysis.behavior);
   }
 
-  async function askQwen(message, previousMessageCount, analysis, attachments = []) {
+  async function askQwen(message, previousMessageCount, analysis, attachments = [], fallbackOverride = "") {
     const agentMessage = state.messages[previousMessageCount + 1];
     if (!agentMessage || agentMessage.role !== "agent") return;
-    const fallbackReply = agentMessage.text;
+    const fallbackReply = fallbackOverride || agentMessage.text;
     const visibleLocalReply = getVisibleLocalReply(fallbackReply, analysis);
-    agentMessage.text = composePendingModelReply(visibleLocalReply);
+    agentMessage.pending = true;
+    agentMessage.text = composePendingModelReply(attachments);
     commitAndRender();
     try {
       const project = getProjectContext(state.activeProjectId);
@@ -1957,15 +1971,19 @@
             riskCount: dashboard.risks.length,
           },
           recentMessages: state.messages
-            .filter((item) => item.projectId === state.activeProjectId)
-            .slice(Math.max(0, state.messages.length - 8)),
+            .filter(
+              (item, index) =>
+                item.projectId === state.activeProjectId && !item.pending && index < previousMessageCount
+            )
+            .slice(-8),
         }),
       });
       if (!response.ok || payload.error) throw new Error(payload.error || "千问请求失败");
       agentMessage.text = composeModelReply(visibleLocalReply, payload.reply);
     } catch (error) {
-      agentMessage.text = composeModelErrorReply(visibleLocalReply, error, fallbackReply, analysis);
+      agentMessage.text = composeModelErrorReply(error, attachments);
     }
+    agentMessage.pending = false;
     commitAndRender();
   }
 
@@ -1988,38 +2006,24 @@
     ].includes(analysis.behavior);
   }
 
-  function composePendingModelReply(localReply) {
-    if (!localReply) return "正在请千问生成更贴合上下文的下一步建议...";
-    return `已先整理：\n${localReply}\n\n正在请千问生成更贴合上下文的下一步建议...`;
+  function composePendingModelReply(attachments = []) {
+    return attachments.some((attachment) => attachment.kind === "image")
+      ? "正在认真看这张图..."
+      : "正在结合这个项目想一想...";
   }
 
   function composeModelReply(localReply, modelReply) {
     const cleanModelReply = normalize(modelReply);
     if (!cleanModelReply) return localReply;
-    if (!localReply) return cleanModelReply;
-    return `已先整理：\n${localReply}\n\n千问建议：\n${cleanModelReply}`;
+    return cleanModelReply;
   }
 
-  function composeModelErrorReply(localReply, error, fallbackReply = "", analysis = null) {
+  function composeModelErrorReply(error, attachments = []) {
     const hint = buildModelErrorHint(error);
-    if (!localReply && shouldKeepFallbackOnModelError(analysis, fallbackReply)) {
-      return `${fallbackReply}\n\n${hint} 模型暂时没接上，我先保留这版本地设计判断。`;
+    if (attachments.some((attachment) => attachment.kind === "image")) {
+      return `这次图片没有看成功。图片已经留在当前项目里，可以再发一次。\n${hint}`;
     }
-    if (!localReply) return `${hint} 可以先继续记录下一条；我不会把设计咨询误写进项目。`;
-    return `已先整理：\n${localReply}\n\n${hint} 本地整理结果已保留，可以继续记录下一条。`;
-  }
-
-  function shouldKeepFallbackOnModelError(analysis, fallbackReply) {
-    if (!analysis || !fallbackReply) return false;
-    if (/核心判断[:：]/.test(fallbackReply) && /验收标准[:：]/.test(fallbackReply)) return true;
-    return [
-      "answer_design_question",
-      "ask_design_directions",
-      "solve_design_issue",
-      "optimize_readability",
-      "recommend_typography_system",
-      "recommend_color_system",
-    ].includes(analysis.behavior);
+    return `这次没有连上。刚才的内容已经留在当前项目里，可以再发一次。\n${hint}`;
   }
 
   function buildModelErrorHint(error) {
@@ -2051,11 +2055,12 @@
     try {
       const response = await fetch(url, { ...options, signal: controller.signal });
       let payload = {};
+      const responseText = await response.text();
       try {
-        payload = await response.json();
+        payload = responseText ? JSON.parse(responseText) : {};
       } catch (error) {
-        if (!response.ok) throw new Error("本地服务返回格式异常。");
-        throw error;
+        const statusHint = response.status ? `（${response.status}）` : "";
+        throw new Error(`服务返回了无法识别的内容${statusHint}，请再试一次。`);
       }
       return { response, payload };
     } finally {
@@ -2142,6 +2147,12 @@
     const settings = getFolderBridgeSettings();
     const supported = typeof window.showDirectoryPicker === "function";
     const connected = Boolean(bridgeDirectoryHandle && settings.connected);
+    const hasActivity = connected || bridgeCandidates.length > 0 || bridgeQueuedCount > 0 || Boolean(bridgeLastError);
+    if (!supported || !hasActivity) {
+      nodes.contextBridge.hidden = true;
+      return;
+    }
+    nodes.contextBridge.hidden = false;
     nodes.contextBridge.classList.toggle("is-connected", connected);
     nodes.contextBridge.classList.toggle("is-paused", connected && settings.paused);
     nodes.contextBridge.classList.toggle("has-error", Boolean(bridgeLastError));
@@ -2151,11 +2162,7 @@
     nodes.contextBridgeSync.hidden = bridgeQueuedCount === 0;
     nodes.contextBridgeSync.textContent = bridgeQueuedCount ? `同步 ${bridgeQueuedCount} 条` : "同步离线记录";
     nodes.contextBridgePause.textContent = settings.paused ? "继续" : "暂停";
-    if (!supported) {
-      nodes.contextBridgeTitle.textContent = "当前浏览器不支持文件夹监听";
-      nodes.contextBridgeCopy.textContent = "仍可直接粘贴截图或点回形针上传，不影响版本评审。";
-      nodes.contextBridgeConnect.disabled = true;
-    } else if (bridgeLastError) {
+    if (bridgeLastError) {
       nodes.contextBridgeTitle.textContent = "工作现场连接需要处理";
       nodes.contextBridgeCopy.textContent = bridgeLastError;
       nodes.contextBridgeConnect.disabled = false;
@@ -2696,13 +2703,7 @@
         if (isImage) {
           const dataUrl = String(reader.result || "");
           const image = new Image();
-          image.onload = () =>
-            resolve({
-              ...base,
-              dataUrl,
-              width: Number(image.naturalWidth) || 0,
-              height: Number(image.naturalHeight) || 0,
-            });
+          image.onload = () => resolve(prepareImageForModel(image, dataUrl, base));
           image.onerror = () => resolve({ ...base, dataUrl, width: 0, height: 0 });
           image.src = dataUrl;
         }
@@ -2711,6 +2712,37 @@
       if (isImage) reader.readAsDataURL(file);
       else reader.readAsText(file);
     });
+  }
+
+  function prepareImageForModel(image, originalDataUrl, base) {
+    const width = Number(image.naturalWidth) || 0;
+    const height = Number(image.naturalHeight) || 0;
+    const maxDimension = 2048;
+    const scale = Math.min(1, maxDimension / Math.max(width, height, 1));
+    if (scale === 1 && originalDataUrl.length <= 2_000_000) {
+      return { ...base, dataUrl: originalDataUrl, width, height };
+    }
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      const context = canvas.getContext("2d", { alpha: true });
+      if (!context) throw new Error("Canvas unavailable");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const compressed = canvas.toDataURL("image/webp", 0.88);
+      if (!compressed || compressed === "data:,") throw new Error("Image conversion failed");
+      const useCompressed = compressed.length < originalDataUrl.length ? compressed : originalDataUrl;
+      return {
+        ...base,
+        mimeType: useCompressed === compressed ? "image/webp" : base.mimeType,
+        size: Math.round(useCompressed.length * 0.75),
+        dataUrl: useCompressed,
+        width: useCompressed === compressed ? canvas.width : width,
+        height: useCompressed === compressed ? canvas.height : height,
+      };
+    } catch (error) {
+      return { ...base, dataUrl: originalDataUrl, width, height };
+    }
   }
 
   function fillQuickTemplate(template) {
@@ -2917,13 +2949,21 @@
   }
 
   function isProjectReadyForWorkflow(project) {
+    return hasUsefulProjectContext(project);
+  }
+
+  function hasUsefulProjectContext(project) {
+    if (!project) return false;
+    const hasRealName = project.name && !["未命名设计项目", "第一个设计项目"].includes(project.name);
+    const hasRealType = project.type && project.type !== "设计项目";
     return Boolean(
-      project &&
-        project.name &&
-        project.name !== "未命名设计项目" &&
-        project.type &&
-        (project.goal || project.requirements) &&
-        project.deliverables.length
+      hasRealName ||
+        hasRealType ||
+        project.goal ||
+        project.requirements ||
+        project.progressNote ||
+        project.dueDate ||
+        (project.deliverables || []).length
     );
   }
 
@@ -2969,7 +3009,8 @@
       role: "agent",
       projectId: project.id,
       createdAt: new Date().toISOString(),
-      text: `${workflow.summary}\n\n正在请千问根据项目详情补充更细的安排...`,
+      text: "正在根据项目详情整理下一步...",
+      pending: true,
     });
     commitAndRender();
     await askQwenForProjectWorkflow(project.id, messageId, workflow.summary, runId);
@@ -3035,19 +3076,25 @@
             riskCount: dashboard.risks.length,
           },
           recentMessages: state.messages
-            .filter((item) => item.projectId === projectId)
-            .slice(Math.max(0, state.messages.length - 8)),
+            .filter((item) => item.projectId === projectId && !item.pending)
+            .slice(-8),
         }),
       });
       if (!response.ok || payload.error) throw new Error(payload.error || "千问请求失败");
       if (runId !== projectAnalysisRun) return;
       const message = state.messages.find((item) => item.id === messageId);
-      if (message) message.text = payload.reply || fallbackReply;
+      if (message) {
+        message.text = payload.reply || fallbackReply;
+        message.pending = false;
+      }
       nodes.saveProjectBtn.textContent = "已整理工作流";
     } catch (error) {
       const message = state.messages.find((item) => item.id === messageId);
-      if (message) message.text = `${fallbackReply}\n\n千问暂时没有连上：${error.message}。本地工作流已先更新。`;
-      nodes.saveProjectBtn.textContent = "已本地整理";
+      if (message) {
+        message.text = `这次还没整理成功，项目资料已经保存。回到对话里说一句“帮我安排下一步”就可以重试。\n${buildModelErrorHint(error)}`;
+        message.pending = false;
+      }
+      nodes.saveProjectBtn.textContent = "资料已保存";
     }
     commitAndRender();
   }
@@ -3131,6 +3178,7 @@
 
   function renderMessageBubble(message) {
     if (message.role !== "agent") return el("div", { className: "bubble", innerHTML: formatBubble(message.text) });
+    if (message.pending) return el("div", { className: "bubble", textContent: message.text });
     const blocks = buildAnswerBlocks(message.text);
     const stack = el("div", { className: "answer-stack" });
     blocks.forEach((block, index) => {

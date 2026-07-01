@@ -295,6 +295,9 @@ function buildMessages(input, attachments = []) {
           "你必须根据项目名称、类型、核心要求、需求细节、交付物、截止时间和任务明细来分析项目，并安排设计工作流。",
           "回复结构使用：项目判断、今日先做、后续步骤、需要确认、交付风险。",
           "不要要求用户重复已经在上下文里提供的信息；只追问仍然缺失的信息，例如尺寸、平台规格、确认人、交付格式。",
+          "即使信息不完整，也先给一个现在就能做的临时起步动作；不要说“无法开始、无法进入、必须填完才能继续”。",
+          "没有用户明确给出的截止时间时，不要编造今天、明天、24 小时、48 小时或任何时间压力。",
+          "需要补充的信息最多追问一个最关键问题，其余等项目推进时再问。",
         ].join("\n")
       : "";
   const formatInstruction =
@@ -632,7 +635,7 @@ function callDashScope(body, parseContent) {
             return;
           }
           try {
-            resolve(parseContent(parsed.choices?.[0]?.message?.content || ""));
+            resolve(parseContent(normalizeAssistantContent(parsed.choices?.[0]?.message?.content)));
           } catch (error) {
             reject(error);
           }
@@ -647,6 +650,29 @@ function callDashScope(body, parseContent) {
     req.write(body);
     req.end();
   });
+}
+
+function normalizeAssistantContent(content) {
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (!item || typeof item !== "object") return "";
+        if (typeof item.text === "string") return item.text;
+        if (item.text && typeof item.text.value === "string") return item.text.value;
+        if (typeof item.content === "string") return item.content;
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  if (content && typeof content === "object") {
+    if (typeof content.text === "string") return content.text.trim();
+    if (typeof content.content === "string") return content.content.trim();
+  }
+  throw new Error("Qwen returned an unsupported content format.");
 }
 
 function callQwen(payload) {

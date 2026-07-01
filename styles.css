@@ -2762,6 +2762,34 @@ select:focus-visible {
   color: #fff;
 }
 
+.message.is-pending .bubble {
+  color: var(--muted);
+  font-weight: 760;
+}
+
+.message.is-pending .bubble::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 10px;
+  vertical-align: 2px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 9px 0 currentColor, 18px 0 currentColor;
+  animation: thinking-dots 1.1s infinite ease-in-out;
+}
+
+@keyframes thinking-dots {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
 .answer-stack {
   display: flex;
   flex-direction: column;
@@ -4573,6 +4601,11 @@ body {
 }
 
 @media (min-width: 901px) {
+  .mobile-stage-guide,
+  .mobile-review-actions {
+    display: none !important;
+  }
+
   .app-shell {
     grid-template-columns: 284px minmax(0, 1fr);
     background: #fff;

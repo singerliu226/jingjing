@@ -2580,16 +2580,21 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const serverSource = fs.readFileSync("server.js", "utf8");
   assert.ok(appSource.includes("currentDate: getLocalDateString()"));
   assert.ok(appSource.includes("localMode: \"guardrail\""));
+  assert.ok(appSource.includes("agentMessage.pending = true"));
+  assert.ok(appSource.includes("function hasUsefulProjectContext"));
+  assert.ok(appSource.includes("return cleanModelReply;"));
+  assert.ok(!appSource.includes("nodes.saveProjectBtn.textContent = \"还差目标和交付物\""));
   assert.ok(serverSource.includes("解析相对日期时"));
   assert.ok(serverSource.includes("schemaVersion: \"llm-intent-v1\""));
+  assert.ok(serverSource.includes("function normalizeAssistantContent"));
 }
 
 {
   const indexSource = fs.readFileSync("index.html", "utf8");
   const stylesSource = fs.readFileSync("styles.css", "utf8");
-  assert.ok(indexSource.includes("菁菁，和小画桌慢慢说"));
+  assert.ok(indexSource.includes("菁菁，直接把图和问题丢给我"));
   assert.ok(indexSource.includes("<h3>项目详情</h3>"));
-  assert.ok(indexSource.includes("一次只补一点点"));
+  assert.ok(indexSource.includes("知道多少写多少，随时可以回到对话"));
   assert.ok(indexSource.includes("要做什么，想让谁行动？"));
   assert.ok(indexSource.includes("要交什么，什么时候要？"));
   assert.ok(indexSource.includes("有什么限制，现在卡在哪？"));
@@ -2655,13 +2660,13 @@ function applyInput(state, text, now = fixedNow, options = {}) {
   const serverSource = fs.readFileSync("server.js", "utf8");
   assert.ok(appSource.includes("const visibleLocalReply = getVisibleLocalReply(fallbackReply, analysis)"));
   assert.ok(appSource.includes("composeModelReply(visibleLocalReply, payload.reply)"));
-  assert.ok(appSource.includes("composeModelErrorReply(visibleLocalReply, error, fallbackReply, analysis)"));
-  assert.ok(appSource.includes("function shouldKeepFallbackOnModelError"));
-  assert.ok(appSource.includes("模型暂时没接上，我先保留这版本地设计判断"));
+  assert.ok(appSource.includes("composeModelErrorReply(error, attachments)"));
+  assert.ok(!appSource.includes("function shouldKeepFallbackOnModelError"));
+  assert.ok(appSource.includes("这次图片没有看成功"));
   assert.ok(appSource.includes("本地千问服务没有连上"));
   assert.ok(appSource.includes("千问访问密钥还没配置好"));
   assert.ok(!appSource.includes("composeModelErrorReply(visibleLocalReply || fallbackReply, error)"));
-  assert.ok(!appSource.includes("agentMessage.text = payload.reply || fallbackReply"));
+  assert.ok(appSource.includes("agentMessage.pending = true"));
   assert.ok(appSource.includes("localReply: fallbackReply"));
   assert.ok(appSource.includes("applyProjectAutofill(clean, effectiveIntent"));
   assert.ok(appSource.includes("pendingAttachments"));
